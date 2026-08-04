@@ -11,7 +11,9 @@ budgets and category list, which are safe to expose in a browser file.
 
 import csv
 import json
+import os
 import tempfile
+import zipfile
 from pathlib import Path
 
 import db
@@ -20,6 +22,7 @@ from parser import CATEGORY_KEYWORDS
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
 DATA_JS_PATH = BASE_DIR / "data.js"
+DASHBOARD_HTML_PATH = BASE_DIR / "dashboard.html"
 
 
 def load_config() -> dict:
@@ -87,6 +90,25 @@ def export_csv(month: str = None) -> Path:
         writer.writerow(["date", "category", "amount", "note", "type"])
         for r in rows:
             writer.writerow([r["date"], r["category"], r["amount"], r["note"] or "", r["type"]])
+
+    return path
+
+
+def bundle_dashboard() -> Path:
+    """
+    Zip a freshly-regenerated dashboard.html + data.js together so they can
+    be sent as one file (e.g. to a phone via Telegram) and still work when
+    unzipped and opened straight off disk via file://.
+    """
+    run()  # make sure data.js reflects the latest transactions first
+
+    fd, path = tempfile.mkstemp(prefix="dashboard_", suffix=".zip")
+    os.close(fd)  # zipfile reopens by path; just needed mkstemp for a unique name
+    path = Path(path)
+
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(DASHBOARD_HTML_PATH, arcname="dashboard.html")
+        zf.write(DATA_JS_PATH, arcname="data.js")
 
     return path
 

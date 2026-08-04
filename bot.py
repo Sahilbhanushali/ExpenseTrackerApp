@@ -20,6 +20,7 @@ Commands:
     /recurring  manage auto-logged monthly bills (add/list/remove)
     /goal       this month's savings goal progress
     /export     [YYYY-MM] send transactions as a CSV file
+    /dashboard  zip up dashboard.html + fresh data.js and send it
 
 A daily JobQueue job checks for due recurring bills and logs them
 automatically — see check_recurring() and main()'s job_queue.run_daily.
@@ -122,6 +123,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/recurring add|list|remove — auto-log monthly bills\n"
         "/goal — savings goal progress\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
+        "/dashboard — get dashboard.html + data.js zipped, ready for your phone\n"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -275,6 +277,23 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 document=f,
                 filename=path.name,
                 caption=f"📄 Export: {month or 'all transactions'}",
+            )
+    finally:
+        path.unlink(missing_ok=True)
+
+
+async def dashboard_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    path = export.bundle_dashboard()
+    try:
+        with open(path, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename="dashboard.zip",
+                caption=(
+                    "📊 dashboard.html + data.js, zipped together and up to date.\n"
+                    "Unzip on your phone (keep both files in the same folder) and "
+                    "open dashboard.html in a browser."
+                ),
             )
     finally:
         path.unlink(missing_ok=True)
@@ -573,6 +592,7 @@ def main():
     app.add_handler(CommandHandler("recurring", recurring_cmd))
     app.add_handler(CommandHandler("goal", goal_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
+    app.add_handler(CommandHandler("dashboard", dashboard_cmd))
     app.add_handler(CommandHandler("setbudget", setbudget_cmd))
     app.add_handler(CommandHandler("setcatbudget", setcatbudget_cmd))
     app.add_handler(CommandHandler("setgoal", setgoal_cmd))
