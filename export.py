@@ -9,7 +9,9 @@ config.json is deliberately NOT copied into data.js — only currency,
 budgets and category list, which are safe to expose in a browser file.
 """
 
+import csv
 import json
+import tempfile
 from pathlib import Path
 
 import db
@@ -32,6 +34,7 @@ def build_export_config(cfg: dict) -> dict:
         "locale": cfg.get("locale", "en-IN"),
         "monthlyBudget": cfg.get("monthlyBudget", 0),
         "budgets": cfg.get("budgets", {}),
+        "savingsGoal": cfg.get("savingsGoal", {}),
         "categories": list(CATEGORY_KEYWORDS.keys()) + ["income"],
     }
 
@@ -64,6 +67,28 @@ def run():
 
     DATA_JS_PATH.write_text(js, encoding="utf-8")
     return len(slim_rows)
+
+
+def export_csv(month: str = None) -> Path:
+    """
+    Write all transactions (or just one 'YYYY-MM' month, if given) to a CSV
+    file in the system temp dir. Returns the file path.
+    """
+    rows = db.all_rows()
+    if month:
+        rows = [r for r in rows if r["date"].startswith(month)]
+
+    suffix = f"_{month}" if month else "_all"
+    fd, path = tempfile.mkstemp(prefix=f"expenses{suffix}_", suffix=".csv")
+    path = Path(path)
+
+    with open(fd, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["date", "category", "amount", "note", "type"])
+        for r in rows:
+            writer.writerow([r["date"], r["category"], r["amount"], r["note"] or "", r["type"]])
+
+    return path
 
 
 if __name__ == "__main__":

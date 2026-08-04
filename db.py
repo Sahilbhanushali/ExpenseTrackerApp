@@ -11,6 +11,16 @@ One table, "txns":
     chat_id     INTEGER  Telegram chat this entry came from
     created_at  TEXT    ISO timestamp, set automatically
 
+And "recurring", for bills that auto-log themselves each month:
+    id              INTEGER PRIMARY KEY
+    chat_id         INTEGER  which chat to log/notify for
+    amount          REAL
+    category        TEXT
+    note            TEXT
+    day_of_month    INTEGER  1-28, the day it should fire
+    last_run_month  TEXT     'YYYY-MM' of the last month it fired, or NULL
+    active          INTEGER  1/0
+
 Everything else in the project (bot.py, export.py) goes through the
 helpers below rather than touching SQLite directly.
 """
@@ -33,6 +43,17 @@ CREATE TABLE IF NOT EXISTS txns (
     chat_id     INTEGER,
     created_at  TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS recurring (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id         INTEGER NOT NULL,
+    amount          REAL NOT NULL,
+    category        TEXT NOT NULL,
+    note            TEXT,
+    day_of_month    INTEGER NOT NULL,
+    last_run_month  TEXT,
+    active          INTEGER NOT NULL DEFAULT 1
+);
 """
 
 
@@ -48,9 +69,9 @@ def _connect():
 
 
 def init_db():
-    """Create the txns table if it doesn't already exist. Safe to call every time."""
+    """Create the txns/recurring tables if they don't already exist. Safe to call every time."""
     with _connect() as conn:
-        conn.execute(SCHEMA)
+        conn.executescript(SCHEMA)
 
 
 def add(amount: float, category: str, note: str, txn_type: str,
@@ -93,6 +114,110 @@ def undo_last(chat_id: int = None):
 
         conn.execute("DELETE FROM txns WHERE id = ?", (row["id"],))
         return dict(row)
+
+
+def get_by_id(row_id: int, chat_id: int = None):
+    """Return a single transaction as a dict, or None if it doesn't exist
+    (or belongs to a different chat, when chat_id is given)."""
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT * FROM txns WHERE id = ? AND chat_id = ?", (row_id, chat_id)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM txns WHERE id = ?", (row_id,)).fetchone()
+        return dict(row) if row else None
+
+
+_EDITABLE_FIELDS = {"amount", "category", "note"}
+
+
+def update(row_id: int, chat_id: int = None, **fields):
+    """
+    Update one or more of amount/category/note on an existing transaction.
+    Returns the updated row as a dict, or None if it doesn't exist (or
+    doesn't belong to chat_id, when given).
+    """
+    fields = {k: v for k, v in fields.items() if k in _EDITABLE_FIELDS and v is not None}
+    if not fields:
+        return get_by_id(row_id, chat_id=chat_id)
+
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT * FROM txns WHERE id = ? AND chat_id = ?", (row_id, chat_id)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM txns WHERE id = ?", (row_id,)).fetchone()
+        if row is None:
+            return None
+
+        set_clause = ", ".join(f"{k} = ?" for k in fields)
+        conn.execute(
+            f"UPDATE txns SET {set_clause} WHERE id = ?",
+            (*fields.values(), row_id),
+        )
+        updated = conn.execute("SELECT * FROM txns WHERE id = ?", (row_id,)).fetchone()
+        return dict(updated)
+
+
+def add_recurring(chat_id: int, amount: float, category: str, note: str, day_of_month: int) -> int:
+    """Register a new recurring bill/subscription. Returns the new row's id."""
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO recurring (chat_id, amount, category, note, day_of_month, active)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (chat_id, amount, category, note, day_of_month),
+        )
+        return cur.lastrowid
+
+
+def list_recurring(chat_id: int) -> list:
+    """Active recurring entries for one chat, ordered by day of month."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM recurring WHERE chat_id = ? AND active = 1 ORDER BY day_of_month ASC",
+            (chat_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def remove_recurring(row_id: int, chat_id: int = None):
+    """Deactivate a recurring entry. Returns True if a row was found and deactivated."""
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT id FROM recurring WHERE id = ? AND chat_id = ?", (row_id, chat_id)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT id FROM recurring WHERE id = ?", (row_id,)).fetchone()
+        if row is None:
+            return False
+        conn.execute("UPDATE recurring SET active = 0 WHERE id = ?", (row_id,))
+        return True
+
+
+def due_recurring(today: date = None) -> list:
+    """
+    Active recurring entries whose day_of_month has arrived and that
+    haven't already fired this calendar month.
+    """
+    today = today or date.today()
+    month = today.isoformat()[:7]
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM recurring
+               WHERE active = 1 AND day_of_month <= ?
+                 AND (last_run_month IS NULL OR last_run_month != ?)""",
+            (today.day, month),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_recurring_run(row_id: int, month: str):
+    """Stamp a recurring entry as having fired for `month` ('YYYY-MM')."""
+    with _connect() as conn:
+        conn.execute("UPDATE recurring SET last_run_month = ? WHERE id = ?", (month, row_id))
 
 
 def all_rows() -> list:

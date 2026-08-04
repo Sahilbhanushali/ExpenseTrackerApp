@@ -26,6 +26,10 @@ window.EXPENSE_CONFIG = {
     "education": 1500,
     "other": 1000
   },
+  "savingsGoal": {
+    "amount": 10000,
+    "label": "Emergency fund"
+  },
   "categories": [
     "travel",
     "food",

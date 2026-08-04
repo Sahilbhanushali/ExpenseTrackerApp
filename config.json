@@ -2,7 +2,11 @@
   "telegram_token": "8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc",
   "currency": "₹",
   "locale": "en-IN",
-  "monthlyBudget": 20000,
+  "monthlyBudget": 40000,
+  "savingsGoal": {
+    "amount": 10000,
+    "label": "Emergency fund"
+  },
   "budgets": {
     "travel": 3000,
     "food": 6000,
