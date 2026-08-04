@@ -1,0 +1,19 @@
+{
+  "telegram_token": "8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc",
+  "currency": "₹",
+  "locale": "en-IN",
+  "monthlyBudget": 20000,
+  "budgets": {
+    "travel": 3000,
+    "food": 6000,
+    "groceries": 5000,
+    "clothes": 2000,
+    "rent": 15000,
+    "bills": 3000,
+    "luxuries": 2500,
+    "investments": 5000,
+    "health": 2000,
+    "education": 1500,
+    "other": 1000
+  }
+}
