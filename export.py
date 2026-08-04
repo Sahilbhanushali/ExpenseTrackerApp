@@ -11,9 +11,7 @@ budgets and category list, which are safe to expose in a browser file.
 
 import csv
 import json
-import os
 import tempfile
-import zipfile
 from pathlib import Path
 
 import db
@@ -94,21 +92,31 @@ def export_csv(month: str = None) -> Path:
     return path
 
 
-def bundle_dashboard() -> Path:
+_DATA_JS_TAG = '<script src="data.js" onerror="console.warn(\'data.js not found next to dashboard.html — showing sample data\')"></script>'
+
+
+def bundle_standalone_dashboard() -> Path:
     """
-    Zip a freshly-regenerated dashboard.html + data.js together so they can
-    be sent as one file (e.g. to a phone via Telegram) and still work when
-    unzipped and opened straight off disk via file://.
+    Produce a single self-contained .html file with data.js's contents baked
+    straight in, instead of loaded via <script src>. Two separate files
+    (dashboard.html + data.js) rely on relative-path loading, which breaks
+    on Android Chrome when a file is opened from Downloads/a file manager as
+    a content:// URI rather than a real file:// path — a single file has no
+    sibling to resolve, so it sidesteps that entirely.
     """
     run()  # make sure data.js reflects the latest transactions first
 
-    fd, path = tempfile.mkstemp(prefix="dashboard_", suffix=".zip")
-    os.close(fd)  # zipfile reopens by path; just needed mkstemp for a unique name
-    path = Path(path)
+    html = DASHBOARD_HTML_PATH.read_text(encoding="utf-8")
+    data_js = DATA_JS_PATH.read_text(encoding="utf-8")
 
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.write(DASHBOARD_HTML_PATH, arcname="dashboard.html")
-        zf.write(DATA_JS_PATH, arcname="data.js")
+    if _DATA_JS_TAG not in html:
+        raise RuntimeError("dashboard.html's data.js <script> tag has changed — update _DATA_JS_TAG in export.py")
+    standalone_html = html.replace(_DATA_JS_TAG, f"<script>\n{data_js}\n</script>")
+
+    fd, path = tempfile.mkstemp(prefix="dashboard_", suffix=".html")
+    path = Path(path)
+    with open(fd, "w", encoding="utf-8") as f:
+        f.write(standalone_html)
 
     return path
 

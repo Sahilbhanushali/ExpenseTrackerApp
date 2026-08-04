@@ -20,7 +20,7 @@ Commands:
     /recurring  manage auto-logged monthly bills (add/list/remove)
     /goal       this month's savings goal progress
     /export     [YYYY-MM] send transactions as a CSV file
-    /dashboard  zip up dashboard.html + fresh data.js and send it
+    /dashboard  send a standalone dashboard.html with today's data baked in
 
 A daily JobQueue job checks for due recurring bills and logs them
 automatically — see check_recurring() and main()'s job_queue.run_daily.
@@ -123,7 +123,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/recurring add|list|remove — auto-log monthly bills\n"
         "/goal — savings goal progress\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
-        "/dashboard — get dashboard.html + data.js zipped, ready for your phone\n"
+        "/dashboard — one self-contained dashboard.html, ready for your phone\n"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -283,16 +283,16 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def dashboard_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    path = export.bundle_dashboard()
+    path = export.bundle_standalone_dashboard()
     try:
         with open(path, "rb") as f:
             await update.message.reply_document(
                 document=f,
-                filename="dashboard.zip",
+                filename="dashboard.html",
                 caption=(
-                    "📊 dashboard.html + data.js, zipped together and up to date.\n"
-                    "Unzip on your phone (keep both files in the same folder) and "
-                    "open dashboard.html in a browser."
+                    "📊 Dashboard with today's data baked in — just open this file "
+                    "directly, no unzipping or second file needed. On Android, "
+                    "open it from the Downloads app with Chrome."
                 ),
             )
     finally:
