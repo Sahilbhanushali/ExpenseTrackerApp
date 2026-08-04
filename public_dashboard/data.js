@@ -6,19 +6,19 @@ window.EXPENSE_CONFIG = {
   "monthlyBudget": 40000,
   "budgets": {
     "travel": 3000,
-    "food": 6000,
-    "groceries": 5000,
+    "food": 3000,
+    "fitness": 6000,
     "clothes": 2000,
     "rent": 15000,
     "bills": 3000,
-    "luxuries": 2500,
-    "investments": 5000,
+    "luxuries": 2000,
+    "investments": 10000,
     "health": 2000,
     "education": 1500,
     "other": 1000
   },
   "savingsGoal": {
-    "amount": 10000,
+    "amount": 50000,
     "label": "Emergency fund"
   },
   "categories": [
@@ -29,6 +29,7 @@ window.EXPENSE_CONFIG = {
     "rent",
     "bills",
     "luxuries",
+    "fitness",
     "investments",
     "health",
     "education",

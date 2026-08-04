@@ -347,13 +347,15 @@
   var CATEGORY_COLORS = {
     travel:"#5fb3d9", food:"#ffb300", groceries:"#8fd15f", clothes:"#d97fd0",
     rent:"#e0895a", bills:"#6f8cff", luxuries:"#ff5f56", investments:"#5fd76f",
-    health:"#5fd0d9", education:"#c9b45f", other:"#8b8877", income:"#5fd76f"
+    health:"#5fd0d9", education:"#c9b45f", other:"#8b8877", income:"#5fd76f",
+    fitness:"#d9915f"
   };
 
   // 50/30/20 rule buckets. "income" itself isn't spend, so it's left out.
   var CATEGORY_BUCKET = {
     rent:"needs", bills:"needs", groceries:"needs", health:"needs",
     food:"wants", clothes:"wants", luxuries:"wants", other:"wants", education:"wants", travel:"wants",
+    fitness:"wants",
     investments:"savings"
   };
   var BUCKET_TARGET = { needs:0.5, wants:0.3, savings:0.2 };
