@@ -4,18 +4,18 @@
   "locale": "en-IN",
   "monthlyBudget": 40000,
   "savingsGoal": {
-    "amount": 10000,
+    "amount": 50000,
     "label": "Emergency fund"
   },
   "budgets": {
     "travel": 3000,
-    "food": 6000,
-    "groceries": 5000,
+    "food": 3000,
+    "fitness": 6000,
     "clothes": 2000,
     "rent": 15000,
     "bills": 3000,
-    "luxuries": 2500,
-    "investments": 5000,
+    "luxuries": 2000,
+    "investments": 10000,
     "health": 2000,
     "education": 1500,
     "other": 1000

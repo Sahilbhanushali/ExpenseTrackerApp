@@ -16,6 +16,7 @@ Commands:
     /setbudget      change the overall monthly budget
     /setcatbudget   change one category's budget
     /setgoal        change the savings goal amount/label
+    /recommend      suggested per-category budget split, or [apply] it
     /undo       delete the most recently logged entry (per-chat)
     /recent     last 10 entries with their ids
     /edit       fix an existing entry's amount/category/note
@@ -155,6 +156,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/setbudget <amount> — change monthly budget\n"
         "/setcatbudget <cat> <amount> — change a category's cap\n"
         "/setgoal <amount> [label] — change savings goal\n"
+        "/recommend — suggested budget split (needs/wealth/wants)\n"
         "/undo — delete the last entry\n"
         "/recent — last 10 entries with their ids\n"
         "/edit <id> <field> <value> — fix an entry\n"
@@ -448,6 +450,88 @@ async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 VALID_CATEGORIES = set(CATEGORY_KEYWORDS.keys()) | {"other"}
 
+# A rule-of-thumb monthly split: pay essentials, pay yourself (investing)
+# before you spend, then the rest is guilt-free lifestyle money. Weighted
+# for typical Indian cost-of-living (rent is usually the single biggest
+# fixed cost) rather than a plain 50/30/20. (category -> (bucket, % of budget))
+RECOMMENDED_ALLOCATION = {
+    "rent":        ("needs",  0.28),
+    "bills":       ("needs",  0.05),
+    "groceries":   ("needs",  0.10),
+    "health":      ("needs",  0.04),
+    "travel":      ("needs",  0.05),
+    "investments": ("wealth", 0.20),
+    "food":        ("wants",  0.08),
+    "fitness":     ("wants",  0.05),
+    "clothes":     ("wants",  0.04),
+    "luxuries":    ("wants",  0.06),
+    "education":   ("wants",  0.03),
+    "other":       ("wants",  0.02),
+}
+BUCKET_TITLE = {"needs": "Needs (essentials)", "wealth": "Wealth-building", "wants": "Wants (life you love)"}
+
+
+def build_recommendation(base: float) -> dict:
+    """category -> recommended monthly amount, given a total budget/income."""
+    return {cat: round(base * pct, 2) for cat, (_, pct) in RECOMMENDED_ALLOCATION.items()}
+
+
+async def recommend_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    month = date.today().isoformat()[:7]
+    income = db.month_total(month)["income"]
+    base = effective_budget(cfg.get("monthlyBudget", 0), income)
+
+    if base <= 0:
+        await update.message.reply_text(
+            "Set a monthlyBudget first (via /setbudget) so I have something to work from."
+        )
+        return
+
+    rec = build_recommendation(base)
+
+    if context.args and context.args[0].lower() == "apply":
+        cfg["budgets"] = rec
+        save_config(cfg)
+        export.run()
+        lines = [f"✅ Category budgets set to the recommended split ({fmt_money(base, currency)} total):"]
+        for c, amt in rec.items():
+            lines.append(f"  {c}: {fmt_money(amt, currency)}")
+        await update.message.reply_text("\n".join(lines))
+        return
+
+    current_budgets = cfg.get("budgets", {})
+
+    lines = [f"💡 *Recommended monthly split* — based on {fmt_money(base, currency)}"]
+    for bucket in ("needs", "wealth", "wants"):
+        cats = [c for c, (b, _) in RECOMMENDED_ALLOCATION.items() if b == bucket]
+        bucket_total = sum(rec[c] for c in cats)
+        pct = round(sum(p for _, (b, p) in RECOMMENDED_ALLOCATION.items() if b == bucket) * 100)
+        lines.append(f"\n{BUCKET_TITLE[bucket]} — {fmt_money(bucket_total, currency)} ({pct}%)")
+        for c in cats:
+            lines.append(f"  {c}: {fmt_money(rec[c], currency)}")
+
+    drift = [
+        (c, current_budgets[c], rec[c])
+        for c in rec
+        if c in current_budgets and abs(current_budgets[c] - rec[c]) > rec[c] * 0.15
+    ]
+    if drift:
+        lines.append("\n⚠️ Your current caps differ a fair bit from this:")
+        for c, cur, new in drift:
+            lines.append(f"  {c}: {fmt_money(cur, currency)} now → {fmt_money(new, currency)} recommended")
+
+    current_sum = sum(current_budgets.values())
+    if current_sum > base:
+        lines.append(
+            f"\n⚠️ Your category caps currently add up to {fmt_money(current_sum, currency)}, "
+            f"which is over your {fmt_money(base, currency)} budget — they can't all be hit at once."
+        )
+
+    lines.append("\nRun /recommend apply to set your category budgets to these numbers.")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
 
 async def recurring_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -648,6 +732,7 @@ def main():
     app.add_handler(CommandHandler("setbudget", setbudget_cmd))
     app.add_handler(CommandHandler("setcatbudget", setcatbudget_cmd))
     app.add_handler(CommandHandler("setgoal", setgoal_cmd))
+    app.add_handler(CommandHandler("recommend", recommend_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # once a day, auto-log any recurring bill that's come due

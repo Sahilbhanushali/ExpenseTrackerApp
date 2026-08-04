@@ -46,9 +46,14 @@ CATEGORY_KEYWORDS = {
         "postpaid", "prepaid",
     ],
     "luxuries": [
-        "netflix", "hotstar", "prime video", "gym", "movie", "bookmyshow",
+        "netflix", "hotstar", "prime video", "movie", "bookmyshow",
         "spotify", "pvr", "inox", "party", "bar", "pub", "alcohol",
         "shopping",
+    ],
+    "fitness": [
+        "gym", "gym membership", "fitness", "yoga", "workout", "trainer",
+        "protein", "supplements", "cult.fit", "cultfit", "swimming",
+        "badminton", "sports",
     ],
     "investments": [
         "sip", "etf", "stocks", "mutual fund", "mf", "zerodha", "groww",
