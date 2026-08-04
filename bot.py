@@ -2,9 +2,11 @@
 bot.py — Telegram front-end for the expense tracker.
 
 Every plain-text message is parsed (parser.py), stored (db.py), and the
-dashboard's data.js is regenerated (export.py) before replying. Nothing
-here ever talks to the network except Telegram's own API — no other
-service is contacted, and the token lives only in config.json.
+dashboard's data.js is regenerated (export.py) before replying. The only
+network traffic is Telegram's own API, plus an optional LAN-only HTTP
+server (see start_local_server()) that serves the dashboard to your own
+phone over WiFi — nothing reaches the public internet either way, and the
+token lives only in config.json (never served, never in data.js).
 
 Commands:
     /start      welcome + quick examples
@@ -21,14 +23,19 @@ Commands:
     /goal       this month's savings goal progress
     /export     [YYYY-MM] send transactions as a CSV file
     /dashboard  send a standalone dashboard.html with today's data baked in
+    /link       LAN URL for the always-live dashboard (same WiFi only)
 
 A daily JobQueue job checks for due recurring bills and logs them
 automatically — see check_recurring() and main()'s job_queue.run_daily.
 """
 
+import functools
 import json
 import logging
+import socket
+import threading
 from datetime import date, datetime
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from datetime import time as dtime
@@ -48,11 +55,42 @@ from parser import parse_message, CATEGORY_KEYWORDS
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
+LOCAL_SERVER_PORT = 8000
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s", level=logging.INFO
 )
 log = logging.getLogger("expense-bot")
+
+
+def get_lan_ip() -> str:
+    """Best-effort local network IP (not 127.0.0.1) for /link to show. Doesn't
+    actually contact 8.8.8.8 — UDP connect() just asks the OS to pick the
+    outbound-facing interface for that route, no packet is sent."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
+def start_local_server():
+    """
+    Serve export.PUBLIC_DIR (dashboard.html + data.js only — never the
+    project root, so config.json/expenses.db/bot.py are never reachable)
+    over the LAN in a background thread, so a phone on the same WiFi can
+    load the dashboard as a live page instead of a one-off Telegram file.
+    """
+    export.PUBLIC_DIR.mkdir(exist_ok=True)
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(export.PUBLIC_DIR))
+    httpd = ThreadingHTTPServer(("0.0.0.0", LOCAL_SERVER_PORT), handler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    log.info("Local dashboard server on http://%s:%s/dashboard.html", get_lan_ip(), LOCAL_SERVER_PORT)
+    return httpd
 
 
 def load_config() -> dict:
@@ -124,6 +162,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/goal — savings goal progress\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
         "/dashboard — one self-contained dashboard.html, ready for your phone\n"
+        "/link — live dashboard URL, for when you're on this WiFi\n"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -297,6 +336,17 @@ async def dashboard_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     finally:
         path.unlink(missing_ok=True)
+
+
+async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    ip = get_lan_ip()
+    url = f"http://{ip}:{LOCAL_SERVER_PORT}/dashboard.html"
+    await update.message.reply_text(
+        f"🔗 Live dashboard (same WiFi as this machine only):\n{url}\n\n"
+        "Reload the page any time for the latest numbers — no need to "
+        "re-request it. Not on this WiFi? Use /dashboard instead for an "
+        "offline snapshot."
+    )
 
 
 async def undo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -580,6 +630,7 @@ def main():
 
     db.init_db()
     export.run()
+    start_local_server()
 
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler("start", start))
@@ -593,6 +644,7 @@ def main():
     app.add_handler(CommandHandler("goal", goal_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
     app.add_handler(CommandHandler("dashboard", dashboard_cmd))
+    app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(CommandHandler("setbudget", setbudget_cmd))
     app.add_handler(CommandHandler("setcatbudget", setcatbudget_cmd))
     app.add_handler(CommandHandler("setgoal", setgoal_cmd))

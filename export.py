@@ -11,6 +11,7 @@ budgets and category list, which are safe to expose in a browser file.
 
 import csv
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -21,6 +22,11 @@ BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
 DATA_JS_PATH = BASE_DIR / "data.js"
 DASHBOARD_HTML_PATH = BASE_DIR / "dashboard.html"
+
+# The only two files the local LAN server (see bot.py) is allowed to serve —
+# a dedicated copy, not the project root, so config.json (bot token) and
+# expenses.db never end up reachable over the network.
+PUBLIC_DIR = BASE_DIR / "public_dashboard"
 
 
 def load_config() -> dict:
@@ -67,6 +73,11 @@ def run():
     )
 
     DATA_JS_PATH.write_text(js, encoding="utf-8")
+
+    PUBLIC_DIR.mkdir(exist_ok=True)
+    shutil.copy2(DASHBOARD_HTML_PATH, PUBLIC_DIR / "dashboard.html")
+    shutil.copy2(DATA_JS_PATH, PUBLIC_DIR / "data.js")
+
     return len(slim_rows)
 
 
