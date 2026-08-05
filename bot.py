@@ -22,6 +22,8 @@ Commands:
     /edit       fix an existing entry's amount/category/note
     /recurring  manage auto-logged monthly bills (add/list/remove)
     /goal       this month's savings goal progress
+    /categories list every category and its keywords
+    /addcategory  add a new category or teach an existing one keywords
     /export     [YYYY-MM] send transactions as a CSV file
     /dashboard  send a standalone dashboard.html with today's data baked in
     /link       LAN URL for the always-live dashboard (same WiFi only)
@@ -162,6 +164,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/edit <id> <field> <value> — fix an entry\n"
         "/recurring add|list|remove — auto-log monthly bills\n"
         "/goal — savings goal progress\n"
+        "/categories — list categories and their keywords\n"
+        "/addcategory <name> <kw1,kw2,...> — teach it a new category\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
         "/dashboard — one self-contained dashboard.html, ready for your phone\n"
         "/link — live dashboard URL, for when you're on this WiFi\n"
@@ -233,17 +237,18 @@ async def setbudget_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def setcatbudget_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
-    if len(args) != 2 or args[0].lower() not in VALID_CATEGORIES or \
+    cfg = load_config()
+    valid = valid_categories(cfg)
+    if len(args) != 2 or args[0].lower() not in valid or \
             (amount := _parse_amount_arg(args[1])) is None:
         await update.message.reply_text(
             "Usage: /setcatbudget <category> <amount>\n"
             "e.g. /setcatbudget food 7000\n"
-            f"Valid categories: {', '.join(sorted(VALID_CATEGORIES))}"
+            f"Valid categories: {', '.join(sorted(valid))}"
         )
         return
 
     category = args[0].lower()
-    cfg = load_config()
     currency = cfg.get("currency", "₹")
     cfg.setdefault("budgets", {})[category] = amount
     save_config(cfg)
@@ -374,17 +379,32 @@ def _crossed(before: float, after: float, cap: float, frac: float) -> bool:
 
 
 def _threshold_warnings(before_spent, after_spent, budget,
-                         before_cat, after_cat, cat_cap, category) -> list:
+                         before_cat, after_cat, cat_cap, category,
+                         currency="₹") -> list:
     warnings = []
+    remaining = budget - after_spent
     if _crossed(before_spent, after_spent, budget, 1.0):
-        warnings.append("🚨 Over monthly budget!")
+        warnings.append(
+            f"🚨 Over monthly budget! You've overspent by "
+            f"{fmt_money(abs(remaining), currency)}."
+        )
     elif _crossed(before_spent, after_spent, budget, 0.8):
-        warnings.append("⚠️ 80% of monthly budget used.")
+        warnings.append(
+            f"⚠️ 80% of monthly budget used — "
+            f"{fmt_money(remaining, currency)} left for the month."
+        )
 
+    cat_remaining = cat_cap - after_cat
     if _crossed(before_cat, after_cat, cat_cap, 1.0):
-        warnings.append(f"🚨 Over budget for {category}!")
+        warnings.append(
+            f"🚨 Over budget for {category}! Overspent by "
+            f"{fmt_money(abs(cat_remaining), currency)}."
+        )
     elif _crossed(before_cat, after_cat, cat_cap, 0.8):
-        warnings.append(f"⚠️ 80% of {category} budget used.")
+        warnings.append(
+            f"⚠️ 80% of {category} budget used — "
+            f"{fmt_money(cat_remaining, currency)} left in this category."
+        )
     return warnings
 
 
@@ -448,7 +468,61 @@ async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✏️ #{row_id} {field}: {before_val} → {after_val}")
 
 
-VALID_CATEGORIES = set(CATEGORY_KEYWORDS.keys()) | {"other"}
+def all_categories(cfg: dict) -> dict:
+    """CATEGORY_KEYWORDS merged with config.json's customCategories, so
+    /addcategory and friends don't require editing parser.py."""
+    merged = {k: list(v) for k, v in CATEGORY_KEYWORDS.items()}
+    for cat, keywords in cfg.get("customCategories", {}).items():
+        merged[cat] = list(keywords) + merged.get(cat, [])
+    return merged
+
+
+def valid_categories(cfg: dict) -> set:
+    return set(all_categories(cfg).keys()) | {"other"}
+
+
+async def categories_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cfg = load_config()
+    merged = all_categories(cfg)
+    custom = set(cfg.get("customCategories", {}).keys())
+    lines = ["🏷️ *Categories*"]
+    for cat in sorted(merged):
+        tag = " (custom)" if cat in custom else ""
+        kws = ", ".join(merged[cat][:6])
+        more = f" +{len(merged[cat]) - 6} more" if len(merged[cat]) > 6 else ""
+        lines.append(f"*{cat}*{tag}: {kws}{more}")
+    lines.append(
+        "\nUse /addcategory <name> <keyword1,keyword2,...> to add a new "
+        "category or teach an existing one more keywords."
+    )
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def addcategory_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text(
+            "Usage: /addcategory <name> <keyword1,keyword2,...>\n"
+            "e.g. /addcategory pets vet,dog food,grooming"
+        )
+        return
+
+    name = args[0].lower().strip()
+    keywords = [kw.strip().lower() for kw in " ".join(args[1:]).split(",") if kw.strip()]
+    if not keywords:
+        await update.message.reply_text("Give at least one keyword, comma-separated.")
+        return
+
+    cfg = load_config()
+    custom = cfg.setdefault("customCategories", {})
+    existing = custom.get(name, [])
+    custom[name] = sorted(set(existing) | set(keywords))
+    save_config(cfg)
+
+    await update.message.reply_text(
+        f"✅ '{name}' now matches: {', '.join(custom[name])}\n"
+        f"Use /setcatbudget {name} <amount> to give it a budget."
+    )
 
 # A rule-of-thumb monthly split: pay essentials, pay yourself (investing)
 # before you spend, then the rest is guilt-free lifestyle money. Weighted
@@ -585,9 +659,10 @@ async def recurring_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Amount must be a number.")
             return
         category = args[2].lower()
-        if category not in VALID_CATEGORIES:
+        valid = valid_categories(cfg)
+        if category not in valid:
             await update.message.reply_text(
-                f"Unknown category '{category}'. Valid: {', '.join(sorted(VALID_CATEGORIES))}"
+                f"Unknown category '{category}'. Valid: {', '.join(sorted(valid))}"
             )
             return
         try:
@@ -650,7 +725,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = load_config()
     currency = cfg.get("currency", "₹")
 
-    parsed = parse_message(message)
+    parsed = parse_message(message, extra_categories=cfg.get("customCategories"))
 
     if parsed["amount"] is None:
         await update.message.reply_text(
@@ -679,7 +754,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if parsed["type"] == "income":
         reply = (
             f"✅ Logged income: {fmt_money(parsed['amount'], currency)}"
-            f" ({parsed['note'] or 'no note'})"
+            f" ({parsed['note'] or 'no note'})\n"
+            f"Total income this month: {fmt_money(totals['income'], currency)}"
+            f" (was {fmt_money(before_totals['income'], currency)} before this)\n"
+            f"Effective monthly budget is now: {fmt_money(budget, currency)}"
         )
     else:
         spent = totals["expense"]
@@ -687,16 +765,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cat_cap = cfg.get("budgets", {}).get(parsed["category"], 0)
 
         bar = progress_bar(spent, budget)
+        remaining = budget - spent
+        remaining_str = fmt_money(remaining, currency) if remaining >= 0 else \
+            f"-{fmt_money(abs(remaining), currency)} (over budget)"
         reply = (
             f"✅ {parsed['category']} — {fmt_money(parsed['amount'], currency)}"
             f" ({parsed['note'] or 'no note'})\n"
-            f"Month so far: {fmt_money(spent, currency)} / {fmt_money(budget, currency)}\n"
+            f"Month so far: {fmt_money(spent, currency)} / {fmt_money(budget, currency)}"
+            f" · Remaining: {remaining_str}\n"
             f"{bar}"
         )
 
         warnings = _threshold_warnings(
             before_totals["expense"], spent, budget,
             before_cat, after_cat, cat_cap, parsed["category"],
+            currency,
         )
         if warnings:
             reply += "\n\n" + "\n".join(warnings)
@@ -733,6 +816,8 @@ def main():
     app.add_handler(CommandHandler("setcatbudget", setcatbudget_cmd))
     app.add_handler(CommandHandler("setgoal", setgoal_cmd))
     app.add_handler(CommandHandler("recommend", recommend_cmd))
+    app.add_handler(CommandHandler("categories", categories_cmd))
+    app.add_handler(CommandHandler("addcategory", addcategory_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # once a day, auto-log any recurring bill that's come due

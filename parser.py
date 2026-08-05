@@ -71,9 +71,11 @@ CATEGORY_KEYWORDS = {
 
 # Any of these words appearing in the message flips type -> "income"
 INCOME_KEYWORDS = [
-    "salary", "salaried", "refund", "cashback", "received", "credited",
-    "credit", "bonus", "reimbursement", "reimbursed", "payout", "income",
-    "interest", "dividend",
+    "salary", "salaried", "refund", "cashback",
+    "received", "receive", "recieved", "recieve", "recevied",
+    "credited", "credit", "bonus", "reimbursement", "reimbursed",
+    "payout", "income", "interest", "dividend", "sold", "sale",
+    "got paid", "earned", "earning",
 ]
 
 # Words stripped out of the note after the amount is removed. Keep this
@@ -167,7 +169,15 @@ def _detect_type(message_lower: str) -> str:
     return "expense"
 
 
-def _detect_category(message_lower: str) -> str:
+def _detect_category(message_lower: str, extra_categories: dict = None) -> str:
+    # User-defined categories/keywords are checked first, so /addcategory can
+    # override a default classification (e.g. "vet" pulled into "pets"
+    # instead of the default "health").
+    if extra_categories:
+        for category, keywords in extra_categories.items():
+            for kw in keywords:
+                if kw in message_lower:
+                    return category
     for category, keywords in CATEGORY_KEYWORDS.items():
         for kw in keywords:
             if kw in message_lower:
@@ -194,19 +204,23 @@ def _build_note(message: str, amount_span) -> str:
 # Public API
 # ---------------------------------------------------------------------------
 
-def parse_message(message: str) -> dict:
+def parse_message(message: str, extra_categories: dict = None) -> dict:
     """
     Parse a free-text message into a transaction dict:
         {"amount": float | None, "category": str, "note": str, "type": str}
 
     amount is None if no amount could be found at all (caller should treat
     this as "could not parse" and ask the user to rephrase).
+
+    extra_categories: optional {category: [keyword, ...]} to merge in on top
+    of CATEGORY_KEYWORDS at call time — lets callers (bot.py) add user-defined
+    categories/keywords from config.json without editing this file.
     """
     message = (message or "").strip()
     message_lower = message.lower()
 
     amount, span = _find_amount(message)
-    category = _detect_category(message_lower)
+    category = _detect_category(message_lower, extra_categories)
     txn_type = _detect_type(message_lower)
     note = _build_note(message, span)
 
