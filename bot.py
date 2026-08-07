@@ -27,6 +27,7 @@ Commands:
     /recent     last 10 entries with their ids
     /edit       fix an existing entry's amount/category/note
     /recurring  manage auto-logged monthly bills (add/list/remove)
+    /emi        log an installment purchase (this month + auto-logs the rest)
     /lend       log money you lent someone (they owe you back)
     /borrow     log money you borrowed (you owe it back)
     /owed       see everything outstanding, both ways
@@ -77,7 +78,7 @@ from telegram.ext import (
 
 import db
 import export
-from parser import parse_multi, parse_receipt_text, CATEGORY_KEYWORDS
+from parser import parse_multi, parse_receipt_text, detect_emi, CATEGORY_KEYWORDS
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -195,6 +196,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/recent — last 10 entries with their ids\n"
         "/edit <id> <field> <value> — fix an entry\n"
         "/recurring add|list|remove — auto-log monthly bills\n"
+        "/emi <amount> <cat> <months> [note] — installment purchase\n"
         "/lend <amount> <person> [note] — you lent them money\n"
         "/borrow <amount> <person> [note] — you borrowed money\n"
         "/owed — see everything outstanding\n"
@@ -922,9 +924,11 @@ async def recurring_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         lines = ["🔁 Recurring bills:"]
         for r in rows:
+            remaining = r.get("installments_remaining")
+            tail = f" · {remaining} left" if remaining is not None else ""
             lines.append(
                 f"#{r['id']} · day {r['day_of_month']} · {r['category']} · "
-                f"{fmt_money(r['amount'], currency)} · {r['note'] or 'no note'}"
+                f"{fmt_money(r['amount'], currency)} · {r['note'] or 'no note'}{tail}"
             )
         await update.message.reply_text("\n".join(lines))
         return
@@ -975,6 +979,68 @@ async def recurring_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Unknown subcommand. Use add, list, or remove.")
 
 
+async def emi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /emi <monthly_amount> <category> <months> [note] — logs this month's
+    installment now and schedules the rest as a self-limiting recurring
+    entry, instead of ever logging the full purchase price as one expense.
+    Explicit command only (not guessed from free text) — an EMI creates a
+    several-month recurring commitment, too consequential to infer wrong.
+    """
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 3:
+        await update.message.reply_text(
+            "Usage: /emi <monthly amount> <category> <months> [note]\n"
+            "e.g. /emi 10000 other 6 fridge"
+        )
+        return
+
+    amount = _parse_amount_arg(args[0])
+    if amount is None:
+        await update.message.reply_text("Monthly amount must be a number.")
+        return
+
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    category = args[1].lower()
+    valid = valid_categories(cfg)
+    if category not in valid:
+        await update.message.reply_text(
+            f"Unknown category '{category}'. Valid: {', '.join(sorted(valid))}"
+        )
+        return
+
+    try:
+        months = int(args[2])
+    except ValueError:
+        await update.message.reply_text("Months must be a whole number.")
+        return
+    if months < 1:
+        await update.message.reply_text("Months must be at least 1.")
+        return
+
+    note = " ".join(args[3:])
+    today = date.today()
+
+    db.add(amount=amount, category=category, note=note, txn_type="expense", chat_id=chat_id)
+
+    remaining_months = months - 1
+    if remaining_months > 0:
+        db.add_recurring(
+            chat_id, amount, category, note, today.day,
+            installments_remaining=remaining_months,
+        )
+    export.run()
+
+    await update.message.reply_text(
+        f"💳 EMI logged: {fmt_money(amount, currency)}/month for {category}"
+        f"{f' ({note})' if note else ''} — 1 of {months} paid."
+        + (f" The remaining {remaining_months} will auto-log on day {today.day} each month."
+           if remaining_months > 0 else " That was the only installment.")
+    )
+
+
 async def check_recurring(context: ContextTypes.DEFAULT_TYPE):
     """Daily JobQueue job: auto-log any recurring bill that's due and hasn't
     already fired this month, then notify the chat it belongs to."""
@@ -995,13 +1061,14 @@ async def check_recurring(context: ContextTypes.DEFAULT_TYPE):
             txn_type="expense",
             chat_id=r["chat_id"],
         )
-        db.mark_recurring_run(r["id"], month)
+        finished = db.mark_recurring_run(r["id"], month)
+        finished_note = " — that was the last installment, all paid off! 🎉" if finished else ""
         try:
             await context.bot.send_message(
                 chat_id=r["chat_id"],
                 text=(
                     f"🔁 Auto-logged recurring bill: {r['category']} "
-                    f"{fmt_money(r['amount'], currency)} ({r['note'] or 'no note'})"
+                    f"{fmt_money(r['amount'], currency)} ({r['note'] or 'no note'}){finished_note}"
                 ),
             )
         except Exception:
@@ -1102,8 +1169,9 @@ _QUERY_TRIGGER_WORDS = ("how much", "spent", "spend", "budget", "left", "remaini
 
 
 def _extract_category_mentioned(message_lower: str, cfg: dict) -> str:
+    # \b avoids "rent" matching inside "different"/"parent"/"current" etc.
     for cat in sorted(valid_categories(cfg), key=len, reverse=True):
-        if cat in message_lower:
+        if re.search(r"\b" + re.escape(cat) + r"\b", message_lower):
             return cat
     return None
 
@@ -1284,6 +1352,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cfg = load_config()
     currency = cfg.get("currency", "₹")
 
+    emi = detect_emi(message)
+    if emi is not None:
+        # Never guess-log an EMI-worded message — a normal parse would grab
+        # the full purchase price as this month's expense (wrong: only one
+        # installment happened). Point at /emi instead, which sets up the
+        # month-by-month schedule correctly.
+        if emi["monthly_amount"] is not None and emi["months"] is not None:
+            suggestion = f"/emi {emi['monthly_amount']:.0f} <category> {emi['months']} <note>"
+            await update.message.reply_text(
+                f"💳 Looks like an EMI purchase — I won't guess and log the full price.\n"
+                f"Try: `{suggestion}`\n(fill in a category and note)",
+                parse_mode="Markdown",
+            )
+        else:
+            await update.message.reply_text(
+                "💳 Looks like an EMI purchase. Use "
+                "`/emi <monthly amount> <category> <months> [note]` so I log "
+                "one installment at a time instead of the full price.",
+                parse_mode="Markdown",
+            )
+        return
+
     parsed_list = parse_multi(message, extra_categories=cfg.get("customCategories"))
     valid = [p for p in parsed_list if p["amount"] is not None]
 
@@ -1358,6 +1448,7 @@ def main():
     app.add_handler(CommandHandler("recent", recent_cmd))
     app.add_handler(CommandHandler("edit", edit_cmd))
     app.add_handler(CommandHandler("recurring", recurring_cmd))
+    app.add_handler(CommandHandler("emi", emi_cmd))
     app.add_handler(CommandHandler("lend", lend_cmd))
     app.add_handler(CommandHandler("borrow", borrow_cmd))
     app.add_handler(CommandHandler("owed", owed_cmd))

@@ -22,6 +22,9 @@ And "recurring", for bills that auto-log themselves each month:
     day_of_month    INTEGER  1-28, the day it should fire
     last_run_month  TEXT     'YYYY-MM' of the last month it fired, or NULL
     active          INTEGER  1/0
+    installments_remaining  INTEGER  NULL = runs indefinitely (rent, subs);
+                             a number = an EMI/installment plan that stops
+                             and deactivates itself once it hits 0
 
 Everything else in the project (bot.py, export.py) goes through the
 helpers below rather than touching SQLite directly.
@@ -56,7 +59,8 @@ CREATE TABLE IF NOT EXISTS recurring (
     note            TEXT,
     day_of_month    INTEGER NOT NULL,
     last_run_month  TEXT,
-    active          INTEGER NOT NULL DEFAULT 1
+    active          INTEGER NOT NULL DEFAULT 1,
+    installments_remaining INTEGER
 );
 """
 
@@ -74,37 +78,40 @@ def _connect():
 
 def _migrate_schema(conn):
     """
-    Upgrade a pre-existing txns table (created before 'lent'/'borrowed' and
-    the counterparty/settled columns existed) in place. Safe to run every
-    startup — it's a no-op once the table already matches SCHEMA.
+    Upgrade pre-existing tables in place — safe to run every startup, a
+    no-op once they already match SCHEMA.
     """
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='txns'"
     ).fetchone()
-    if row is None or "'lent'" in row["sql"]:
-        return
+    if row is not None and "'lent'" not in row["sql"]:
+        conn.executescript("""
+            ALTER TABLE txns RENAME TO txns_old;
 
-    conn.executescript("""
-        ALTER TABLE txns RENAME TO txns_old;
+            CREATE TABLE txns (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date        TEXT NOT NULL,
+                category    TEXT NOT NULL,
+                amount      REAL NOT NULL,
+                note        TEXT,
+                type        TEXT NOT NULL CHECK (type IN ('expense', 'income', 'lent', 'borrowed')),
+                chat_id     INTEGER,
+                created_at  TEXT NOT NULL,
+                counterparty TEXT,
+                settled     INTEGER
+            );
 
-        CREATE TABLE txns (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            date        TEXT NOT NULL,
-            category    TEXT NOT NULL,
-            amount      REAL NOT NULL,
-            note        TEXT,
-            type        TEXT NOT NULL CHECK (type IN ('expense', 'income', 'lent', 'borrowed')),
-            chat_id     INTEGER,
-            created_at  TEXT NOT NULL,
-            counterparty TEXT,
-            settled     INTEGER
-        );
+            INSERT INTO txns (id, date, category, amount, note, type, chat_id, created_at)
+                SELECT id, date, category, amount, note, type, chat_id, created_at FROM txns_old;
 
-        INSERT INTO txns (id, date, category, amount, note, type, chat_id, created_at)
-            SELECT id, date, category, amount, note, type, chat_id, created_at FROM txns_old;
+            DROP TABLE txns_old;
+        """)
 
-        DROP TABLE txns_old;
-    """)
+    # recurring has no CHECK constraint, so a plain ADD COLUMN works — no
+    # need to rebuild the table like txns above.
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(recurring)").fetchall()}
+    if "installments_remaining" not in cols:
+        conn.execute("ALTER TABLE recurring ADD COLUMN installments_remaining INTEGER")
 
 
 def init_db():
@@ -206,13 +213,20 @@ def update(row_id: int, chat_id: int = None, **fields):
         return dict(updated)
 
 
-def add_recurring(chat_id: int, amount: float, category: str, note: str, day_of_month: int) -> int:
-    """Register a new recurring bill/subscription. Returns the new row's id."""
+def add_recurring(chat_id: int, amount: float, category: str, note: str, day_of_month: int,
+                   installments_remaining: int = None) -> int:
+    """
+    Register a new recurring bill/subscription. Returns the new row's id.
+    installments_remaining=None runs indefinitely (rent, subscriptions); a
+    number makes it an EMI/installment plan that deactivates itself once
+    that many more auto-logs have fired (see mark_recurring_run).
+    """
     with _connect() as conn:
         cur = conn.execute(
-            """INSERT INTO recurring (chat_id, amount, category, note, day_of_month, active)
-               VALUES (?, ?, ?, ?, ?, 1)""",
-            (chat_id, amount, category, note, day_of_month),
+            """INSERT INTO recurring (chat_id, amount, category, note, day_of_month,
+                                       active, installments_remaining)
+               VALUES (?, ?, ?, ?, ?, 1, ?)""",
+            (chat_id, amount, category, note, day_of_month, installments_remaining),
         )
         return cur.lastrowid
 
@@ -259,10 +273,30 @@ def due_recurring(today: date = None) -> list:
         return [dict(r) for r in rows]
 
 
-def mark_recurring_run(row_id: int, month: str):
-    """Stamp a recurring entry as having fired for `month` ('YYYY-MM')."""
+def mark_recurring_run(row_id: int, month: str) -> bool:
+    """
+    Stamp a recurring entry as having fired for `month` ('YYYY-MM'). If it
+    has installments_remaining set, decrements it and deactivates the entry
+    once it reaches 0 — an EMI plan stops itself instead of firing forever.
+    Returns True if this was the final installment (now deactivated).
+    """
     with _connect() as conn:
-        conn.execute("UPDATE recurring SET last_run_month = ? WHERE id = ?", (month, row_id))
+        row = conn.execute(
+            "SELECT installments_remaining FROM recurring WHERE id = ?", (row_id,)
+        ).fetchone()
+        remaining = row["installments_remaining"] if row else None
+
+        if remaining is None:
+            conn.execute("UPDATE recurring SET last_run_month = ? WHERE id = ?", (month, row_id))
+            return False
+
+        remaining -= 1
+        finished = remaining <= 0
+        conn.execute(
+            "UPDATE recurring SET last_run_month = ?, installments_remaining = ?, active = ? WHERE id = ?",
+            (month, remaining, 0 if finished else 1, row_id),
+        )
+        return finished
 
 
 def outstanding_loans(chat_id: int = None) -> list:

@@ -235,15 +235,23 @@ def _remove_span(text: str, span) -> str:
 # Category + type detection
 # ---------------------------------------------------------------------------
 
+# Plain "kw in message_lower" substring checks match inside unrelated words
+# — "rd" (recurring deposit) matches inside "card", "rent" matches inside
+# "different"/"parent"/"current", "bus" matches inside "business". \b keeps
+# the match to whole words (or whole phrases, for multi-word keywords).
+def _keyword_in(text_lower: str, keyword: str) -> bool:
+    return re.search(r"\b" + re.escape(keyword.lower()) + r"\b", text_lower) is not None
+
+
 def _detect_type(message_lower: str) -> str:
     for kw in LEND_KEYWORDS:
-        if kw in message_lower:
+        if _keyword_in(message_lower, kw):
             return "lent"
     for kw in BORROW_KEYWORDS:
-        if kw in message_lower:
+        if _keyword_in(message_lower, kw):
             return "borrowed"
     for kw in INCOME_KEYWORDS:
-        if kw in message_lower:
+        if _keyword_in(message_lower, kw):
             return "income"
     return "expense"
 
@@ -266,11 +274,11 @@ def _detect_category(message_lower: str, extra_categories: dict = None) -> str:
     if extra_categories:
         for category, keywords in extra_categories.items():
             for kw in keywords:
-                if kw in message_lower:
+                if _keyword_in(message_lower, kw):
                     return category
     for category, keywords in CATEGORY_KEYWORDS.items():
         for kw in keywords:
-            if kw in message_lower:
+            if _keyword_in(message_lower, kw):
                 return category
     return DEFAULT_CATEGORY
 
@@ -368,6 +376,37 @@ def parse_multi(message: str, extra_categories: dict = None) -> list:
     if len(valid) < 2:
         return [parse_message(message, extra_categories)]
     return valid
+
+
+# Best-effort extraction of "emi 10000 per month for 6 months" style
+# phrasing, used only to point the user at /emi with a prefilled suggestion
+# — never to auto-log. A normal parse_message on an EMI-worded message
+# would grab the total purchase price (the first/only large number) and log
+# it as this month's full expense, which is wrong: only one installment
+# happened this month, not the whole purchase.
+_EMI_RE = re.compile(
+    r"emi.*?(?P<amt>[\d,]+(?:\.\d+)?)\s*(?:per\s*month|/\s*month|pm|monthly)?"
+    r".*?(?P<months>\d+)\s*months?",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def detect_emi(message: str):
+    """
+    None if the message doesn't mention "emi" at all. Otherwise a dict —
+    {"monthly_amount": float | None, "months": int | None} — with whatever
+    could be pulled out of the phrasing, so the caller can prefill a
+    suggested /emi command even from a partial match.
+    """
+    if not _keyword_in(message.lower(), "emi"):
+        return None
+    m = _EMI_RE.search(message)
+    if not m:
+        return {"monthly_amount": None, "months": None}
+    return {
+        "monthly_amount": float(m.group("amt").replace(",", "")),
+        "months": int(m.group("months")),
+    }
 
 
 _TOTAL_LINE_RE = re.compile(r"\btotal\b", re.IGNORECASE)
