@@ -8,6 +8,7 @@ to teach the parser new merchants or a new currency's income words.
 """
 
 import re
+from datetime import date, timedelta
 
 # ---------------------------------------------------------------------------
 # Editable tables
@@ -78,11 +79,18 @@ INCOME_KEYWORDS = [
     "got paid", "earned", "earning",
 ]
 
+# Money that leaves/enters your pocket but isn't really spent/earned — it's
+# expected back (or owed back). Checked before INCOME_KEYWORDS so "lent 500
+# to a friend" doesn't get swept up by an unrelated income word.
+LEND_KEYWORDS = ["lent", "loaned", "loan to", "lending"]
+BORROW_KEYWORDS = ["borrowed", "took a loan", "loan from", "borrowing"]
+
 # Words stripped out of the note after the amount is removed. Keep this
 # list lowercase; matching is case-insensitive.
 FILLER_WORDS = {
     "spent", "spend", "on", "for", "rs", "rupees", "rupee", "inr", "paid",
     "pay", "got", "of", "at", "the", "a", "an", "in", "to", "from",
+    "lent", "loaned", "borrowed",
 }
 
 DEFAULT_CATEGORY = "other"
@@ -93,12 +101,17 @@ DEFAULT_CATEGORY = "other"
 
 # Matches things like: 500  1,250  1.5k  2l  2.5L  rs 500  ₹500  500rs
 # Captures: currency-ish prefix, the numeric part, and a k/l suffix.
+# k/l each get their own (?![a-zA-Z]) so they don't eat the first letter of
+# the next word — without it, "450 lunch" reads the "l" off "lunch" as a
+# lakh multiplier and turns ₹450 into ₹4.5 crore. The lookahead is scoped to
+# just those two single-letter alternatives (not the whole suffix group) so
+# it doesn't also block a real currency suffix like "500rs".
 _AMOUNT_RE = re.compile(
     r"""
     (?:rs\.?|inr|₹)?\s*          # optional currency prefix
     (?P<num>\d[\d,]*(?:\.\d+)?)  # the number itself, with optional commas/decimal
     \s*
-    (?P<suffix>k|l|lac|lacs|lakh|lakhs)?  # optional magnitude suffix
+    (?P<suffix>lakhs|lakh|lacs|lac|k(?![a-zA-Z])|l(?![a-zA-Z]))?  # optional magnitude suffix, not mid-word
     \s*
     (?:rs\.?|/-|₹)?              # optional currency suffix (500rs, 500/-)
     """,
@@ -159,14 +172,91 @@ def _find_amount(message: str):
 
 
 # ---------------------------------------------------------------------------
+# Retroactive dates — "yesterday 500 taxi", "780 groceries on 3rd aug"
+# ---------------------------------------------------------------------------
+
+_MONTH_NAMES = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9, "oct": 10,
+    "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_MONTH_ALT = "|".join(sorted(_MONTH_NAMES, key=len, reverse=True))
+
+_RELATIVE_DATE_RE = re.compile(
+    r"\b(day before yesterday|yesterday|today)\b", re.IGNORECASE
+)
+_DAYS_AGO_RE = re.compile(r"\b(\d+)\s+days?\s+ago\b", re.IGNORECASE)
+_ABS_DATE_RE = re.compile(
+    rf"\bon\s+(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTH_ALT})\s*(\d{{4}})?\b",
+    re.IGNORECASE,
+)
+
+
+def _find_date(message: str):
+    """
+    Returns (date_str: 'YYYY-MM-DD', span: (start, end)) for the first
+    date phrase found — "on 3rd aug 2026", "5 days ago", "yesterday", "day
+    before yesterday", "today" — checked in that priority order (explicit
+    beats relative). Returns (None, None) if the message doesn't mention a
+    date at all, so the caller should default to today.
+    """
+    m = _ABS_DATE_RE.search(message)
+    if m:
+        day = int(m.group(1))
+        month = _MONTH_NAMES[m.group(2).lower()]
+        year = int(m.group(3)) if m.group(3) else date.today().year
+        try:
+            return date(year, month, day).isoformat(), m.span()
+        except ValueError:
+            return None, None
+
+    m = _DAYS_AGO_RE.search(message)
+    if m:
+        return (date.today() - timedelta(days=int(m.group(1)))).isoformat(), m.span()
+
+    m = _RELATIVE_DATE_RE.search(message)
+    if m:
+        word = m.group(1).lower()
+        offset = {"today": 0, "yesterday": 1, "day before yesterday": 2}[word]
+        return (date.today() - timedelta(days=offset)).isoformat(), m.span()
+
+    return None, None
+
+
+def _remove_span(text: str, span) -> str:
+    if not span:
+        return text
+    start, end = span
+    return text[:start] + " " + text[end:]
+
+
+# ---------------------------------------------------------------------------
 # Category + type detection
 # ---------------------------------------------------------------------------
 
 def _detect_type(message_lower: str) -> str:
+    for kw in LEND_KEYWORDS:
+        if kw in message_lower:
+            return "lent"
+    for kw in BORROW_KEYWORDS:
+        if kw in message_lower:
+            return "borrowed"
     for kw in INCOME_KEYWORDS:
         if kw in message_lower:
             return "income"
     return "expense"
+
+
+# Picks up "...to <Name>" or "...from <Name>" so a lent/borrowed entry can
+# be tied to a person without requiring the /lend /borrow commands. Best
+# effort only — a plain name after to/from, not general NER.
+_COUNTERPARTY_RE = re.compile(r"\b(?:to|from)\s+([A-Za-z][A-Za-z]*)")
+
+
+def _extract_counterparty(message: str):
+    m = _COUNTERPARTY_RE.search(message)
+    return m.group(1).title() if m else None
 
 
 def _detect_category(message_lower: str, extra_categories: dict = None) -> str:
@@ -186,10 +276,7 @@ def _detect_category(message_lower: str, extra_categories: dict = None) -> str:
 
 
 def _build_note(message: str, amount_span) -> str:
-    text = message
-    if amount_span:
-        start, end = amount_span
-        text = text[:start] + " " + text[end:]
+    text = _remove_span(message, amount_span)
 
     # tokenize on whitespace, drop punctuation, drop filler words
     tokens = re.findall(r"[A-Za-z]+", text)
@@ -207,29 +294,80 @@ def _build_note(message: str, amount_span) -> str:
 def parse_message(message: str, extra_categories: dict = None) -> dict:
     """
     Parse a free-text message into a transaction dict:
-        {"amount": float | None, "category": str, "note": str, "type": str}
+        {"amount": float | None, "category": str, "note": str, "type": str,
+         "counterparty": str | None, "date": str}
 
     amount is None if no amount could be found at all (caller should treat
     this as "could not parse" and ask the user to rephrase).
+
+    type is one of "expense", "income", "lent" (you gave money, expect it
+    back) or "borrowed" (you received money, owe it back). counterparty is
+    a best-effort "to/from <Name>" guess, only meaningful for lent/borrowed.
+
+    date is 'YYYY-MM-DD' — today, unless the message names a date, e.g.
+    "yesterday 500 taxi", "3 days ago 200 chai", "780 groceries on 3rd aug".
 
     extra_categories: optional {category: [keyword, ...]} to merge in on top
     of CATEGORY_KEYWORDS at call time — lets callers (bot.py) add user-defined
     categories/keywords from config.json without editing this file.
     """
     message = (message or "").strip()
-    message_lower = message.lower()
 
-    amount, span = _find_amount(message)
-    category = _detect_category(message_lower, extra_categories)
-    txn_type = _detect_type(message_lower)
-    note = _build_note(message, span)
+    txn_date, date_span = _find_date(message)
+    text = _remove_span(message, date_span)
+    text_lower = text.lower()
+
+    amount, span = _find_amount(text)
+    category = _detect_category(text_lower, extra_categories)
+    txn_type = _detect_type(text_lower)
+    note = _build_note(text, span)
+
+    if txn_type in ("lent", "borrowed"):
+        out_category = "lending"
+        counterparty = _extract_counterparty(text)
+    else:
+        out_category = category if txn_type == "expense" else "income"
+        counterparty = None
 
     return {
         "amount": round(amount, 2) if amount is not None else None,
-        "category": category if txn_type == "expense" else "income",
+        "category": out_category,
         "note": note,
         "type": txn_type,
+        "counterparty": counterparty,
+        "date": txn_date or date.today().isoformat(),
     }
+
+
+# Splits a message into multiple transactions when it's clearly listing more
+# than one, e.g. "450 lunch and 200 auto". Not a comma, since commas are
+# also thousands separators inside an amount ("1,250") — splitting on those
+# would mangle the number. "and"/";"/newline don't have that ambiguity.
+_SPLIT_RE = re.compile(r"\s*(?:\band\b|;|\n)\s*", re.IGNORECASE)
+
+
+def parse_multi(message: str, extra_categories: dict = None) -> list:
+    """
+    Like parse_message, but returns a list of transaction dicts — more than
+    one if the message looks like it's logging several things at once.
+
+    Splits on "and"/";"/newline, then parses each piece. Only actually
+    returns multiple entries if at least two pieces each had their own
+    amount; otherwise (e.g. "coffee and snacks 300", where "and" is just
+    part of one purchase's description, not a separator between two) it
+    falls back to parsing the whole message as a single transaction, so a
+    stray "and" in a note doesn't silently drop half of it.
+    """
+    message = (message or "").strip()
+    parts = [p.strip() for p in _SPLIT_RE.split(message) if p.strip()]
+    if len(parts) <= 1:
+        return [parse_message(message, extra_categories)]
+
+    parsed = [parse_message(p, extra_categories) for p in parts]
+    valid = [p for p in parsed if p["amount"] is not None]
+    if len(valid) < 2:
+        return [parse_message(message, extra_categories)]
+    return valid
 
 
 if __name__ == "__main__":

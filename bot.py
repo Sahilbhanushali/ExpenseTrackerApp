@@ -13,31 +13,47 @@ Commands:
     /help       same as /start
     /total      this month's spend vs budget, with a text progress bar
     /budget     show every category's cap and this month's usage
+    /find       search past entries by note/category keyword
+    /compare    this month vs last month
+    /digest     on-demand budget-pacing summary (also sent daily at 8pm)
     /setbudget      change the overall monthly budget
     /setcatbudget   change one category's budget
     /setgoal        change the savings goal amount/label
     /recommend      suggested per-category budget split, or [apply] it
-    /undo       delete the most recently logged entry (per-chat)
+    /undo       delete the most recently logged entry (per-chat, asks to confirm)
     /recent     last 10 entries with their ids
     /edit       fix an existing entry's amount/category/note
     /recurring  manage auto-logged monthly bills (add/list/remove)
+    /lend       log money you lent someone (they owe you back)
+    /borrow     log money you borrowed (you owe it back)
+    /owed       see everything outstanding, both ways
+    /settle     mark a lend/borrow entry as paid back
     /goal       this month's savings goal progress
     /categories list every category and its keywords
     /addcategory  add a new category or teach an existing one keywords
     /export     [YYYY-MM] send transactions as a CSV file
+    /backup     send expenses.db + config.json as a zip (also sent weekly)
     /dashboard  send a standalone dashboard.html with today's data baked in
     /link       LAN URL for the always-live dashboard (same WiFi only)
 
-A daily JobQueue job checks for due recurring bills and logs them
-automatically — see check_recurring() and main()'s job_queue.run_daily.
+Three JobQueue jobs run automatically (see main()'s job_queue.run_daily
+calls): check_recurring() at 9am auto-logs due recurring bills,
+daily_digest() at 8pm pushes a budget-pacing summary to every chat that's
+ever logged something, and weekly_backup() on Sunday nights sends a
+DB+config backup the same way.
 """
 
+import calendar
 import functools
 import json
 import logging
+import os
+import re
 import socket
+import tempfile
 import threading
-from datetime import date, datetime
+import zipfile
+from datetime import date, datetime, timedelta
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
@@ -54,7 +70,7 @@ from telegram.ext import (
 
 import db
 import export
-from parser import parse_message, CATEGORY_KEYWORDS
+from parser import parse_multi, CATEGORY_KEYWORDS
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -151,10 +167,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "  • `spent 500 on ola`\n"
         "  • `swiggy 420 dinner`\n"
         "  • `1.5k myntra shirt`\n"
-        "  • `got salary 75000`\n\n"
+        "  • `got salary 75000`\n"
+        "  • `yesterday 500 taxi` / `780 groceries on 3rd aug`\n"
+        "  • `450 lunch and 200 auto` (logs both)\n\n"
+        "Or just ask, e.g. \"what's my budget\", \"how much have I spent\", "
+        "\"how much on food\", \"how much have I spent on ola\", "
+        "\"compare this month to last month\", \"savings goal progress\", "
+        "\"recent expenses\".\n\n"
         "Commands:\n"
         "/total — this month vs budget\n"
         "/budget — per-category caps\n"
+        "/find <term> — search past entries\n"
+        "/compare — this month vs last month\n"
+        "/digest — on-demand pacing summary (also sent daily at 8pm)\n"
         "/setbudget <amount> — change monthly budget\n"
         "/setcatbudget <cat> <amount> — change a category's cap\n"
         "/setgoal <amount> [label] — change savings goal\n"
@@ -163,10 +188,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/recent — last 10 entries with their ids\n"
         "/edit <id> <field> <value> — fix an entry\n"
         "/recurring add|list|remove — auto-log monthly bills\n"
+        "/lend <amount> <person> [note] — you lent them money\n"
+        "/borrow <amount> <person> [note] — you borrowed money\n"
+        "/owed — see everything outstanding\n"
+        "/settle <id> — mark a loan as paid back\n"
         "/goal — savings goal progress\n"
         "/categories — list categories and their keywords\n"
         "/addcategory <name> <kw1,kw2,...> — teach it a new category\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
+        "/backup — download expenses.db + config.json as a zip\n"
         "/dashboard — one self-contained dashboard.html, ready for your phone\n"
         "/link — live dashboard URL, for when you're on this WiFi\n"
     )
@@ -210,6 +240,90 @@ async def budget_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(
             f"{cat}: {fmt_money(spent, currency)} / {fmt_money(cap, currency)}{flag}"
         )
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def _category_query_reply(update: Update, category: str, cfg: dict):
+    """Reply with just one category's spend vs cap this month — the precise
+    answer to "how much on food" instead of dumping the full /budget list."""
+    currency = cfg.get("currency", "₹")
+    month = date.today().isoformat()[:7]
+    spent = db.category_totals(month).get(category, 0.0)
+    cap = cfg.get("budgets", {}).get(category, 0)
+
+    lines = [f"📊 *{category}* — {month}"]
+    if cap:
+        remaining = cap - spent
+        remaining_str = fmt_money(remaining, currency) if remaining >= 0 else \
+            f"-{fmt_money(abs(remaining), currency)} (over budget)"
+        lines.append(f"{fmt_money(spent, currency)} / {fmt_money(cap, currency)}")
+        lines.append(progress_bar(spent, cap))
+        lines.append(f"Remaining: {remaining_str}")
+    else:
+        lines.append(f"Spent: {fmt_money(spent, currency)} (no budget cap set — /setcatbudget {category} <amount>)")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+def _search_transactions(term: str, chat_id: int) -> list:
+    term = term.lower()
+    return [
+        r for r in db.all_rows()
+        if r["chat_id"] == chat_id
+        and (term in (r["note"] or "").lower() or term in r["category"].lower())
+    ]
+
+
+async def _search_reply(update: Update, term: str, cfg: dict):
+    chat_id = update.effective_chat.id
+    currency = cfg.get("currency", "₹")
+    matches = _search_transactions(term, chat_id)
+
+    if not matches:
+        await update.message.reply_text(f"No entries found matching '{term}'.")
+        return
+
+    total = sum(r["amount"] for r in matches if r["type"] == "expense")
+    lines = [f"🔍 *'{term}'* — {len(matches)} match(es), {fmt_money(total, currency)} spent total"]
+    for r in matches[-10:]:
+        sign = "+" if r["type"] in ("income", "borrowed") else "-"
+        lines.append(
+            f"#{r['id']} · {r['date']} · {sign}{fmt_money(r['amount'], currency)} · {r['note'] or 'no note'}"
+        )
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def find_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if not args:
+        await update.message.reply_text("Usage: /find <term>\ne.g. /find ola")
+        return
+    cfg = load_config()
+    await _search_reply(update, " ".join(args), cfg)
+
+
+async def compare_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    today = date.today()
+    this_month = today.isoformat()[:7]
+    last_month = (today.replace(day=1) - timedelta(days=1)).isoformat()[:7]
+
+    cur = db.month_total(this_month)
+    prev = db.month_total(last_month)
+    diff = cur["expense"] - prev["expense"]
+
+    lines = [f"📈 *{this_month} vs {last_month}*"]
+    lines.append(f"Spent: {fmt_money(cur['expense'], currency)} vs {fmt_money(prev['expense'], currency)}")
+    if prev["expense"] > 0:
+        pct = abs(diff) / prev["expense"] * 100
+        if diff > 0:
+            lines.append(f"🔺 up {pct:.0f}% ({fmt_money(diff, currency)} more)")
+        elif diff < 0:
+            lines.append(f"🔻 down {pct:.0f}% ({fmt_money(abs(diff), currency)} less)")
+        else:
+            lines.append("➖ same as last month")
+    lines.append(f"Income: {fmt_money(cur['income'], currency)} vs {fmt_money(prev['income'], currency)}")
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
@@ -328,6 +442,56 @@ async def export_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         path.unlink(missing_ok=True)
 
 
+def _build_backup_zip() -> Path:
+    """Zip up expenses.db + config.json (the two files that can't be
+    regenerated from anything else) so a corrupted disk or bad edit doesn't
+    wipe your whole history with no way back."""
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fd, path = tempfile.mkstemp(prefix=f"expense_backup_{ts}_", suffix=".zip")
+    os.close(fd)
+    path = Path(path)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(db.DB_PATH, arcname="expenses.db")
+        zf.write(CONFIG_PATH, arcname="config.json")
+    return path
+
+
+async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    path = _build_backup_zip()
+    try:
+        with open(path, "rb") as f:
+            await update.message.reply_document(
+                document=f,
+                filename=path.name,
+                caption=(
+                    "💾 Backup: expenses.db + config.json (includes your bot "
+                    "token — this file is as sensitive as the bot itself)."
+                ),
+            )
+    finally:
+        path.unlink(missing_ok=True)
+
+
+async def weekly_backup(context: ContextTypes.DEFAULT_TYPE):
+    """Weekly JobQueue job: push the same backup /backup produces to every
+    chat that's ever logged something, so it exists somewhere off this
+    machine even if you never remember to run /backup yourself."""
+    path = _build_backup_zip()
+    chat_ids = {r["chat_id"] for r in db.all_rows() if r["chat_id"] is not None}
+    try:
+        for chat_id in chat_ids:
+            try:
+                with open(path, "rb") as f:
+                    await context.bot.send_document(
+                        chat_id=chat_id, document=f, filename=path.name,
+                        caption="💾 Weekly backup",
+                    )
+            except Exception:
+                log.exception("Failed to send weekly backup to chat %s", chat_id)
+    finally:
+        path.unlink(missing_ok=True)
+
+
 async def dashboard_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     path = export.bundle_standalone_dashboard()
     try:
@@ -356,18 +520,47 @@ async def link_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# chat_id -> expiry datetime for a pending /undo awaiting /undo confirm.
+# In-memory only (cleared on restart) — acceptable since an expired or lost
+# confirmation just means re-running /undo, not a stuck state.
+_PENDING_UNDO = {}
+_UNDO_CONFIRM_WINDOW = timedelta(minutes=2)
+
+
 async def undo_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    row = db.undo_last(chat_id=chat_id)
-    export.run()
-    if row is None:
-        await update.message.reply_text("Nothing to undo.")
-        return
     cfg = load_config()
     currency = cfg.get("currency", "₹")
+
+    if context.args and context.args[0].lower() == "confirm":
+        expiry = _PENDING_UNDO.pop(chat_id, None)
+        if expiry is None or datetime.now() > expiry:
+            await update.message.reply_text("Nothing pending to confirm — run /undo again.")
+            return
+        row = db.undo_last(chat_id=chat_id)
+        export.run()
+        if row is None:
+            await update.message.reply_text("Nothing to undo.")
+            return
+        await update.message.reply_text(
+            f"🗑️ Removed: {row['category']} {fmt_money(row['amount'], currency)}"
+            f" ({row['note'] or 'no note'})"
+        )
+        return
+
+    rows = [r for r in db.all_rows() if r["chat_id"] == chat_id]
+    if not rows:
+        await update.message.reply_text("Nothing to undo.")
+        return
+
+    last = rows[-1]
+    _PENDING_UNDO[chat_id] = datetime.now() + _UNDO_CONFIRM_WINDOW
+    sign = "+" if last["type"] in ("income", "borrowed") else "-"
     await update.message.reply_text(
-        f"🗑️ Removed: {row['category']} {fmt_money(row['amount'], currency)}"
-        f" ({row['note'] or 'no note'})"
+        f"⚠️ This will delete:\n"
+        f"#{last['id']} · {last['date']} · {last['category']} · "
+        f"{sign}{fmt_money(last['amount'], currency)} · {last['note'] or 'no note'}\n\n"
+        f"Reply /undo confirm within 2 minutes to delete it, or ignore to cancel."
     )
 
 
@@ -422,7 +615,7 @@ async def recent_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lines = ["🧾 Last entries — use /edit <id> <field> <value> to fix one:"]
     for r in rows:
-        sign = "+" if r["type"] == "income" else "-"
+        sign = "+" if r["type"] in ("income", "borrowed") else "-"
         lines.append(
             f"#{r['id']} · {r['date']} · {r['category']} · "
             f"{sign}{fmt_money(r['amount'], currency)} · {r['note'] or 'no note'}"
@@ -466,6 +659,96 @@ async def edit_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     before_val = before[field] if field != "amount" else fmt_money(before[field], currency)
     after_val = updated[field] if field != "amount" else fmt_money(updated[field], currency)
     await update.message.reply_text(f"✏️ #{row_id} {field}: {before_val} → {after_val}")
+
+
+async def lend_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2 or (amount := _parse_amount_arg(args[0])) is None:
+        await update.message.reply_text(
+            "Usage: /lend <amount> <person> [note]\ne.g. /lend 500 Rahul table part"
+        )
+        return
+
+    person = args[1].strip().title()
+    note = " ".join(args[2:])
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    db.add(amount=amount, category="lending", note=note, txn_type="lent",
+            chat_id=chat_id, counterparty=person, settled=0)
+    export.run()
+    await update.message.reply_text(
+        f"🤝 Logged: you lent {person} {fmt_money(amount, currency)}"
+        f"{f' ({note})' if note else ''}\n"
+        f"{person} owes you this back — /owed to track, /settle <id> once repaid."
+    )
+
+
+async def borrow_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2 or (amount := _parse_amount_arg(args[0])) is None:
+        await update.message.reply_text(
+            "Usage: /borrow <amount> <person> [note]\ne.g. /borrow 1000 Priya rent split"
+        )
+        return
+
+    person = args[1].strip().title()
+    note = " ".join(args[2:])
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    db.add(amount=amount, category="lending", note=note, txn_type="borrowed",
+            chat_id=chat_id, counterparty=person, settled=0)
+    export.run()
+    await update.message.reply_text(
+        f"🤝 Logged: you borrowed {fmt_money(amount, currency)} from {person}"
+        f"{f' ({note})' if note else ''}\n"
+        f"You owe {person} this back — /owed to track, /settle <id> once repaid."
+    )
+
+
+async def owed_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    rows = db.outstanding_loans(chat_id=chat_id)
+    if not rows:
+        await update.message.reply_text("Nothing outstanding — all settled up! 🎉")
+        return
+
+    lines = ["🤝 *Outstanding — use /settle <id> once repaid*"]
+    for r in rows:
+        person = r["counterparty"] or "someone"
+        verb = "owes you" if r["type"] == "lent" else "you owe"
+        note_suffix = f" ({r['note']})" if r["note"] else ""
+        lines.append(
+            f"#{r['id']} · {person} {verb} {fmt_money(r['amount'], currency)}{note_suffix}"
+        )
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def settle_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if not args or not args[0].isdigit():
+        await update.message.reply_text("Usage: /settle <id>\nSee /owed for ids.")
+        return
+
+    row = db.settle(int(args[0]), chat_id=chat_id)
+    if row is None:
+        await update.message.reply_text(f"No outstanding entry #{args[0]} found.")
+        return
+
+    export.run()
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    person = row["counterparty"] or "them"
+    await update.message.reply_text(
+        f"✅ Settled #{row['id']}: {person} · {fmt_money(row['amount'], currency)}"
+    )
 
 
 def all_categories(cfg: dict) -> dict:
@@ -719,23 +1002,150 @@ async def check_recurring(context: ContextTypes.DEFAULT_TYPE):
     export.run()
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message.text
-    chat_id = update.effective_chat.id
-    cfg = load_config()
+def _build_digest_text(cfg: dict) -> str:
+    """This month's pacing summary — spend so far vs. days elapsed,
+    projected to see if you're on track to stay under budget. Returns None
+    if there's no monthlyBudget set (nothing meaningful to pace against)."""
     currency = cfg.get("currency", "₹")
+    today = date.today()
+    month = today.isoformat()[:7]
+    totals = db.month_total(month)
+    spent = totals["expense"]
+    budget = effective_budget(cfg.get("monthlyBudget", 0), totals["income"])
+    if budget <= 0:
+        return None
 
-    parsed = parse_message(message, extra_categories=cfg.get("customCategories"))
+    day_of_month = today.day
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+    pace = (spent / day_of_month) * days_in_month if day_of_month else spent
+    pct_used = round(spent / budget * 100) if budget else 0
+    pct_days = round(day_of_month / days_in_month * 100)
 
-    if parsed["amount"] is None:
-        await update.message.reply_text(
-            "Couldn't find an amount in that — try something like "
-            "`spent 500 on ola` or `1.5k myntra shirt`.",
-            parse_mode="Markdown",
+    lines = [
+        f"🌙 *Day {day_of_month}/{days_in_month} — {month}*",
+        f"Spent: {fmt_money(spent, currency)} / {fmt_money(budget, currency)}"
+        f" ({pct_used}% of budget, {pct_days}% of month gone)",
+    ]
+    if pace > budget:
+        lines.append(
+            f"⚠️ Pacing to end at {fmt_money(pace, currency)} — "
+            f"{fmt_money(pace - budget, currency)} over budget at this rate."
         )
+    else:
+        lines.append(f"✅ Pacing to end around {fmt_money(pace, currency)}, under budget.")
+    return "\n".join(lines)
+
+
+async def daily_digest(context: ContextTypes.DEFAULT_TYPE):
+    """Daily JobQueue job: push a pacing summary to every chat that's ever
+    logged something, so overspending shows up before month-end instead of
+    only when you happen to check /total."""
+    cfg = load_config()
+    text = _build_digest_text(cfg)
+    if text is None:
         return
 
-    month = date.today().isoformat()[:7]
+    chat_ids = {r["chat_id"] for r in db.all_rows() if r["chat_id"] is not None}
+    for chat_id in chat_ids:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+        except Exception:
+            log.exception("Failed to send daily digest to chat %s", chat_id)
+
+
+async def digest_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cfg = load_config()
+    text = _build_digest_text(cfg)
+    if text is None:
+        await update.message.reply_text(
+            "Set a monthlyBudget first (via /setbudget) so I have something to pace against."
+        )
+        return
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+# Plain-English questions that don't contain an amount get routed to an
+# existing command instead of failing as "couldn't find an amount". Checked
+# in order, first match wins — more specific phrasing (category budgets,
+# goal) is listed before the generic "budget"/"total" catch-all.
+QUERY_INTENTS = [
+    (("compare", "vs last month", "last month to this"), "compare"),
+    (("category budget", "categories budget", "budget for", "budget per category",
+      "category caps", "category wise"), "budget"),
+    (("owed", "outstanding", "who owes me", "do i owe"), "owed"),
+    (("saving", "savings", "goal"), "goal"),
+    (("recent", "last few", "last transaction", "last expense", "history"), "recent"),
+    (("categories", "what categories", "list categories"), "categories"),
+    (("budget", "how much have i spent", "how much did i spend", "spent so far",
+      "total spent", "total this month", "how much left", "remaining",
+      "how much can i spend"), "total"),
+    (("help", "commands", "what can you do"), "help"),
+]
+
+
+def _detect_query_intent(message_lower: str) -> str:
+    for keywords, intent in QUERY_INTENTS:
+        if any(kw in message_lower for kw in keywords):
+            return intent
+    return None
+
+
+_QUERY_TRIGGER_WORDS = ("how much", "spent", "spend", "budget", "left", "remaining", "total")
+
+
+def _extract_category_mentioned(message_lower: str, cfg: dict) -> str:
+    for cat in sorted(valid_categories(cfg), key=len, reverse=True):
+        if cat in message_lower:
+            return cat
+    return None
+
+
+# Picks up "...on <word>" to use as a merchant/keyword search term, e.g.
+# "how much have I spent on ola". Only a single word — merchants in this
+# tracker's notes are typically one token ("ola", "swiggy", "netflix").
+_SEARCH_ON_RE = re.compile(r"\bon\s+([a-z][a-z\-]*)", re.IGNORECASE)
+
+
+def _extract_search_term(message_lower: str, cfg: dict) -> str:
+    m = _SEARCH_ON_RE.search(message_lower)
+    if not m:
+        return None
+    term = m.group(1).lower()
+    if term in valid_categories(cfg):
+        return None  # handled by the category-specific path instead
+    return term
+
+
+def _log_one_transaction(parsed: dict, chat_id: int, cfg: dict, currency: str) -> str:
+    """Insert one already-parsed transaction and return its confirmation
+    text. Does NOT call export.run() — the caller does that once, after all
+    items in a (possibly multi-item) message are inserted."""
+    txn_date = parsed.get("date") or date.today().isoformat()
+    date_note = "" if txn_date == date.today().isoformat() else f" [dated {txn_date}]"
+
+    if parsed["type"] in ("lent", "borrowed"):
+        person = parsed["counterparty"] or "them"
+        note = parsed["note"]
+        db.add(
+            amount=parsed["amount"], category="lending", note=note,
+            txn_type=parsed["type"], chat_id=chat_id,
+            counterparty=parsed["counterparty"], settled=0, txn_date=txn_date,
+        )
+        note_suffix = f" ({note})" if note else ""
+        if parsed["type"] == "lent":
+            return (
+                f"🤝 Logged: you lent {person} {fmt_money(parsed['amount'], currency)}{note_suffix}{date_note}\n"
+                f"{person} owes you this back — /owed to track, /settle <id> once repaid."
+            )
+        return (
+            f"🤝 Logged: you borrowed {fmt_money(parsed['amount'], currency)} from {person}{note_suffix}{date_note}\n"
+            f"You owe {person} this back — /owed to track, /settle <id> once repaid."
+        )
+
+    # Use the entry's own month for before/after totals, not always today's —
+    # a backdated entry ("yesterday 500 taxi" on the 1st of the month) should
+    # affect the month it actually belongs to, not the month you typed it in.
+    month = txn_date[:7]
     before_totals = db.month_total(month)
     before_cat = db.category_totals(month).get(parsed["category"], 0.0)
 
@@ -745,46 +1155,101 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         note=parsed["note"],
         txn_type=parsed["type"],
         chat_id=chat_id,
+        txn_date=txn_date,
     )
-    export.run()
 
     totals = db.month_total(month)
     budget = effective_budget(cfg.get("monthlyBudget", 0), totals["income"])
 
     if parsed["type"] == "income":
-        reply = (
+        return (
             f"✅ Logged income: {fmt_money(parsed['amount'], currency)}"
-            f" ({parsed['note'] or 'no note'})\n"
-            f"Total income this month: {fmt_money(totals['income'], currency)}"
+            f" ({parsed['note'] or 'no note'}){date_note}\n"
+            f"Total income for {month}: {fmt_money(totals['income'], currency)}"
             f" (was {fmt_money(before_totals['income'], currency)} before this)\n"
             f"Effective monthly budget is now: {fmt_money(budget, currency)}"
         )
+
+    spent = totals["expense"]
+    after_cat = db.category_totals(month).get(parsed["category"], 0.0)
+    cat_cap = cfg.get("budgets", {}).get(parsed["category"], 0)
+
+    bar = progress_bar(spent, budget)
+    remaining = budget - spent
+    remaining_str = fmt_money(remaining, currency) if remaining >= 0 else \
+        f"-{fmt_money(abs(remaining), currency)} (over budget)"
+    reply = (
+        f"✅ {parsed['category']} — {fmt_money(parsed['amount'], currency)}"
+        f" ({parsed['note'] or 'no note'}){date_note}\n"
+        f"{month} so far: {fmt_money(spent, currency)} / {fmt_money(budget, currency)}"
+        f" · Remaining: {remaining_str}\n"
+        f"{bar}"
+    )
+
+    warnings = _threshold_warnings(
+        before_totals["expense"], spent, budget,
+        before_cat, after_cat, cat_cap, parsed["category"],
+        currency,
+    )
+    if warnings:
+        reply += "\n\n" + "\n".join(warnings)
+    return reply
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = update.message.text
+    chat_id = update.effective_chat.id
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    parsed_list = parse_multi(message, extra_categories=cfg.get("customCategories"))
+    valid = [p for p in parsed_list if p["amount"] is not None]
+
+    if not valid:
+        message_lower = message.lower()
+        category = _extract_category_mentioned(message_lower, cfg)
+        term = _extract_search_term(message_lower, cfg)
+        intent = _detect_query_intent(message_lower)
+
+        if intent == "compare":
+            await compare_cmd(update, context)
+        elif category and any(kw in message_lower for kw in _QUERY_TRIGGER_WORDS):
+            await _category_query_reply(update, category, cfg)
+        elif term and any(kw in message_lower for kw in _QUERY_TRIGGER_WORDS):
+            await _search_reply(update, term, cfg)
+        elif intent == "budget":
+            await budget_cmd(update, context)
+        elif intent == "owed":
+            await owed_cmd(update, context)
+        elif intent == "goal":
+            await goal_cmd(update, context)
+        elif intent == "recent":
+            await recent_cmd(update, context)
+        elif intent == "categories":
+            await categories_cmd(update, context)
+        elif intent == "total":
+            await total_cmd(update, context)
+        elif intent == "help":
+            await start(update, context)
+        else:
+            await update.message.reply_text(
+                "Couldn't find an amount, and this didn't look like a question "
+                "I recognize either.\n\n"
+                "To log spending: `spent 500 on ola` or `1.5k myntra shirt`\n"
+                "To ask something: \"what's my budget\", \"how much have I spent\", "
+                "\"savings goal progress\", \"recent expenses\"",
+                parse_mode="Markdown",
+            )
+        return
+
+    replies = [_log_one_transaction(parsed, chat_id, cfg, currency) for parsed in valid]
+    export.run()
+
+    if len(replies) > 1:
+        header = f"📝 Logged {len(replies)} entries from that message:\n\n"
+        await update.message.reply_text(header + "\n\n—\n\n".join(replies))
     else:
-        spent = totals["expense"]
-        after_cat = db.category_totals(month).get(parsed["category"], 0.0)
-        cat_cap = cfg.get("budgets", {}).get(parsed["category"], 0)
-
-        bar = progress_bar(spent, budget)
-        remaining = budget - spent
-        remaining_str = fmt_money(remaining, currency) if remaining >= 0 else \
-            f"-{fmt_money(abs(remaining), currency)} (over budget)"
-        reply = (
-            f"✅ {parsed['category']} — {fmt_money(parsed['amount'], currency)}"
-            f" ({parsed['note'] or 'no note'})\n"
-            f"Month so far: {fmt_money(spent, currency)} / {fmt_money(budget, currency)}"
-            f" · Remaining: {remaining_str}\n"
-            f"{bar}"
-        )
-
-        warnings = _threshold_warnings(
-            before_totals["expense"], spent, budget,
-            before_cat, after_cat, cat_cap, parsed["category"],
-            currency,
-        )
-        if warnings:
-            reply += "\n\n" + "\n".join(warnings)
-
-    await update.message.reply_text(reply)
+        await update.message.reply_text(replies[0])
 
 
 def main():
@@ -804,12 +1269,20 @@ def main():
     app.add_handler(CommandHandler("help", start))
     app.add_handler(CommandHandler("total", total_cmd))
     app.add_handler(CommandHandler("budget", budget_cmd))
+    app.add_handler(CommandHandler("find", find_cmd))
+    app.add_handler(CommandHandler("compare", compare_cmd))
+    app.add_handler(CommandHandler("digest", digest_cmd))
     app.add_handler(CommandHandler("undo", undo_cmd))
     app.add_handler(CommandHandler("recent", recent_cmd))
     app.add_handler(CommandHandler("edit", edit_cmd))
     app.add_handler(CommandHandler("recurring", recurring_cmd))
+    app.add_handler(CommandHandler("lend", lend_cmd))
+    app.add_handler(CommandHandler("borrow", borrow_cmd))
+    app.add_handler(CommandHandler("owed", owed_cmd))
+    app.add_handler(CommandHandler("settle", settle_cmd))
     app.add_handler(CommandHandler("goal", goal_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
+    app.add_handler(CommandHandler("backup", backup_cmd))
     app.add_handler(CommandHandler("dashboard", dashboard_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(CommandHandler("setbudget", setbudget_cmd))
@@ -822,6 +1295,12 @@ def main():
 
     # once a day, auto-log any recurring bill that's come due
     app.job_queue.run_daily(check_recurring, time=dtime(hour=9, minute=0))
+    # once a day, push a budget-pacing summary so overspending shows up
+    # before month-end instead of only when you happen to check /total
+    app.job_queue.run_daily(daily_digest, time=dtime(hour=20, minute=0))
+    # once a week (Sunday night), push a DB+config backup so history survives
+    # a corrupted disk even if /backup is never run manually
+    app.job_queue.run_daily(weekly_backup, time=dtime(hour=21, minute=0), days=(6,))
 
     log.info("Bot starting...")
     app.run_polling()

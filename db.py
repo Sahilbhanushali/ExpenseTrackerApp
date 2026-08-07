@@ -7,9 +7,11 @@ One table, "txns":
     category    TEXT
     amount      REAL
     note        TEXT
-    type        TEXT    'expense' | 'income'
+    type        TEXT    'expense' | 'income' | 'lent' | 'borrowed'
     chat_id     INTEGER  Telegram chat this entry came from
     created_at  TEXT    ISO timestamp, set automatically
+    counterparty TEXT    person's name, only set for lent/borrowed rows
+    settled     INTEGER  0/1, only meaningful for lent/borrowed rows
 
 And "recurring", for bills that auto-log themselves each month:
     id              INTEGER PRIMARY KEY
@@ -39,9 +41,11 @@ CREATE TABLE IF NOT EXISTS txns (
     category    TEXT NOT NULL,
     amount      REAL NOT NULL,
     note        TEXT,
-    type        TEXT NOT NULL CHECK (type IN ('expense', 'income')),
+    type        TEXT NOT NULL CHECK (type IN ('expense', 'income', 'lent', 'borrowed')),
     chat_id     INTEGER,
-    created_at  TEXT NOT NULL
+    created_at  TEXT NOT NULL,
+    counterparty TEXT,
+    settled     INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS recurring (
@@ -68,16 +72,55 @@ def _connect():
         conn.close()
 
 
+def _migrate_schema(conn):
+    """
+    Upgrade a pre-existing txns table (created before 'lent'/'borrowed' and
+    the counterparty/settled columns existed) in place. Safe to run every
+    startup — it's a no-op once the table already matches SCHEMA.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='txns'"
+    ).fetchone()
+    if row is None or "'lent'" in row["sql"]:
+        return
+
+    conn.executescript("""
+        ALTER TABLE txns RENAME TO txns_old;
+
+        CREATE TABLE txns (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            date        TEXT NOT NULL,
+            category    TEXT NOT NULL,
+            amount      REAL NOT NULL,
+            note        TEXT,
+            type        TEXT NOT NULL CHECK (type IN ('expense', 'income', 'lent', 'borrowed')),
+            chat_id     INTEGER,
+            created_at  TEXT NOT NULL,
+            counterparty TEXT,
+            settled     INTEGER
+        );
+
+        INSERT INTO txns (id, date, category, amount, note, type, chat_id, created_at)
+            SELECT id, date, category, amount, note, type, chat_id, created_at FROM txns_old;
+
+        DROP TABLE txns_old;
+    """)
+
+
 def init_db():
-    """Create the txns/recurring tables if they don't already exist. Safe to call every time."""
+    """Create the txns/recurring tables if they don't already exist, and
+    migrate an older txns table in place if needed. Safe to call every time."""
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate_schema(conn)
 
 
 def add(amount: float, category: str, note: str, txn_type: str,
-        chat_id: int = None, txn_date: str = None) -> int:
+        chat_id: int = None, txn_date: str = None,
+        counterparty: str = None, settled: int = None) -> int:
     """
     Insert one transaction. txn_date defaults to today (YYYY-MM-DD).
+    counterparty/settled are only meaningful for txn_type 'lent'/'borrowed'.
     Returns the new row's id.
     """
     txn_date = txn_date or date.today().isoformat()
@@ -85,9 +128,11 @@ def add(amount: float, category: str, note: str, txn_type: str,
 
     with _connect() as conn:
         cur = conn.execute(
-            """INSERT INTO txns (date, category, amount, note, type, chat_id, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (txn_date, category, amount, note, txn_type, chat_id, created_at),
+            """INSERT INTO txns (date, category, amount, note, type, chat_id,
+                                  created_at, counterparty, settled)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (txn_date, category, amount, note, txn_type, chat_id, created_at,
+             counterparty, settled),
         )
         return cur.lastrowid
 
@@ -218,6 +263,48 @@ def mark_recurring_run(row_id: int, month: str):
     """Stamp a recurring entry as having fired for `month` ('YYYY-MM')."""
     with _connect() as conn:
         conn.execute("UPDATE recurring SET last_run_month = ? WHERE id = ?", (month, row_id))
+
+
+def outstanding_loans(chat_id: int = None) -> list:
+    """Lent/borrowed rows that haven't been settled yet, oldest first."""
+    with _connect() as conn:
+        if chat_id is not None:
+            rows = conn.execute(
+                """SELECT * FROM txns
+                   WHERE type IN ('lent', 'borrowed') AND (settled IS NULL OR settled = 0)
+                     AND chat_id = ?
+                   ORDER BY date ASC, id ASC""",
+                (chat_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT * FROM txns
+                   WHERE type IN ('lent', 'borrowed') AND (settled IS NULL OR settled = 0)
+                   ORDER BY date ASC, id ASC"""
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def settle(row_id: int, chat_id: int = None):
+    """Mark a lent/borrowed row as settled (paid back). Returns the updated
+    row as a dict, or None if it doesn't exist / isn't a loan row / doesn't
+    belong to chat_id."""
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT * FROM txns WHERE id = ? AND chat_id = ? AND type IN ('lent', 'borrowed')",
+                (row_id, chat_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM txns WHERE id = ? AND type IN ('lent', 'borrowed')", (row_id,)
+            ).fetchone()
+        if row is None:
+            return None
+
+        conn.execute("UPDATE txns SET settled = 1 WHERE id = ?", (row_id,))
+        updated = conn.execute("SELECT * FROM txns WHERE id = ?", (row_id,)).fetchone()
+        return dict(updated)
 
 
 def all_rows() -> list:
