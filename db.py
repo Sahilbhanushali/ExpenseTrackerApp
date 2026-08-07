@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS txns (
     chat_id     INTEGER,
     created_at  TEXT NOT NULL,
     counterparty TEXT,
-    settled     INTEGER
+    settled     INTEGER,
+    account     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS recurring (
@@ -66,6 +67,37 @@ CREATE TABLE IF NOT EXISTS recurring (
     active          INTEGER NOT NULL DEFAULT 1,
     installments_remaining INTEGER,
     loan_id         INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS accounts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id         INTEGER NOT NULL,
+    name            TEXT NOT NULL,
+    opening_balance REAL NOT NULL DEFAULT 0,
+    is_default      INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transfers (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id         INTEGER NOT NULL,
+    from_account    TEXT NOT NULL,
+    to_account      TEXT NOT NULL,
+    amount          REAL NOT NULL,
+    note            TEXT,
+    date            TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS wishlist (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id         INTEGER NOT NULL,
+    name            TEXT NOT NULL,
+    price           REAL NOT NULL,
+    note            TEXT,
+    purchased       INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL,
+    purchased_at    TEXT
 );
 """
 
@@ -120,6 +152,10 @@ def _migrate_schema(conn):
     if "loan_id" not in cols:
         conn.execute("ALTER TABLE recurring ADD COLUMN loan_id INTEGER")
 
+    txn_cols = {r["name"] for r in conn.execute("PRAGMA table_info(txns)").fetchall()}
+    if "account" not in txn_cols:
+        conn.execute("ALTER TABLE txns ADD COLUMN account TEXT")
+
 
 def init_db():
     """Create the txns/recurring tables if they don't already exist, and
@@ -131,11 +167,13 @@ def init_db():
 
 def add(amount: float, category: str, note: str, txn_type: str,
         chat_id: int = None, txn_date: str = None,
-        counterparty: str = None, settled: int = None) -> int:
+        counterparty: str = None, settled: int = None,
+        account: str = None) -> int:
     """
     Insert one transaction. txn_date defaults to today (YYYY-MM-DD).
     counterparty/settled are only meaningful for txn_type 'lent'/'borrowed'.
-    Returns the new row's id.
+    account is the money pot (see accounts table) this txn affects — None if
+    the chat hasn't set one up. Returns the new row's id.
     """
     txn_date = txn_date or date.today().isoformat()
     created_at = datetime.now().isoformat(timespec="seconds")
@@ -143,10 +181,10 @@ def add(amount: float, category: str, note: str, txn_type: str,
     with _connect() as conn:
         cur = conn.execute(
             """INSERT INTO txns (date, category, amount, note, type, chat_id,
-                                  created_at, counterparty, settled)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                  created_at, counterparty, settled, account)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (txn_date, category, amount, note, txn_type, chat_id, created_at,
-             counterparty, settled),
+             counterparty, settled, account),
         )
         return cur.lastrowid
 
@@ -423,6 +461,184 @@ def category_totals(month: str) -> dict:
             (f"{month}%",),
         ).fetchall()
     return {r["category"]: r["total"] or 0.0 for r in rows}
+
+
+def add_account(chat_id: int, name: str, opening_balance: float = 0.0) -> int:
+    """Register a new money pot (bank/cash/wallet/card) for a chat. Returns
+    the new row's id. Caller (bot.py) is responsible for rejecting duplicate
+    names — this just inserts."""
+    created_at = datetime.now().isoformat(timespec="seconds")
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO accounts (chat_id, name, opening_balance, is_default, created_at)
+               VALUES (?, ?, ?, 0, ?)""",
+            (chat_id, name, opening_balance, created_at),
+        )
+        return cur.lastrowid
+
+
+def list_accounts(chat_id: int) -> list:
+    """All accounts for a chat, oldest first."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM accounts WHERE chat_id = ? ORDER BY id ASC", (chat_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_default_account(chat_id: int) -> str:
+    """The account name new transactions should be tagged with, or None if
+    the chat hasn't set one up / hasn't picked a default."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT name FROM accounts WHERE chat_id = ? AND is_default = 1", (chat_id,)
+        ).fetchone()
+        return row["name"] if row else None
+
+
+def set_default_account(chat_id: int, name: str) -> bool:
+    """Make `name` the chat's default account (used to auto-tag new
+    transactions). Returns False if no such account exists for this chat."""
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id FROM accounts WHERE chat_id = ? AND name = ?", (chat_id, name)
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute("UPDATE accounts SET is_default = 0 WHERE chat_id = ?", (chat_id,))
+        conn.execute("UPDATE accounts SET is_default = 1 WHERE id = ?", (row["id"],))
+        return True
+
+
+def account_balance(chat_id: int, name: str) -> float:
+    """Current balance of one account: opening balance, plus everything
+    logged against it (income/borrowed add, expense/lent subtract — same
+    sign convention as everywhere else in this file), plus transfers."""
+    with _connect() as conn:
+        acc = conn.execute(
+            "SELECT opening_balance FROM accounts WHERE chat_id = ? AND name = ?",
+            (chat_id, name),
+        ).fetchone()
+        if acc is None:
+            return None
+        balance = acc["opening_balance"]
+
+        rows = conn.execute(
+            "SELECT type, SUM(amount) as total FROM txns WHERE chat_id = ? AND account = ? GROUP BY type",
+            (chat_id, name),
+        ).fetchall()
+        for r in rows:
+            total = r["total"] or 0.0
+            if r["type"] in ("expense", "lent"):
+                balance -= total
+            else:  # income, borrowed
+                balance += total
+
+        transferred_in = conn.execute(
+            "SELECT SUM(amount) as total FROM transfers WHERE chat_id = ? AND to_account = ?",
+            (chat_id, name),
+        ).fetchone()["total"] or 0.0
+        transferred_out = conn.execute(
+            "SELECT SUM(amount) as total FROM transfers WHERE chat_id = ? AND from_account = ?",
+            (chat_id, name),
+        ).fetchone()["total"] or 0.0
+        balance += transferred_in - transferred_out
+
+        return balance
+
+
+def add_transfer(chat_id: int, from_account: str, to_account: str, amount: float,
+                  note: str = None, txn_date: str = None) -> int:
+    """Move money between two of a chat's accounts. Doesn't touch txns —
+    account_balance() nets transfers in separately."""
+    txn_date = txn_date or date.today().isoformat()
+    created_at = datetime.now().isoformat(timespec="seconds")
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO transfers (chat_id, from_account, to_account, amount, note, date, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (chat_id, from_account, to_account, amount, note, txn_date, created_at),
+        )
+        return cur.lastrowid
+
+
+def available_savings(chat_id: int) -> float:
+    """Rough all-time spare cash for a chat: income earned, minus expenses,
+    minus what's currently tied up in outstanding lent money. Deliberately
+    excludes outstanding borrowed money — that cash is sitting in your
+    pocket but it's owed, not saved, so it must never count toward wishlist
+    affordability (counting it would show a purchase as "affordable" using
+    money that's actually a debt to someone else)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT type, SUM(amount) as total FROM txns WHERE chat_id = ? GROUP BY type",
+            (chat_id,),
+        ).fetchall()
+    totals = {r["type"]: (r["total"] or 0.0) for r in rows}
+    return totals.get("income", 0.0) - totals.get("expense", 0.0) - totals.get("lent", 0.0)
+
+
+def add_wishlist_item(chat_id: int, name: str, price: float, note: str = None) -> int:
+    """Add a purchase goal. Returns the new row's id."""
+    created_at = datetime.now().isoformat(timespec="seconds")
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO wishlist (chat_id, name, price, note, purchased, created_at)
+               VALUES (?, ?, ?, ?, 0, ?)""",
+            (chat_id, name, price, note, created_at),
+        )
+        return cur.lastrowid
+
+
+def list_wishlist(chat_id: int, include_purchased: bool = False) -> list:
+    """Wishlist items for a chat, cheapest first (closest to affordable)."""
+    with _connect() as conn:
+        if include_purchased:
+            rows = conn.execute(
+                "SELECT * FROM wishlist WHERE chat_id = ? ORDER BY price ASC", (chat_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM wishlist WHERE chat_id = ? AND purchased = 0 ORDER BY price ASC",
+                (chat_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def mark_wishlist_purchased(row_id: int, chat_id: int = None):
+    """Mark a wishlist item as bought. Returns the updated row, or None if
+    it doesn't exist (or belongs to a different chat)."""
+    purchased_at = datetime.now().isoformat(timespec="seconds")
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT id FROM wishlist WHERE id = ? AND chat_id = ?", (row_id, chat_id)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT id FROM wishlist WHERE id = ?", (row_id,)).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "UPDATE wishlist SET purchased = 1, purchased_at = ? WHERE id = ?",
+            (purchased_at, row_id),
+        )
+        updated = conn.execute("SELECT * FROM wishlist WHERE id = ?", (row_id,)).fetchone()
+        return dict(updated)
+
+
+def remove_wishlist_item(row_id: int, chat_id: int = None) -> bool:
+    """Delete a wishlist item outright. Returns True if a row was found."""
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT id FROM wishlist WHERE id = ? AND chat_id = ?", (row_id, chat_id)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT id FROM wishlist WHERE id = ?", (row_id,)).fetchone()
+        if row is None:
+            return False
+        conn.execute("DELETE FROM wishlist WHERE id = ?", (row_id,))
+        return True
 
 
 if __name__ == "__main__":

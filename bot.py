@@ -37,6 +37,9 @@ Commands:
     /goal       this month's savings goal progress
     /categories list every category and its keywords
     /addcategory  add a new category or teach an existing one keywords
+    /account    add/list money pots (bank, cash, wallet...) and their balances
+    /transfer   move money between two accounts
+    /wishlist   purchase goals tracked against your available savings
     /logreceipt   confirm/save a receipt photo's OCR'd amount (send a photo first)
     /export     [YYYY-MM] send transactions as a CSV file
     /backup     send expenses.db + config.json as a zip (also sent weekly)
@@ -208,6 +211,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/goal — savings goal progress\n"
         "/categories — list categories and their keywords\n"
         "/addcategory <name> <kw1,kw2,...> — teach it a new category\n"
+        "/account add|list|default — track money across accounts\n"
+        "/transfer <from> <to> <amount> [note] — move money between accounts\n"
+        "/wishlist add|list|buy|remove — purchase goals vs available savings\n"
         "Send a receipt photo — I'll OCR it and ask you to /logreceipt to confirm\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
         "/backup — download expenses.db + config.json as a zip\n"
@@ -690,7 +696,8 @@ async def lend_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     currency = cfg.get("currency", "₹")
 
     db.add(amount=amount, category="lending", note=note, txn_type="lent",
-            chat_id=chat_id, counterparty=person, settled=0)
+            chat_id=chat_id, counterparty=person, settled=0,
+            account=db.get_default_account(chat_id))
     export.run()
     await update.message.reply_text(
         f"🤝 Logged: you lent {person} {fmt_money(amount, currency)}"
@@ -714,7 +721,8 @@ async def borrow_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     currency = cfg.get("currency", "₹")
 
     db.add(amount=amount, category="lending", note=note, txn_type="borrowed",
-            chat_id=chat_id, counterparty=person, settled=0)
+            chat_id=chat_id, counterparty=person, settled=0,
+            account=db.get_default_account(chat_id))
     export.run()
     await update.message.reply_text(
         f"🤝 Logged: you borrowed {fmt_money(amount, currency)} from {person}"
@@ -1131,7 +1139,8 @@ async def emi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     note = " ".join(args[3:])
     today = date.today()
 
-    db.add(amount=amount, category=category, note=note, txn_type="expense", chat_id=chat_id)
+    db.add(amount=amount, category=category, note=note, txn_type="expense", chat_id=chat_id,
+           account=db.get_default_account(chat_id))
 
     remaining_months = months - 1
     if remaining_months > 0:
@@ -1147,6 +1156,193 @@ async def emi_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         + (f" The remaining {remaining_months} will auto-log on day {today.day} each month."
            if remaining_months > 0 else " That was the only installment.")
     )
+
+
+async def account_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /account add <name> <opening balance> — register a money pot (bank,
+    cash, wallet, card...). /account list — balances. /account default
+    <name> — new transactions get auto-tagged to this account from now on.
+    """
+    chat_id = update.effective_chat.id
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    args = context.args
+
+    if not args:
+        await update.message.reply_text(
+            "Usage:\n"
+            "/account add <name> <opening balance>\n"
+            "/account list\n"
+            "/account default <name>"
+        )
+        return
+
+    sub = args[0].lower()
+
+    if sub == "list":
+        rows = db.list_accounts(chat_id)
+        if not rows:
+            await update.message.reply_text(
+                "No accounts set up yet. /account add <name> <opening balance>"
+            )
+            return
+        lines = ["🏦 *Accounts*"]
+        for r in rows:
+            balance = db.account_balance(chat_id, r["name"])
+            tag = " (default)" if r["is_default"] else ""
+            lines.append(f"{r['name']}{tag}: {fmt_money(balance, currency)}")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        return
+
+    if sub == "default":
+        if len(args) < 2:
+            await update.message.reply_text("Usage: /account default <name>")
+            return
+        name = args[1]
+        ok = db.set_default_account(chat_id, name)
+        if not ok:
+            await update.message.reply_text(
+                f"No account named '{name}'. See /account list, or add it first."
+            )
+            return
+        await update.message.reply_text(
+            f"✅ New entries will be tagged to '{name}' unless you say otherwise."
+        )
+        return
+
+    if sub == "add":
+        if len(args) < 2:
+            await update.message.reply_text(
+                "Usage: /account add <name> <opening balance>\ne.g. /account add cash 2000"
+            )
+            return
+        name = args[1]
+        opening = _parse_amount_arg(args[2]) if len(args) >= 3 else 0.0
+        if opening is None:
+            await update.message.reply_text("Opening balance must be a number.")
+            return
+        existing = {a["name"].lower() for a in db.list_accounts(chat_id)}
+        if name.lower() in existing:
+            await update.message.reply_text(f"Account '{name}' already exists.")
+            return
+        db.add_account(chat_id, name, opening)
+        if len(db.list_accounts(chat_id)) == 1:
+            db.set_default_account(chat_id, name)
+        await update.message.reply_text(
+            f"🏦 Added account '{name}' — opening balance {fmt_money(opening, currency)}."
+            + (" Set as default since it's your first account." if len(db.list_accounts(chat_id)) == 1 else "")
+        )
+        return
+
+    await update.message.reply_text("Unknown subcommand. Use add, list, or default.")
+
+
+async def transfer_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 3:
+        await update.message.reply_text(
+            "Usage: /transfer <from account> <to account> <amount> [note]\n"
+            "e.g. /transfer bank cash 2000 ATM withdrawal"
+        )
+        return
+
+    from_acc, to_acc = args[0], args[1]
+    amount = _parse_amount_arg(args[2])
+    if not amount:
+        await update.message.reply_text("Amount must be a positive number.")
+        return
+
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    names = {a["name"].lower() for a in db.list_accounts(chat_id)}
+    if from_acc.lower() not in names or to_acc.lower() not in names:
+        await update.message.reply_text(
+            f"Both accounts must already exist. See /account list."
+        )
+        return
+
+    note = " ".join(args[3:])
+    db.add_transfer(chat_id, from_acc, to_acc, amount, note=note)
+    await update.message.reply_text(
+        f"🔀 Transferred {fmt_money(amount, currency)}: {from_acc} → {to_acc}"
+        f"{f' ({note})' if note else ''}"
+    )
+
+
+async def wishlist_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /wishlist add <price> <name> — add a purchase goal.
+    /wishlist — list items, cheapest first, against your available savings.
+    /wishlist buy <id> — mark bought and log it as an expense.
+    /wishlist remove <id> — drop it.
+    """
+    chat_id = update.effective_chat.id
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    args = context.args
+
+    if not args or args[0].lower() == "list":
+        rows = db.list_wishlist(chat_id)
+        if not rows:
+            await update.message.reply_text(
+                "Nothing on your wishlist yet. /wishlist add <price> <name>"
+            )
+            return
+        available = db.available_savings(chat_id)
+        lines = [f"🛍️ *Wishlist* — {fmt_money(available, currency)} available"]
+        for r in rows:
+            lines.append(
+                f"#{r['id']} · {r['name']} · {fmt_money(r['price'], currency)}\n"
+                f"  {progress_bar(max(available, 0), r['price'])}"
+            )
+        lines.append("\n/wishlist buy <id> once you get it · /wishlist remove <id> to drop it")
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        return
+
+    sub = args[0].lower()
+
+    if sub == "add":
+        if len(args) < 3:
+            await update.message.reply_text(
+                "Usage: /wishlist add <price> <name>\ne.g. /wishlist add 3000 headphones"
+            )
+            return
+        price = _parse_amount_arg(args[1])
+        if not price:
+            await update.message.reply_text("Price must be a positive number.")
+            return
+        name = " ".join(args[2:])
+        rid = db.add_wishlist_item(chat_id, name, price)
+        await update.message.reply_text(f"🛍️ Added #{rid}: {name} — {fmt_money(price, currency)}")
+        return
+
+    if sub == "buy":
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text("Usage: /wishlist buy <id>\nSee /wishlist for ids.")
+            return
+        row = db.mark_wishlist_purchased(int(args[1]), chat_id=chat_id)
+        if row is None:
+            await update.message.reply_text(f"No wishlist item #{args[1]} found.")
+            return
+        db.add(amount=row["price"], category="other", note=row["name"], txn_type="expense",
+               chat_id=chat_id, account=db.get_default_account(chat_id))
+        export.run()
+        await update.message.reply_text(
+            f"🎉 Bought {row['name']} for {fmt_money(row['price'], currency)} — logged as an expense."
+        )
+        return
+
+    if sub == "remove":
+        if len(args) < 2 or not args[1].isdigit():
+            await update.message.reply_text("Usage: /wishlist remove <id>\nSee /wishlist for ids.")
+            return
+        ok = db.remove_wishlist_item(int(args[1]), chat_id=chat_id)
+        await update.message.reply_text("🗑️ Removed." if ok else "No such wishlist item.")
+        return
+
+    await update.message.reply_text("Unknown subcommand. Use add, buy, remove, or list.")
 
 
 async def check_recurring(context: ContextTypes.DEFAULT_TYPE):
@@ -1192,6 +1388,7 @@ async def check_recurring(context: ContextTypes.DEFAULT_TYPE):
                 note=r["note"],
                 txn_type="expense",
                 chat_id=r["chat_id"],
+                account=db.get_default_account(r["chat_id"]),
             )
             finished = db.mark_recurring_run(r["id"], month)
             finished_note = " — that was the last installment, all paid off! 🎉" if finished else ""
@@ -1337,6 +1534,7 @@ def _log_one_transaction(parsed: dict, chat_id: int, cfg: dict, currency: str) -
             amount=parsed["amount"], category="lending", note=note,
             txn_type=parsed["type"], chat_id=chat_id,
             counterparty=parsed["counterparty"], settled=0, txn_date=txn_date,
+            account=db.get_default_account(chat_id),
         )
         note_suffix = f" ({note})" if note else ""
         if parsed["type"] == "lent":
@@ -1363,6 +1561,7 @@ def _log_one_transaction(parsed: dict, chat_id: int, cfg: dict, currency: str) -
         txn_type=parsed["type"],
         chat_id=chat_id,
         txn_date=txn_date,
+        account=db.get_default_account(chat_id),
     )
 
     totals = db.month_total(month)
@@ -1647,6 +1846,9 @@ def main():
     app.add_handler(CommandHandler("recommend", recommend_cmd))
     app.add_handler(CommandHandler("categories", categories_cmd))
     app.add_handler(CommandHandler("addcategory", addcategory_cmd))
+    app.add_handler(CommandHandler("account", account_cmd))
+    app.add_handler(CommandHandler("transfer", transfer_cmd))
+    app.add_handler(CommandHandler("wishlist", wishlist_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
