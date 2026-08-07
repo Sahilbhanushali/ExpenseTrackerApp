@@ -370,6 +370,50 @@ def parse_multi(message: str, extra_categories: dict = None) -> list:
     return valid
 
 
+_TOTAL_LINE_RE = re.compile(r"\btotal\b", re.IGNORECASE)
+_SUBTOTAL_LINE_RE = re.compile(r"\bsub[\s-]?total\b", re.IGNORECASE)
+
+
+def parse_receipt_text(text: str, extra_categories: dict = None) -> dict:
+    """
+    Best-effort parse of OCR'd receipt text into the same shape as
+    parse_message. Receipts usually list several numbers (subtotal, tax,
+    total) — this prefers a line that says "total" but not "subtotal", and
+    falls back to the largest number on the receipt (which is almost always
+    the final total, since line items and tax are each smaller pieces of it).
+
+    Always returns type "expense" and date today — OCR text has no notion
+    of income vs. expense or a stated date, so those aren't guessed.
+    """
+    lines = [l.strip() for l in (text or "").splitlines() if l.strip()]
+
+    amount = None
+    for line in lines:
+        if _TOTAL_LINE_RE.search(line) and not _SUBTOTAL_LINE_RE.search(line):
+            amt, _ = _find_amount(line)
+            if amt is not None:
+                amount = amt
+                break
+
+    if amount is None:
+        candidates = [a for a, _ in (_find_amount(l) for l in lines) if a is not None]
+        if candidates:
+            amount = max(candidates)
+
+    full_text_lower = "\n".join(lines).lower()
+    category = _detect_category(full_text_lower, extra_categories)
+    note = lines[0][:40] if lines else ""
+
+    return {
+        "amount": round(amount, 2) if amount is not None else None,
+        "category": category,
+        "note": note,
+        "type": "expense",
+        "counterparty": None,
+        "date": date.today().isoformat(),
+    }
+
+
 if __name__ == "__main__":
     # quick manual smoke test when run directly
     samples = [

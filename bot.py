@@ -2,11 +2,14 @@
 bot.py — Telegram front-end for the expense tracker.
 
 Every plain-text message is parsed (parser.py), stored (db.py), and the
-dashboard's data.js is regenerated (export.py) before replying. The only
-network traffic is Telegram's own API, plus an optional LAN-only HTTP
-server (see start_local_server()) that serves the dashboard to your own
-phone over WiFi — nothing reaches the public internet either way, and the
-token lives only in config.json (never served, never in data.js).
+dashboard's data.js is regenerated (export.py) before replying. A photo is
+treated as a receipt: OCR'd via pytesseract/Tesseract, best-effort matched
+to an amount/category, and held pending until /logreceipt confirms it — see
+handle_photo(). The only network traffic is Telegram's own API, plus an
+optional LAN-only HTTP server (see start_local_server()) that serves the
+dashboard to your own phone over WiFi — nothing reaches the public internet
+either way, and the token lives only in config.json (never served, never
+in data.js).
 
 Commands:
     /start      welcome + quick examples
@@ -31,6 +34,7 @@ Commands:
     /goal       this month's savings goal progress
     /categories list every category and its keywords
     /addcategory  add a new category or teach an existing one keywords
+    /logreceipt   confirm/save a receipt photo's OCR'd amount (send a photo first)
     /export     [YYYY-MM] send transactions as a CSV file
     /backup     send expenses.db + config.json as a zip (also sent weekly)
     /dashboard  send a standalone dashboard.html with today's data baked in
@@ -45,6 +49,7 @@ DB+config backup the same way.
 
 import calendar
 import functools
+import io
 import json
 import logging
 import os
@@ -59,6 +64,8 @@ from pathlib import Path
 
 from datetime import time as dtime
 
+import pytesseract
+from PIL import Image
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -70,7 +77,7 @@ from telegram.ext import (
 
 import db
 import export
-from parser import parse_multi, CATEGORY_KEYWORDS
+from parser import parse_multi, parse_receipt_text, CATEGORY_KEYWORDS
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -195,6 +202,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/goal — savings goal progress\n"
         "/categories — list categories and their keywords\n"
         "/addcategory <name> <kw1,kw2,...> — teach it a new category\n"
+        "Send a receipt photo — I'll OCR it and ask you to /logreceipt to confirm\n"
         "/export [YYYY-MM] — download transactions as CSV\n"
         "/backup — download expenses.db + config.json as a zip\n"
         "/dashboard — one self-contained dashboard.html, ready for your phone\n"
@@ -1196,6 +1204,80 @@ def _log_one_transaction(parsed: dict, chat_id: int, cfg: dict, currency: str) -
     return reply
 
 
+# chat_id -> (parsed transaction dict, expiry datetime) for a receipt photo
+# awaiting /logreceipt. In-memory only, same tradeoff as _PENDING_UNDO.
+_PENDING_RECEIPT = {}
+_RECEIPT_CONFIRM_WINDOW = timedelta(minutes=5)
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receipt photo -> OCR -> best-effort amount/category guess, held
+    pending until /logreceipt confirms it. Never auto-logs from OCR alone —
+    it's too error-prone (blurry photos, multiple totals on one receipt) to
+    write to the ledger without a human glancing at the number first."""
+    chat_id = update.effective_chat.id
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    photo = update.message.photo[-1]  # last = highest resolution
+    tg_file = await photo.get_file()
+    photo_bytes = await tg_file.download_as_bytearray()
+
+    try:
+        image = Image.open(io.BytesIO(bytes(photo_bytes)))
+        text = pytesseract.image_to_string(image)
+    except Exception:
+        log.exception("OCR failed for chat %s", chat_id)
+        await update.message.reply_text(
+            "Couldn't read that image — try typing the amount manually, e.g. `495 food`.",
+            parse_mode="Markdown",
+        )
+        return
+
+    parsed = parse_receipt_text(text, extra_categories=cfg.get("customCategories"))
+    if parsed["amount"] is None:
+        await update.message.reply_text(
+            "Couldn't find an amount on that receipt — try typing it manually, e.g. `495 food`.",
+            parse_mode="Markdown",
+        )
+        return
+
+    _PENDING_RECEIPT[chat_id] = (parsed, datetime.now() + _RECEIPT_CONFIRM_WINDOW)
+    await update.message.reply_text(
+        f"🧾 Detected: {fmt_money(parsed['amount'], currency)} · {parsed['category']}"
+        f" ({parsed['note'] or 'no note'})\n\n"
+        f"Reply /logreceipt to save this, or /logreceipt <category> to log it under "
+        f"a different category. Looks wrong? Just type it manually instead."
+    )
+
+
+async def logreceipt_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+
+    pending = _PENDING_RECEIPT.pop(chat_id, None)
+    if pending is None or datetime.now() > pending[1]:
+        await update.message.reply_text("Nothing pending — send a receipt photo first.")
+        return
+
+    parsed, expiry = pending
+    if context.args:
+        category = context.args[0].lower()
+        valid = valid_categories(cfg)
+        if category not in valid:
+            _PENDING_RECEIPT[chat_id] = (parsed, expiry)  # let them retry without resending
+            await update.message.reply_text(
+                f"Unknown category '{category}'. Valid: {', '.join(sorted(valid))}"
+            )
+            return
+        parsed["category"] = category
+
+    reply = _log_one_transaction(parsed, chat_id, cfg, currency)
+    export.run()
+    await update.message.reply_text(reply)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message.text
     chat_id = update.effective_chat.id
@@ -1283,6 +1365,7 @@ def main():
     app.add_handler(CommandHandler("goal", goal_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
     app.add_handler(CommandHandler("backup", backup_cmd))
+    app.add_handler(CommandHandler("logreceipt", logreceipt_cmd))
     app.add_handler(CommandHandler("dashboard", dashboard_cmd))
     app.add_handler(CommandHandler("link", link_cmd))
     app.add_handler(CommandHandler("setbudget", setbudget_cmd))
@@ -1292,6 +1375,7 @@ def main():
     app.add_handler(CommandHandler("categories", categories_cmd))
     app.add_handler(CommandHandler("addcategory", addcategory_cmd))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     # once a day, auto-log any recurring bill that's come due
     app.job_queue.run_daily(check_recurring, time=dtime(hour=9, minute=0))
