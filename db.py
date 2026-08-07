@@ -341,6 +341,45 @@ def settle(row_id: int, chat_id: int = None):
         return dict(updated)
 
 
+def repay(row_id: int, repay_amount: float, chat_id: int = None):
+    """
+    Apply a partial (or full) repayment to an outstanding lent/borrowed row
+    by reducing its amount in place. Clamps at 0 and auto-settles once it
+    reaches 0 — mirrors settle()'s all-at-once behavior but for paying a
+    debt down over several transactions instead of one.
+
+    Returns {"row": <updated row dict>, "applied": float, "overpaid": float}
+    — overpaid is whatever part of repay_amount exceeded what was still
+    owed (not recorded anywhere, just surfaced so the caller can flag it) —
+    or None if the row doesn't exist, isn't a loan, or is already settled.
+    """
+    with _connect() as conn:
+        if chat_id is not None:
+            row = conn.execute(
+                "SELECT * FROM txns WHERE id = ? AND chat_id = ? AND type IN ('lent', 'borrowed')",
+                (row_id, chat_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM txns WHERE id = ? AND type IN ('lent', 'borrowed')", (row_id,)
+            ).fetchone()
+        if row is None or row["settled"] == 1:
+            return None
+
+        outstanding = row["amount"]
+        applied = min(repay_amount, outstanding)
+        overpaid = max(repay_amount - outstanding, 0.0)
+        new_amount = outstanding - applied
+        settled = 1 if new_amount <= 0 else 0
+
+        conn.execute(
+            "UPDATE txns SET amount = ?, settled = ? WHERE id = ?",
+            (new_amount, settled, row_id),
+        )
+        updated = conn.execute("SELECT * FROM txns WHERE id = ?", (row_id,)).fetchone()
+        return {"row": dict(updated), "applied": applied, "overpaid": overpaid}
+
+
 def all_rows() -> list:
     """Return every transaction as a list of dicts, oldest first."""
     with _connect() as conn:

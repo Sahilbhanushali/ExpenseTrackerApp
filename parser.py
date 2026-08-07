@@ -267,6 +267,61 @@ def _extract_counterparty(message: str):
     return m.group(1).title() if m else None
 
 
+# Unambiguous repayment phrasing — safe to auto-apply against a matching
+# debt with no confirmation, same directness as LEND_KEYWORDS/BORROW_KEYWORDS.
+REPAY_EXPLICIT_KEYWORDS = ["repaid", "paid back", "gave back", "returned the money",
+                           "settled up", "cleared the debt"]
+
+# Bare verbs that are just as consistent with a brand new expense/gift as
+# with paying down an existing debt ("gave 500 to mummy" could be either) —
+# only worth surfacing as a hint, and only when a matching debt exists.
+REPAY_HINT_VERBS = ["given", "gave", "paid", "pay", "returned"]
+
+# Fallback for phrasing with no "to"/"from" — "repaid mummy 5000", "settled
+# up with henil 2000". Tries the name right after the verb (skipping a
+# stray "with"/"to" in between).
+_REPAY_VERB_ALT = "|".join(
+    re.escape(v) for v in sorted(REPAY_EXPLICIT_KEYWORDS + REPAY_HINT_VERBS, key=len, reverse=True)
+)
+_COUNTERPARTY_AFTER_VERB_RE = re.compile(
+    rf"\b(?:{_REPAY_VERB_ALT})\b\s*(?:with\s+|to\s+)?([A-Za-z][A-Za-z]*)", re.IGNORECASE
+)
+
+
+def detect_repayment_candidate(message: str):
+    """
+    Best-effort detection of "gave/paid/repaid ... to <Name>" (or "repaid
+    <Name> ...") phrasing that might be paying down an existing debt, e.g.
+    "given 10000 to mummy" or "repaid mummy 5000". Returns
+    {"amount": float, "counterparty": str, "explicit": bool} or None if the
+    message doesn't look like this pattern at all.
+
+    "explicit" is True only for unambiguous verbs (repaid/paid back/gave
+    back/returned the money/settled up) — the caller should auto-apply only
+    when explicit is True, and otherwise just offer it as a suggestion,
+    since a bare "gave"/"paid" is equally consistent with a new expense and
+    this function has no access to whether a debt with that name exists.
+    """
+    message_lower = message.lower()
+    explicit = any(_keyword_in(message_lower, kw) for kw in REPAY_EXPLICIT_KEYWORDS)
+    hinted = explicit or any(_keyword_in(message_lower, kw) for kw in REPAY_HINT_VERBS)
+    if not hinted:
+        return None
+
+    counterparty = _extract_counterparty(message)
+    if counterparty is None:
+        m = _COUNTERPARTY_AFTER_VERB_RE.search(message)
+        counterparty = m.group(1).title() if m else None
+    if counterparty is None:
+        return None
+
+    amount, _ = _find_amount(message)
+    if amount is None:
+        return None
+
+    return {"amount": round(amount, 2), "counterparty": counterparty, "explicit": explicit}
+
+
 def _detect_category(message_lower: str, extra_categories: dict = None) -> str:
     # User-defined categories/keywords are checked first, so /addcategory can
     # override a default classification (e.g. "vet" pulled into "pets"

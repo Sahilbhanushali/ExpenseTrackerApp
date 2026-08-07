@@ -31,7 +31,8 @@ Commands:
     /lend       log money you lent someone (they owe you back)
     /borrow     log money you borrowed (you owe it back)
     /owed       see everything outstanding, both ways
-    /settle     mark a lend/borrow entry as paid back
+    /settle     mark a lend/borrow entry as fully paid back
+    /repay      apply a partial payment toward an outstanding loan
     /goal       this month's savings goal progress
     /categories list every category and its keywords
     /addcategory  add a new category or teach an existing one keywords
@@ -78,7 +79,7 @@ from telegram.ext import (
 
 import db
 import export
-from parser import parse_multi, parse_receipt_text, detect_emi, CATEGORY_KEYWORDS
+from parser import parse_multi, parse_receipt_text, detect_emi, detect_repayment_candidate, CATEGORY_KEYWORDS
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -200,7 +201,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/lend <amount> <person> [note] — you lent them money\n"
         "/borrow <amount> <person> [note] — you borrowed money\n"
         "/owed — see everything outstanding\n"
-        "/settle <id> — mark a loan as paid back\n"
+        "/settle <id> — mark a loan as fully paid back\n"
+        "/repay <id> <amount> — apply a partial payment\n"
         "/goal — savings goal progress\n"
         "/categories — list categories and their keywords\n"
         "/addcategory <name> <kw1,kw2,...> — teach it a new category\n"
@@ -759,6 +761,53 @@ async def settle_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"✅ Settled #{row['id']}: {person} · {fmt_money(row['amount'], currency)}"
     )
+
+
+def _format_repay_reply(result: dict, currency: str) -> str:
+    row = result["row"]
+    person = row["counterparty"] or "them"
+    lines = [f"✅ Applied {fmt_money(result['applied'], currency)} to {person}'s debt (#{row['id']})."]
+    if row["settled"]:
+        lines.append("🎉 Fully settled!")
+    else:
+        lines.append(f"Remaining: {fmt_money(row['amount'], currency)}")
+    if result["overpaid"] > 0:
+        lines.append(
+            f"⚠️ That's {fmt_money(result['overpaid'], currency)} more than was owed — "
+            f"the extra wasn't recorded anywhere."
+        )
+    return "\n".join(lines)
+
+
+def _find_outstanding_by_counterparty(chat_id: int, name: str, loan_type: str) -> list:
+    name_lower = name.lower()
+    return [
+        r for r in db.outstanding_loans(chat_id=chat_id)
+        if r["type"] == loan_type and (r["counterparty"] or "").lower() == name_lower
+    ]
+
+
+async def repay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2 or not args[0].isdigit():
+        await update.message.reply_text("Usage: /repay <id> <amount>\nSee /owed for ids.")
+        return
+
+    amount = _parse_amount_arg(args[1])
+    if not amount:
+        await update.message.reply_text("Amount must be a positive number.")
+        return
+
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    result = db.repay(int(args[0]), amount, chat_id=chat_id)
+    if result is None:
+        await update.message.reply_text(f"No outstanding loan #{args[0]} found for you.")
+        return
+
+    export.run()
+    await update.message.reply_text(_format_repay_reply(result, currency))
 
 
 def all_categories(cfg: dict) -> dict:
@@ -1374,6 +1423,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    repay_candidate = detect_repayment_candidate(message)
+    if repay_candidate is not None:
+        matches = _find_outstanding_by_counterparty(chat_id, repay_candidate["counterparty"], "borrowed")
+        if matches:
+            loan = matches[0]  # outstanding_loans() orders oldest first
+            if repay_candidate["explicit"]:
+                result = db.repay(loan["id"], repay_candidate["amount"], chat_id=chat_id)
+                export.run()
+                await update.message.reply_text(_format_repay_reply(result, currency))
+            else:
+                await update.message.reply_text(
+                    f"💰 This looks like it could be a repayment to {loan['counterparty']} "
+                    f"(you owe {fmt_money(loan['amount'], currency)}).\n"
+                    f"Reply `/repay {loan['id']} {repay_candidate['amount']:.0f}` to apply it, "
+                    f"or ignore if this was something else.",
+                    parse_mode="Markdown",
+                )
+            return
+        # no matching outstanding debt with that name — fall through and
+        # log it as a normal transaction below, same as before this feature
+
     parsed_list = parse_multi(message, extra_categories=cfg.get("customCategories"))
     valid = [p for p in parsed_list if p["amount"] is not None]
 
@@ -1453,6 +1523,7 @@ def main():
     app.add_handler(CommandHandler("borrow", borrow_cmd))
     app.add_handler(CommandHandler("owed", owed_cmd))
     app.add_handler(CommandHandler("settle", settle_cmd))
+    app.add_handler(CommandHandler("repay", repay_cmd))
     app.add_handler(CommandHandler("goal", goal_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
     app.add_handler(CommandHandler("backup", backup_cmd))
