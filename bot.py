@@ -33,6 +33,7 @@ Commands:
     /owed       see everything outstanding, both ways
     /settle     mark a lend/borrow entry as fully paid back
     /repay      apply a partial payment toward an outstanding loan
+    /repayplan  schedule automatic monthly repayments against a loan
     /goal       this month's savings goal progress
     /categories list every category and its keywords
     /addcategory  add a new category or teach an existing one keywords
@@ -203,6 +204,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/owed — see everything outstanding\n"
         "/settle <id> — mark a loan as fully paid back\n"
         "/repay <id> <amount> — apply a partial payment\n"
+        "/repayplan <id> <amount> [months] — schedule monthly repayments\n"
         "/goal — savings goal progress\n"
         "/categories — list categories and their keywords\n"
         "/addcategory <name> <kw1,kw2,...> — teach it a new category\n"
@@ -810,6 +812,63 @@ async def repay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(_format_repay_reply(result, currency))
 
 
+async def repayplan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    /repayplan <loan id> <monthly amount> [months] — schedules automatic
+    monthly repayments against an existing lend/borrow entry (see /owed for
+    ids), instead of a one-off /repay each time. Without [months] it keeps
+    firing until the loan is fully settled; with it, it stops after that
+    many payments even if a balance remains (e.g. paying off a smaller
+    fixed amount deliberately rather than the whole debt on autopilot).
+    """
+    chat_id = update.effective_chat.id
+    args = context.args
+    if len(args) < 2 or not args[0].isdigit():
+        await update.message.reply_text(
+            "Usage: /repayplan <loan id> <monthly amount> [months]\n"
+            "e.g. /repayplan 12 5000 9\nSee /owed for loan ids."
+        )
+        return
+
+    loan_id = int(args[0])
+    monthly_amount = _parse_amount_arg(args[1])
+    if not monthly_amount:
+        await update.message.reply_text("Monthly amount must be a positive number.")
+        return
+
+    loans = [r for r in db.outstanding_loans(chat_id=chat_id) if r["id"] == loan_id]
+    if not loans:
+        await update.message.reply_text(f"No outstanding loan #{loan_id} found for you.")
+        return
+    loan = loans[0]
+
+    months = None
+    if len(args) >= 3:
+        try:
+            months = int(args[2])
+        except ValueError:
+            await update.message.reply_text("Months must be a whole number.")
+            return
+        if months < 1:
+            await update.message.reply_text("Months must be at least 1.")
+            return
+
+    cfg = load_config()
+    currency = cfg.get("currency", "₹")
+    today = date.today()
+    rid = db.add_recurring(
+        chat_id, monthly_amount, "lending", f"repayment to {loan['counterparty'] or 'them'}",
+        today.day, installments_remaining=months, loan_id=loan_id,
+    )
+    plan_note = f" for {months} months" if months else " until settled"
+    await update.message.reply_text(
+        f"📅 Repayment plan #{rid}: {fmt_money(monthly_amount, currency)}/month toward "
+        f"{loan['counterparty'] or 'them'}'s {fmt_money(loan['amount'], currency)} balance"
+        f"{plan_note}, starting day {today.day} each month.\n"
+        f"Use /recurring remove {rid} to cancel it."
+    )
+
+
 def all_categories(cfg: dict) -> dict:
     """CATEGORY_KEYWORDS merged with config.json's customCategories, so
     /addcategory and friends don't require editing parser.py."""
@@ -1103,23 +1162,46 @@ async def check_recurring(context: ContextTypes.DEFAULT_TYPE):
         return
 
     for r in due:
-        db.add(
-            amount=r["amount"],
-            category=r["category"],
-            note=r["note"],
-            txn_type="expense",
-            chat_id=r["chat_id"],
-        )
-        finished = db.mark_recurring_run(r["id"], month)
-        finished_note = " — that was the last installment, all paid off! 🎉" if finished else ""
-        try:
-            await context.bot.send_message(
-                chat_id=r["chat_id"],
-                text=(
-                    f"🔁 Auto-logged recurring bill: {r['category']} "
-                    f"{fmt_money(r['amount'], currency)} ({r['note'] or 'no note'}){finished_note}"
-                ),
+        loan_id = r.get("loan_id")
+
+        if loan_id is not None:
+            # Repayment plan: pay down the linked loan instead of logging a
+            # plain expense — this is what actually reduces what's owed.
+            result = db.repay(loan_id, r["amount"], chat_id=r["chat_id"])
+            if result is None:
+                # loan already settled (e.g. paid off manually via /repay
+                # in between firings) — nothing left to do, stop the plan
+                db.remove_recurring(r["id"], chat_id=r["chat_id"])
+                continue
+
+            finished = db.mark_recurring_run(r["id"], month)
+            loan_settled = result["row"]["settled"] == 1
+            if loan_settled and not finished:
+                db.remove_recurring(r["id"], chat_id=r["chat_id"])
+            person = result["row"]["counterparty"] or "them"
+            finished_note = " — fully settled! 🎉" if loan_settled else \
+                f" (remaining: {fmt_money(result['row']['amount'], currency)})"
+            text = (
+                f"🔁 Auto-applied repayment to {person}: "
+                f"{fmt_money(result['applied'], currency)}{finished_note}"
             )
+        else:
+            db.add(
+                amount=r["amount"],
+                category=r["category"],
+                note=r["note"],
+                txn_type="expense",
+                chat_id=r["chat_id"],
+            )
+            finished = db.mark_recurring_run(r["id"], month)
+            finished_note = " — that was the last installment, all paid off! 🎉" if finished else ""
+            text = (
+                f"🔁 Auto-logged recurring bill: {r['category']} "
+                f"{fmt_money(r['amount'], currency)} ({r['note'] or 'no note'}){finished_note}"
+            )
+
+        try:
+            await context.bot.send_message(chat_id=r["chat_id"], text=text)
         except Exception:
             log.exception("Failed to notify chat %s about recurring bill #%s", r["chat_id"], r["id"])
 
@@ -1425,7 +1507,35 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     repay_candidate = detect_repayment_candidate(message)
     if repay_candidate is not None:
-        matches = _find_outstanding_by_counterparty(chat_id, repay_candidate["counterparty"], "borrowed")
+        person = repay_candidate["counterparty"]
+        matches = _find_outstanding_by_counterparty(chat_id, person, "borrowed")
+
+        if repay_candidate["is_plan"]:
+            # A recurring monthly figure ("...5000 every month") is never
+            # auto-applied or auto-scheduled — same reasoning as EMI: it's a
+            # multi-month commitment, too consequential to guess at.
+            amt = repay_candidate["amount"]
+            if matches:
+                loan = matches[0]
+                await update.message.reply_text(
+                    f"📅 Looks like a repayment plan to {loan['counterparty']} "
+                    f"(you owe {fmt_money(loan['amount'], currency)}).\n"
+                    f"Reply `/repayplan {loan['id']} {amt:.0f}` to schedule it monthly, "
+                    f"or `/repay {loan['id']} <amount>` for a one-off payment instead.",
+                    parse_mode="Markdown",
+                )
+            else:
+                total = repay_candidate["total_guess"]
+                borrow_hint = f"/borrow {total:.0f} {person} <note>" if total else f"/borrow <amount owed> {person} <note>"
+                await update.message.reply_text(
+                    f"📅 Looks like a repayment plan to {person}, but there's no debt logged "
+                    f"for them yet. First register what you owe, then schedule the plan:\n"
+                    f"1. `{borrow_hint}`\n"
+                    f"2. `/repayplan <id from step 1> {amt:.0f}`",
+                    parse_mode="Markdown",
+                )
+            return
+
         if matches:
             loan = matches[0]  # outstanding_loans() orders oldest first
             if repay_candidate["explicit"]:
@@ -1524,6 +1634,7 @@ def main():
     app.add_handler(CommandHandler("owed", owed_cmd))
     app.add_handler(CommandHandler("settle", settle_cmd))
     app.add_handler(CommandHandler("repay", repay_cmd))
+    app.add_handler(CommandHandler("repayplan", repayplan_cmd))
     app.add_handler(CommandHandler("goal", goal_cmd))
     app.add_handler(CommandHandler("export", export_cmd))
     app.add_handler(CommandHandler("backup", backup_cmd))

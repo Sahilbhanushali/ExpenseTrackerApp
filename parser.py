@@ -261,10 +261,25 @@ def _detect_type(message_lower: str) -> str:
 # effort only — a plain name after to/from, not general NER.
 _COUNTERPARTY_RE = re.compile(r"\b(?:to|from)\s+([A-Za-z][A-Za-z]*)")
 
+# Common words that land right after "to"/"from" without being a name —
+# "to be given to henil" has "to" twice, and without this list the first
+# one ("to be") would be mistaken for the counterparty instead of "henil".
+_COUNTERPARTY_STOPWORDS = {
+    "be", "get", "pay", "give", "him", "her", "them", "it", "us", "the",
+    "my", "our", "your", "his", "its", "do", "go", "come", "take", "make",
+    "this", "that", "me", "you",
+}
+
 
 def _extract_counterparty(message: str):
-    m = _COUNTERPARTY_RE.search(message)
-    return m.group(1).title() if m else None
+    # Take the LAST plausible match, not the first — "to be given to henil"
+    # has two "to"s, and the real name is consistently the one closer to
+    # the end of that kind of phrasing.
+    candidates = [
+        m.group(1) for m in _COUNTERPARTY_RE.finditer(message)
+        if m.group(1).lower() not in _COUNTERPARTY_STOPWORDS
+    ]
+    return candidates[-1].title() if candidates else None
 
 
 # Unambiguous repayment phrasing — safe to auto-apply against a matching
@@ -288,19 +303,36 @@ _COUNTERPARTY_AFTER_VERB_RE = re.compile(
 )
 
 
+# A number right before "per month"/"every month"/"monthly" — used to pull
+# the *installment* amount out of a message that also mentions some other,
+# larger number (a total owed, say), so "henil 45000 will pay 5000 every
+# month" extracts 5000, not the 45000 that happens to appear earlier.
+_MONTHLY_AMOUNT_RE = re.compile(
+    r"(?P<amt>[\d,]+(?:\.\d+)?)\s*(?:per\s*month|/\s*month|every\s*month|monthly)",
+    re.IGNORECASE,
+)
+_PLAN_MONTHS_RE = re.compile(r"for\s+(\d+)\s*months?", re.IGNORECASE)
+
+
 def detect_repayment_candidate(message: str):
     """
     Best-effort detection of "gave/paid/repaid ... to <Name>" (or "repaid
     <Name> ...") phrasing that might be paying down an existing debt, e.g.
     "given 10000 to mummy" or "repaid mummy 5000". Returns
-    {"amount": float, "counterparty": str, "explicit": bool} or None if the
-    message doesn't look like this pattern at all.
+    {"amount": float, "counterparty": str, "explicit": bool, "is_plan": bool,
+    "months": int | None} or None if the message doesn't look like this
+    pattern at all.
 
     "explicit" is True only for unambiguous verbs (repaid/paid back/gave
     back/returned the money/settled up) — the caller should auto-apply only
     when explicit is True, and otherwise just offer it as a suggestion,
     since a bare "gave"/"paid" is equally consistent with a new expense and
     this function has no access to whether a debt with that name exists.
+
+    "is_plan" is True when the message names a recurring installment
+    ("...every month"/"per month"/"monthly") rather than a single payment —
+    the caller should point at a repayment schedule instead of applying
+    "amount" once, since amount here is the per-month figure, not a total.
     """
     message_lower = message.lower()
     explicit = any(_keyword_in(message_lower, kw) for kw in REPAY_EXPLICIT_KEYWORDS)
@@ -315,11 +347,30 @@ def detect_repayment_candidate(message: str):
     if counterparty is None:
         return None
 
-    amount, _ = _find_amount(message)
+    monthly_amount = _MONTHLY_AMOUNT_RE.search(message)
+    is_plan = monthly_amount is not None
+    total_guess = None
+    if is_plan:
+        amount = float(monthly_amount.group("amt").replace(",", ""))
+        # a distinct, larger number elsewhere might be the total/principal
+        # owed ("henil 45000 will pay 5000 every month") — best-effort only,
+        # used just to prefill a /borrow suggestion if no debt exists yet.
+        rest = message[:monthly_amount.start()] + " " + message[monthly_amount.end():]
+        guess, _ = _find_amount(rest)
+        if guess is not None and round(guess, 2) != round(amount, 2):
+            total_guess = guess
+    else:
+        amount, _ = _find_amount(message)
     if amount is None:
         return None
 
-    return {"amount": round(amount, 2), "counterparty": counterparty, "explicit": explicit}
+    months_match = _PLAN_MONTHS_RE.search(message)
+    months = int(months_match.group(1)) if months_match else None
+
+    return {
+        "amount": round(amount, 2), "counterparty": counterparty, "explicit": explicit,
+        "is_plan": is_plan, "months": months, "total_guess": total_guess,
+    }
 
 
 def _detect_category(message_lower: str, extra_categories: dict = None) -> str:

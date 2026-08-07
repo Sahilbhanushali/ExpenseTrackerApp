@@ -498,13 +498,19 @@
   }
 
   function monthTotals(mk){
+    // lent/borrowed are neither real spending nor real income — they're
+    // money that's expected back (or owed back). Only expense/income count
+    // toward these totals; lent/borrowed sit in a separate bucket so a
+    // ₹45,000 loan doesn't inflate the month's "spent" total.
     var rows = rowsForMonth(mk);
-    var expense = 0, income = 0;
+    var expense = 0, income = 0, lent = 0, borrowed = 0;
     rows.forEach(function(r){
       if (r.type === "income") income += r.amount;
-      else expense += r.amount;
+      else if (r.type === "expense") expense += r.amount;
+      else if (r.type === "lent") lent += r.amount;
+      else if (r.type === "borrowed") borrowed += r.amount;
     });
-    return { expense:expense, income:income };
+    return { expense:expense, income:income, lent:lent, borrowed:borrowed };
   }
 
   function categoryTotals(mk){
@@ -886,12 +892,13 @@
     }
     rows.forEach(function(r){
       var tr = document.createElement("tr");
-      var amtStr = (r.type === "income" ? "+" : "-") + fmtMoney(r.amount);
+      var isCredit = (r.type === "income" || r.type === "borrowed");
+      var amtStr = (isCredit ? "+" : "-") + fmtMoney(r.amount);
       tr.innerHTML =
         '<td>'+r.date.slice(5)+'</td>' +
         '<td class="cat">'+r.category+'</td>' +
         '<td>'+(r.note || "—")+'</td>' +
-        '<td class="num" style="color:'+(r.type==="income"?"var(--green)":"var(--text)")+'">'+amtStr+'</td>';
+        '<td class="num" style="color:'+(isCredit?"var(--green)":"var(--text)")+'">'+amtStr+'</td>';
       tbody.appendChild(tr);
     });
   }

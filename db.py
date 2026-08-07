@@ -25,6 +25,10 @@ And "recurring", for bills that auto-log themselves each month:
     installments_remaining  INTEGER  NULL = runs indefinitely (rent, subs);
                              a number = an EMI/installment plan that stops
                              and deactivates itself once it hits 0
+    loan_id         INTEGER  NULL = a normal expense bill; set = this entry
+                             pays down that txns row (a lent/borrowed loan)
+                             each month via repay() instead of logging a
+                             plain expense — see /repayplan in bot.py
 
 Everything else in the project (bot.py, export.py) goes through the
 helpers below rather than touching SQLite directly.
@@ -60,7 +64,8 @@ CREATE TABLE IF NOT EXISTS recurring (
     day_of_month    INTEGER NOT NULL,
     last_run_month  TEXT,
     active          INTEGER NOT NULL DEFAULT 1,
-    installments_remaining INTEGER
+    installments_remaining INTEGER,
+    loan_id         INTEGER
 );
 """
 
@@ -112,6 +117,8 @@ def _migrate_schema(conn):
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(recurring)").fetchall()}
     if "installments_remaining" not in cols:
         conn.execute("ALTER TABLE recurring ADD COLUMN installments_remaining INTEGER")
+    if "loan_id" not in cols:
+        conn.execute("ALTER TABLE recurring ADD COLUMN loan_id INTEGER")
 
 
 def init_db():
@@ -214,19 +221,21 @@ def update(row_id: int, chat_id: int = None, **fields):
 
 
 def add_recurring(chat_id: int, amount: float, category: str, note: str, day_of_month: int,
-                   installments_remaining: int = None) -> int:
+                   installments_remaining: int = None, loan_id: int = None) -> int:
     """
     Register a new recurring bill/subscription. Returns the new row's id.
     installments_remaining=None runs indefinitely (rent, subscriptions); a
     number makes it an EMI/installment plan that deactivates itself once
     that many more auto-logs have fired (see mark_recurring_run).
+    loan_id links this to an existing lent/borrowed txns row — each firing
+    calls repay() against that loan instead of logging a plain expense.
     """
     with _connect() as conn:
         cur = conn.execute(
             """INSERT INTO recurring (chat_id, amount, category, note, day_of_month,
-                                       active, installments_remaining)
-               VALUES (?, ?, ?, ?, ?, 1, ?)""",
-            (chat_id, amount, category, note, day_of_month, installments_remaining),
+                                       active, installments_remaining, loan_id)
+               VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+            (chat_id, amount, category, note, day_of_month, installments_remaining, loan_id),
         )
         return cur.lastrowid
 
