@@ -1,4 +1,6 @@
-#!/home/rnd/Desktop/Sahil/sahilPersonal/expense_bot/.venv/bin/python
+#!/bin/sh
+'''exec' "/mnt/ddisk/Sahil/Sahil code Work/Telegram_expense_track/.venv/bin/python" "$0" "$@"
+' '''
 import sys
 from httpx import main
 if __name__ == '__main__':
