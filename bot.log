@@ -1,0 +1,451 @@
+2026-08-11 16:39:31,321 INFO expense-bot: Local dashboard server on http://192.168.0.221:8000/dashboard.html
+2026-08-11 16:39:31,561 INFO apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-08-11 16:39:31,561 INFO apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-08-11 16:39:31,561 INFO apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-08-11 16:39:31,562 INFO expense-bot: Bot starting...
+2026-08-11 16:39:32,679 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getMe "HTTP/1.1 200 OK"
+2026-08-11 16:39:32,872 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/deleteWebhook "HTTP/1.1 200 OK"
+2026-08-11 16:39:32,873 INFO apscheduler.scheduler: Added job "check_recurring" to job store "default"
+2026-08-11 16:39:32,873 INFO apscheduler.scheduler: Added job "daily_digest" to job store "default"
+2026-08-11 16:39:32,874 INFO apscheduler.scheduler: Added job "weekly_backup" to job store "default"
+2026-08-11 16:39:32,874 INFO apscheduler.scheduler: Scheduler started
+2026-08-11 16:39:32,874 INFO telegram.ext.Application: Application started
+2026-08-11 16:39:41,794 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:39:44,053 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:39:46] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:39:46] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:39:51,996 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:39:57,666 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:39:58,482 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 16:40:07,870 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:10,046 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:12,726 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendDocument "HTTP/1.1 200 OK"
+2026-08-11 16:40:20,252 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:27,000 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:28,404 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+192.168.0.104 - - [11/Aug/2026 16:40:31] "GET /dashboard.html HTTP/1.1" 304 -
+192.168.0.104 - - [11/Aug/2026 16:40:31] "GET /data.js HTTP/1.1" 200 -
+192.168.0.104 - - [11/Aug/2026 16:40:31] code 404, message File not found
+192.168.0.104 - - [11/Aug/2026 16:40:31] "GET /favicon.ico HTTP/1.1" 404 -
+2026-08-11 16:40:37,203 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:38,191 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:39,140 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:40:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:40:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:40:48,550 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:40:58,751 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:08,951 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:13,122 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:16,435 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:17,866 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 16:41:26,637 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:36,951 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:44,097 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:41:44,906 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:41:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:41:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:41:54,299 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:42:03,413 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:42:05,307 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendDocument "HTTP/1.1 200 OK"
+2026-08-11 16:42:13,616 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:42:23,820 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:42:34,020 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:42:44,220 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:42:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:42:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:42:54,425 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:43:04,624 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:43:14,825 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:43:25,026 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:43:35,225 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:43:45,430 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:43:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:43:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:43:55,634 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:44:05,832 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:44:16,033 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:44:26,244 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:44:36,471 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:44:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:44:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:44:47,730 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:44:58,035 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:45:08,239 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:45:18,440 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:45:28,642 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:45:38,846 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:45:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:45:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:45:49,044 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:45:59,245 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:46:10,103 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:46:20,555 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:46:31,408 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:46:41,610 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:46:47] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:46:47] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:46:51,809 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:47:02,009 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:47:12,210 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:47:22,408 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:47:32,610 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:47:42,809 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:47:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:47:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:47:53,463 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:48:03,669 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:48:13,874 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:48:24,074 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:48:34,273 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:48:44,474 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:48:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:48:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:48:54,673 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:49:05,000 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:49:15,201 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:49:25,402 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:49:35,602 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:49:46,053 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:49:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:49:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:49:56,256 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:50:06,456 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:50:16,658 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:50:26,860 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:50:37,062 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:50:47,262 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:50:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:50:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:50:57,475 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:51:07,688 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:51:17,890 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:51:28,094 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:51:38,300 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:51:48,500 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:51:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:51:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:51:58,704 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:52:08,904 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:52:19,103 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:52:29,303 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:52:39,504 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:52:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:52:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:52:49,714 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:52:59,914 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:53:10,117 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:53:20,318 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:53:30,517 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:53:40,716 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:53:48] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:53:48] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:53:50,917 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:54:01,713 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:54:11,913 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:54:22,112 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:54:32,313 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:54:42,514 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:54:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:54:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:54:52,714 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:55:02,917 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:55:13,121 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:55:23,321 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:55:34,126 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:55:44,333 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:55:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:55:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:55:54,532 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:56:04,732 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:56:14,933 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:56:25,134 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:56:35,340 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:56:44,157 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:56:45,915 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendDocument "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:56:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:56:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:56:54,360 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:57:04,569 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:57:14,768 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:57:24,968 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:57:35,169 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:57:45,370 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:57:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:57:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:57:55,571 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:58:05,772 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:58:15,974 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:58:26,173 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:58:36,373 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:58:46,574 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:58:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:58:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:58:56,777 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:59:06,981 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+192.168.0.104 - - [11/Aug/2026 16:59:09] "GET /data.js HTTP/1.1" 200 -
+2026-08-11 16:59:17,182 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:59:27,383 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:59:37,583 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 16:59:47,786 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 16:59:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 16:59:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 16:59:57,988 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:00:08,193 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:00:18,396 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:00:28,599 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:00:38,800 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:00:49,001 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:00:49] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:00:49] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:00:59,203 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:01:09,405 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:01:19,606 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:01:29,820 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:01:40,020 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:01:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:01:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:01:50,219 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:02:00,422 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:02:10,622 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:02:20,824 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:02:31,026 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:02:41,230 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:02:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:02:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:02:51,431 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:03:01,631 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:03:06,636 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:03:07,935 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 17:03:13,884 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:03:14,708 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 17:03:24,090 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:03:34,290 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:03:44,491 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:03:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:03:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:03:54,692 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:04:04,893 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:04:15,098 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:04:23,721 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:04:24,556 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 17:04:33,964 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:04:44,168 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:04:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:04:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:04:54,372 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:05:04,571 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:05:14,771 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:05:24,970 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:05:35,171 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:05:45,370 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:05:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:05:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:05:55,572 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:05,855 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:16,055 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:26,254 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:36,453 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:46,653 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:06:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:06:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:06:56,859 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:58,114 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:06:58,954 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 17:07:05,348 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:07:06,159 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 17:07:15,551 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:07:25,753 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:07:35,955 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:07:46,154 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:07:50] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:07:50] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:07:56,486 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:08:06,708 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:08:17,052 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:08:27,255 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:08:37,457 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:08:47,660 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:08:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:08:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:08:57,861 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:09:08,068 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:09:18,269 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:09:20,619 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:09:21,442 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/sendMessage "HTTP/1.1 200 OK"
+2026-08-11 17:09:30,822 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:09:41,024 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:09:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:09:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:09:51,223 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:10:01,427 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:10:11,635 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:10:21,836 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:10:32,036 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:10:42,239 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:10:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:10:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:10:52,451 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:11:02,676 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:11:12,887 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:11:23,093 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:11:33,294 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:11:43,497 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:11:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:11:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:11:53,702 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:12:03,902 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:12:14,102 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:12:24,309 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:12:34,517 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:12:44,718 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:12:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:12:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:12:55,259 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:13:05,464 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:13:15,666 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:13:25,867 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:13:36,069 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:13:46,268 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:13:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:13:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:13:56,467 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:14:06,668 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:14:16,872 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:14:27,323 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:14:37,523 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:14:47,723 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:14:51] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:14:51] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:14:57,924 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:15:08,130 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:15:18,329 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:15:28,615 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:15:38,855 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:15:50,125 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:15:52] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:15:52] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:16:00,328 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:16:10,535 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:16:20,734 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:16:30,938 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:16:41,139 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:16:51,344 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:16:52] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:16:52] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:17:01,547 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:17:11,746 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:17:21,947 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:17:32,147 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:17:42,351 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:17:52,552 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:17:52] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:17:52] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:18:02,750 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:18:12,949 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:18:23,151 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:18:33,356 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:18:43,567 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:18:52] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:18:52] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:18:53,829 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:19:04,042 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:19:14,865 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:19:25,066 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:19:35,266 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:19:45,468 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:19:52] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:19:52] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:19:55,668 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:20:05,868 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:20:16,071 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:20:26,271 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:20:36,470 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:20:46,674 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:20:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:20:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:20:56,874 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:21:07,076 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:21:17,280 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:21:27,488 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:21:37,689 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:21:47,969 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:21:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:21:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:21:58,911 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:22:09,119 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:22:19,320 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:22:29,519 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:22:39,721 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:22:50,024 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:22:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:22:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:23:00,223 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:23:10,426 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:23:20,627 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:23:30,828 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:23:41,031 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:23:51,231 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:23:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:23:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:24:01,432 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:24:11,634 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:24:21,834 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:24:32,034 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:24:42,238 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:24:52,437 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:24:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:24:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:25:02,636 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:25:12,837 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:25:23,037 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:25:33,239 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:25:43,438 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:25:53,637 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:25:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:25:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:26:03,838 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:26:14,036 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:26:24,240 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:26:34,442 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:26:44,640 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:26:53] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:26:53] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:26:54,842 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:27:05,040 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:27:15,242 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:27:25,441 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:27:35,642 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:27:45,846 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:27:54] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:27:54] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:27:56,050 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:28:06,252 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:28:16,453 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:28:26,651 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:28:36,857 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:28:47,060 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:28:54] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:28:54] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:28:57,263 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:29:07,467 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:29:17,666 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:29:28,691 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:29:38,968 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:29:49,168 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:29:54] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:29:54] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:29:59,433 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:30:09,633 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:30:19,834 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:30:30,036 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:30:40,238 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:30:50,442 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+172.19.0.4 - - [11/Aug/2026 17:30:54] code 404, message File not found
+172.19.0.4 - - [11/Aug/2026 17:30:54] "GET /v1/models HTTP/1.1" 404 -
+2026-08-11 17:31:00,642 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:31:10,841 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:31:21,041 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:31:25,319 INFO httpx: HTTP Request: POST https://api.telegram.org/bot8915898366:AAHXlU5cl5M39Db08760cLBIKa4OGz4bgUc/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 17:31:25,775 INFO telegram.ext.Application: Application is stopping. This might take a moment.
+2026-08-11 17:31:25,775 INFO apscheduler.scheduler: Scheduler has been shut down
+2026-08-11 17:31:25,785 INFO telegram.ext.Application: Application.stop() complete
