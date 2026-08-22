@@ -15,7 +15,8 @@ class AuroraBackground extends StatefulWidget {
   State<AuroraBackground> createState() => _AuroraBackgroundState();
 }
 
-class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerProviderStateMixin {
+class _AuroraBackgroundState extends State<AuroraBackground>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   static const _anchors = [
@@ -34,8 +35,10 @@ class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 26))
-      ..repeat(reverse: true);
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 26),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -48,7 +51,9 @@ class _AuroraBackgroundState extends State<AuroraBackground> with SingleTickerPr
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final base = isDark ? AppColors.voidDark : AppColors.voidLight;
-    final blobs = isDark ? AppColors.auroraBlobsDark : AppColors.auroraBlobsLight;
+    final blobs = isDark
+        ? AppColors.auroraBlobsDark
+        : AppColors.auroraBlobsLight;
 
     return ColoredBox(
       color: base,

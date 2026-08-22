@@ -12,7 +12,8 @@ class GoalProgress {
   const GoalProgress({required this.goal, required this.saved});
 
   double get remaining => (goal.target - saved).clamp(0, double.infinity);
-  double get pct => goal.target > 0 ? (saved / goal.target).clamp(0.0, 1.0) : 0.0;
+  double get pct =>
+      goal.target > 0 ? (saved / goal.target).clamp(0.0, 1.0) : 0.0;
   bool get isComplete => saved >= goal.target;
 }
 
@@ -26,9 +27,9 @@ class GoalsController extends ChangeNotifier {
     GoalRepository? goalRepo,
     TransactionRepository? txnRepo,
     AccountRepository? accountRepo,
-  })  : _goalRepo = goalRepo ?? GoalRepository(),
-        _txnRepo = txnRepo ?? TransactionRepository(),
-        _accountRepo = accountRepo ?? AccountRepository();
+  }) : _goalRepo = goalRepo ?? GoalRepository(),
+       _txnRepo = txnRepo ?? TransactionRepository(),
+       _accountRepo = accountRepo ?? AccountRepository();
 
   List<GoalProgress> _goals = [];
   List<GoalProgress> get goals => _goals;
@@ -60,16 +61,28 @@ class GoalsController extends ChangeNotifier {
     final date =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final goal = _goals.firstWhere((g) => g.goal.id == goalId).goal;
-    await _txnRepo.add(Transaction(
-      date: date,
-      category: 'other',
-      amount: amount,
-      note: 'Goal: ${goal.name}',
-      type: TxnType.expense,
-      createdAt: now.toIso8601String(),
-      account: account,
-      goalId: goalId,
-    ));
+    await _txnRepo.add(
+      Transaction(
+        date: date,
+        category: 'other',
+        amount: amount,
+        note: 'Goal: ${goal.name}',
+        type: TxnType.expense,
+        createdAt: now.toIso8601String(),
+        account: account,
+        goalId: goalId,
+      ),
+    );
+    await refresh();
+  }
+
+  Future<void> update(
+    int id, {
+    String? name,
+    double? target,
+    String? note,
+  }) async {
+    await _goalRepo.update(id, name: name, target: target, note: note);
     await refresh();
   }
 

@@ -18,9 +18,9 @@ class LendingController extends ChangeNotifier {
     TransactionRepository? txnRepo,
     RecurringRepository? recurringRepo,
     AccountRepository? accountRepo,
-  })  : _txnRepo = txnRepo ?? TransactionRepository(),
-        _recurringRepo = recurringRepo ?? RecurringRepository(),
-        _accountRepo = accountRepo ?? AccountRepository();
+  }) : _txnRepo = txnRepo ?? TransactionRepository(),
+       _recurringRepo = recurringRepo ?? RecurringRepository(),
+       _accountRepo = accountRepo ?? AccountRepository();
 
   List<Transaction> _outstanding = [];
   List<Transaction> get outstanding => _outstanding;
@@ -32,25 +32,49 @@ class LendingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> lend(double amount, String person, String? note) => _record(TxnType.lent, amount, person, note);
-  Future<void> borrow(double amount, String person, String? note) => _record(TxnType.borrowed, amount, person, note);
+  Future<void> lend(double amount, String person, String? note) =>
+      _record(TxnType.lent, amount, person, note);
+  Future<void> borrow(double amount, String person, String? note) =>
+      _record(TxnType.borrowed, amount, person, note);
 
-  Future<void> _record(TxnType type, double amount, String person, String? note) async {
+  Future<void> _record(
+    TxnType type,
+    double amount,
+    String person,
+    String? note,
+  ) async {
     final account = await _accountRepo.defaultAccount();
     final now = DateTime.now();
     final date =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await _txnRepo.add(Transaction(
-      date: date,
-      category: 'lending',
-      amount: amount,
-      note: note,
-      type: type,
-      createdAt: now.toIso8601String(),
-      counterparty: person,
-      settled: 0,
-      account: account,
-    ));
+    await _txnRepo.add(
+      Transaction(
+        date: date,
+        category: 'lending',
+        amount: amount,
+        note: note,
+        type: type,
+        createdAt: now.toIso8601String(),
+        counterparty: person,
+        settled: 0,
+        account: account,
+      ),
+    );
+    await refresh();
+  }
+
+  Future<void> update(
+    int id, {
+    double? amount,
+    String? person,
+    String? note,
+  }) async {
+    await _txnRepo.update(id, amount: amount, note: note, counterparty: person);
+    await refresh();
+  }
+
+  Future<void> remove(int id) async {
+    await _txnRepo.deleteById(id);
     await refresh();
   }
 
@@ -67,16 +91,22 @@ class LendingController extends ChangeNotifier {
 
   /// Schedules automatic monthly repayments against a loan — creates a
   /// recurring row with loan_id set, same as bot.py's repayplan_cmd.
-  Future<void> repayPlan(int loanId, double monthlyAmount, {int? months}) async {
+  Future<void> repayPlan(
+    int loanId,
+    double monthlyAmount, {
+    int? months,
+  }) async {
     final loan = _outstanding.firstWhere((r) => r.id == loanId);
     final today = DateTime.now().day;
-    await _recurringRepo.add(RecurringBill(
-      amount: monthlyAmount,
-      category: 'lending',
-      note: 'repayment to ${loan.counterparty ?? 'them'}',
-      dayOfMonth: today,
-      installmentsRemaining: months,
-      loanId: loanId,
-    ));
+    await _recurringRepo.add(
+      RecurringBill(
+        amount: monthlyAmount,
+        category: 'lending',
+        note: 'repayment to ${loan.counterparty ?? 'them'}',
+        dayOfMonth: today,
+        installmentsRemaining: months,
+        loanId: loanId,
+      ),
+    );
   }
 }

@@ -1,9 +1,9 @@
 enum TxnType { expense, income, lent, borrowed }
 
 TxnType txnTypeFromString(String value) => TxnType.values.firstWhere(
-      (t) => t.name == value,
-      orElse: () => TxnType.expense,
-    );
+  (t) => t.name == value,
+  orElse: () => TxnType.expense,
+);
 
 class Transaction {
   final int? id;

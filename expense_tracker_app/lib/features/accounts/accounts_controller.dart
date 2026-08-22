@@ -12,7 +12,8 @@ class AccountBalance {
 /// Money pots + transfers — port of bot.py's account_cmd/transfer_cmd.
 class AccountsController extends ChangeNotifier {
   final AccountRepository _repo;
-  AccountsController([AccountRepository? repo]) : _repo = repo ?? AccountRepository();
+  AccountsController([AccountRepository? repo])
+    : _repo = repo ?? AccountRepository();
 
   List<AccountBalance> _accounts = [];
   List<AccountBalance> get accounts => _accounts;
@@ -30,8 +31,11 @@ class AccountsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool nameTaken(String name) =>
-      _accounts.any((a) => a.account.name.toLowerCase() == name.toLowerCase());
+  bool nameTaken(String name, {int? excludeId}) => _accounts.any(
+    (a) =>
+        a.account.id != excludeId &&
+        a.account.name.toLowerCase() == name.toLowerCase(),
+  );
 
   Future<void> add(String name, double openingBalance) async {
     await _repo.add(name, openingBalance);
@@ -41,17 +45,39 @@ class AccountsController extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> update(int id, {String? name, double? openingBalance}) async {
+    await _repo.update(id, name: name, openingBalance: openingBalance);
+    await refresh();
+  }
+
+  Future<void> remove(int id) async {
+    await _repo.remove(id);
+    await refresh();
+  }
+
   Future<void> setDefault(String name) async {
     await _repo.setDefault(name);
     await refresh();
   }
 
-  Future<void> transfer(String from, String to, double amount, String? note) async {
+  Future<void> transfer(
+    String from,
+    String to,
+    double amount,
+    String? note,
+  ) async {
     final now = DateTime.now();
     final date =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     await _repo.addTransfer(
-      Transfer(fromAccount: from, toAccount: to, amount: amount, note: note, date: date, createdAt: now.toIso8601String()),
+      Transfer(
+        fromAccount: from,
+        toAccount: to,
+        amount: amount,
+        note: note,
+        date: date,
+        createdAt: now.toIso8601String(),
+      ),
     );
     await refresh();
   }

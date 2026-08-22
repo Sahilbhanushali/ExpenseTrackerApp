@@ -27,17 +27,23 @@ class RecurringController extends ChangeNotifier {
     RecurringRepository? recurringRepo,
     TransactionRepository? txnRepo,
     AccountRepository? accountRepo,
-  })  : _recurringRepo = recurringRepo ?? RecurringRepository(),
-        _txnRepo = txnRepo ?? TransactionRepository(),
-        _accountRepo = accountRepo ?? AccountRepository();
+  }) : _recurringRepo = recurringRepo ?? RecurringRepository(),
+       _txnRepo = txnRepo ?? TransactionRepository(),
+       _accountRepo = accountRepo ?? AccountRepository();
 
   List<RecurringBill> _bills = [];
   List<RecurringBill> get bills => _bills;
+
+  /// Bills whose day has arrived but haven't been logged this month yet —
+  /// surfaced for the user to confirm, never written automatically.
+  List<RecurringBill> _due = [];
+  List<RecurringBill> get due => _due;
 
   Future<void> init() => refresh();
 
   Future<void> refresh() async {
     _bills = await _recurringRepo.list();
+    _due = await _recurringRepo.due(DateTime.now());
     notifyListeners();
   }
 
@@ -49,7 +55,13 @@ class RecurringController extends ChangeNotifier {
     RecurringType type = RecurringType.expense,
   }) async {
     final id = await _recurringRepo.add(
-      RecurringBill(amount: amount, category: category, note: note, dayOfMonth: dayOfMonth, type: type),
+      RecurringBill(
+        amount: amount,
+        category: category,
+        note: note,
+        dayOfMonth: dayOfMonth,
+        type: type,
+      ),
     );
     await NotificationService.instance.scheduleRecurringReminder(
       billId: id,
@@ -67,6 +79,39 @@ class RecurringController extends ChangeNotifier {
     await refresh();
   }
 
+  Future<void> update(
+    int id, {
+    double? amount,
+    String? category,
+    String? note,
+    int? dayOfMonth,
+  }) async {
+    await _recurringRepo.update(
+      id,
+      amount: amount,
+      category: category,
+      note: note,
+      dayOfMonth: dayOfMonth,
+    );
+    if (dayOfMonth != null) {
+      final bill = _bills.firstWhere(
+        (b) => b.id == id,
+        orElse: () =>
+            RecurringBill(amount: 0, category: '', dayOfMonth: dayOfMonth),
+      );
+      await NotificationService.instance.scheduleRecurringReminder(
+        billId: id,
+        dayOfMonth: dayOfMonth,
+        title: bill.type == RecurringType.income
+            ? 'Income due'
+            : 'Recurring bill due',
+        body:
+            '${category ?? bill.category} · ${note ?? bill.note ?? 'no note'}',
+      );
+    }
+    await refresh();
+  }
+
   /// Logs this month's installment now, schedules the rest as a
   /// self-limiting recurring entry — port of emi_cmd.
   Future<void> logEmi({
@@ -80,24 +125,28 @@ class RecurringController extends ChangeNotifier {
     final now = DateTime.now();
     final date =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await _txnRepo.add(Transaction(
-      date: date,
-      category: category,
-      amount: monthlyAmount,
-      note: note,
-      type: TxnType.expense,
-      createdAt: now.toIso8601String(),
-      account: account,
-    ));
+    await _txnRepo.add(
+      Transaction(
+        date: date,
+        category: category,
+        amount: monthlyAmount,
+        note: note,
+        type: TxnType.expense,
+        createdAt: now.toIso8601String(),
+        account: account,
+      ),
+    );
     final remainingMonths = months - 1;
     if (remainingMonths > 0) {
-      final id = await _recurringRepo.add(RecurringBill(
-        amount: monthlyAmount,
-        category: category,
-        note: note,
-        dayOfMonth: dueDay ?? now.day,
-        installmentsRemaining: remainingMonths,
-      ));
+      final id = await _recurringRepo.add(
+        RecurringBill(
+          amount: monthlyAmount,
+          category: category,
+          note: note,
+          dayOfMonth: dueDay ?? now.day,
+          installmentsRemaining: remainingMonths,
+        ),
+      );
       await NotificationService.instance.scheduleRecurringReminder(
         billId: id,
         dayOfMonth: dueDay ?? now.day,
@@ -108,56 +157,72 @@ class RecurringController extends ChangeNotifier {
     await refresh();
   }
 
-  /// Auto-logs any recurring bill that's come due and hasn't fired this
-  /// month yet — call on app launch/resume. Mirrors check_recurring().
-  Future<List<DueBillResult>> checkDue() async {
-    final today = DateTime.now();
-    final month = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}';
-    final due = await _recurringRepo.due(today);
-    if (due.isEmpty) return [];
+  /// Read-only: refreshes which bills have come due, without logging
+  /// anything. Safe to call on every launch/resume — never writes to the
+  /// ledger, so re-opening the app can't double-add a bill.
+  Future<List<RecurringBill>> refreshDue() async {
+    _due = await _recurringRepo.due(DateTime.now());
+    notifyListeners();
+    return _due;
+  }
 
-    final results = <DueBillResult>[];
-    for (final bill in due) {
-      if (bill.loanId != null) {
-        final result = await _txnRepo.repay(bill.loanId!, bill.amount);
-        if (result == null) {
-          await _recurringRepo.remove(bill.id!);
-          continue;
-        }
+  /// Logs a single due bill now, on explicit user confirmation (tapping
+  /// "Log now" in the UI). Mirrors bot.py's check_recurring() logic, but
+  /// only ever runs for one bill, once, when the user asks for it.
+  Future<DueBillResult> logDue(RecurringBill bill) async {
+    final today = DateTime.now();
+    final month =
+        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}';
+    DueBillResult result;
+
+    if (bill.loanId != null) {
+      final repayResult = await _txnRepo.repay(bill.loanId!, bill.amount);
+      if (repayResult == null) {
+        await _recurringRepo.remove(bill.id!);
+        result = DueBillResult(
+          bill: bill,
+          message: 'That loan is gone — reminder removed.',
+        );
+      } else {
         final finished = await _recurringRepo.markRun(bill.id!, month);
-        final loanSettled = result.row.isSettled;
+        final loanSettled = repayResult.row.isSettled;
         if (loanSettled && !finished) {
           await _recurringRepo.remove(bill.id!);
         }
-        final person = result.row.counterparty ?? 'them';
-        results.add(DueBillResult(
+        final person = repayResult.row.counterparty ?? 'them';
+        result = DueBillResult(
           bill: bill,
           message: loanSettled
-              ? 'Auto-applied repayment to $person — fully settled!'
-              : 'Auto-applied repayment to $person: ${result.applied}',
-        ));
-      } else {
-        final account = await _accountRepo.defaultAccount();
-        final isIncome = bill.type == RecurringType.income;
-        await _txnRepo.add(Transaction(
-          date: '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}',
+              ? 'Applied repayment to $person — fully settled!'
+              : 'Applied repayment to $person: ${repayResult.applied}',
+        );
+      }
+    } else {
+      final account = await _accountRepo.defaultAccount();
+      final isIncome = bill.type == RecurringType.income;
+      await _txnRepo.add(
+        Transaction(
+          date:
+              '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}',
           category: bill.category,
           amount: bill.amount,
           note: bill.note,
           type: isIncome ? TxnType.income : TxnType.expense,
           createdAt: today.toIso8601String(),
           account: account,
-        ));
-        final finished = await _recurringRepo.markRun(bill.id!, month);
-        results.add(DueBillResult(
-          bill: bill,
-          message: '${isIncome ? 'Auto-logged income' : 'Auto-logged recurring bill'}: '
-              '${bill.category} ${bill.amount}'
-              '${finished ? ' — that was the last installment' : ''}',
-        ));
-      }
+        ),
+      );
+      final finished = await _recurringRepo.markRun(bill.id!, month);
+      result = DueBillResult(
+        bill: bill,
+        message:
+            '${isIncome ? 'Logged income' : 'Logged bill'}: '
+            '${bill.category} ${bill.amount}'
+            '${finished ? ' — that was the last installment' : ''}',
+      );
     }
+
     await refresh();
-    return results;
+    return result;
   }
 }

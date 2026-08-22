@@ -21,14 +21,20 @@ List<String> buildThresholdWarnings({
   if (_crossed(beforeSpent, afterSpent, budget, 1.0)) {
     warnings.add('Over monthly budget! Overspent by ${fmt(remaining.abs())}.');
   } else if (_crossed(beforeSpent, afterSpent, budget, 0.8)) {
-    warnings.add('80% of monthly budget used — ${fmt(remaining)} left for the month.');
+    warnings.add(
+      '80% of monthly budget used — ${fmt(remaining)} left for the month.',
+    );
   }
 
   final catRemaining = catCap - afterCat;
   if (_crossed(beforeCat, afterCat, catCap, 1.0)) {
-    warnings.add('Over budget for $category! Overspent by ${fmt(catRemaining.abs())}.');
+    warnings.add(
+      'Over budget for $category! Overspent by ${fmt(catRemaining.abs())}.',
+    );
   } else if (_crossed(beforeCat, afterCat, catCap, 0.8)) {
-    warnings.add('80% of $category budget used — ${fmt(catRemaining)} left in this category.');
+    warnings.add(
+      '80% of $category budget used — ${fmt(catRemaining)} left in this category.',
+    );
   }
 
   return warnings;

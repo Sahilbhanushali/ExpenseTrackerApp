@@ -23,16 +23,32 @@ class LendingScreen extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: amountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount')),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Amount'),
+            ),
             const SizedBox(height: AppSpacing.md),
-            TextField(controller: personController, decoration: const InputDecoration(labelText: 'Person')),
+            TextField(
+              controller: personController,
+              decoration: const InputDecoration(labelText: 'Person'),
+            ),
             const SizedBox(height: AppSpacing.md),
-            TextField(controller: noteController, decoration: const InputDecoration(labelText: 'Note (optional)')),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -40,7 +56,9 @@ class LendingScreen extends StatelessWidget {
       final amount = double.tryParse(amountController.text.replaceAll(',', ''));
       final person = personController.text.trim();
       if (amount == null || amount <= 0 || person.isEmpty) return;
-      final note = noteController.text.trim().isEmpty ? null : noteController.text.trim();
+      final note = noteController.text.trim().isEmpty
+          ? null
+          : noteController.text.trim();
       final controller = context.read<LendingController>();
       if (type == TxnType.lent) {
         await controller.lend(amount, person, note);
@@ -62,8 +80,14 @@ class LendingScreen extends StatelessWidget {
           decoration: const InputDecoration(labelText: 'Repayment amount'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, 'settle'), child: const Text('Settle fully')),
-          FilledButton(onPressed: () => Navigator.pop(context, 'repay'), child: const Text('Apply repayment')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'settle'),
+            child: const Text('Settle fully'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'repay'),
+            child: const Text('Apply repayment'),
+          ),
         ],
       ),
     );
@@ -75,6 +99,95 @@ class LendingScreen extends StatelessWidget {
       final amount = double.tryParse(amountController.text.replaceAll(',', ''));
       if (amount == null || amount <= 0) return;
       await controller.repay(loan.id!, amount);
+    }
+  }
+
+  Future<void> _showEditLoan(BuildContext context, Transaction loan) async {
+    final amountController = TextEditingController(
+      text: loan.amount.toStringAsFixed(0),
+    );
+    final personController = TextEditingController(
+      text: loan.counterparty ?? '',
+    );
+    final noteController = TextEditingController(text: loan.note ?? '');
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          loan.type == TxnType.lent ? 'Edit loan' : 'Edit borrowed amount',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Amount'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: personController,
+              decoration: const InputDecoration(labelText: 'Person'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: noteController,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result != true || !context.mounted) return;
+    final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+    final person = personController.text.trim();
+    if (amount == null || amount <= 0 || person.isEmpty) return;
+    final note = noteController.text.trim().isEmpty
+        ? null
+        : noteController.text.trim();
+    await context.read<LendingController>().update(
+      loan.id!,
+      amount: amount,
+      person: person,
+      note: note,
+    );
+  }
+
+  Future<void> _confirmDeleteLoan(
+    BuildContext context,
+    Transaction loan,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this entry?'),
+        content: Text(
+          'This removes the record with ${loan.counterparty ?? 'them'} entirely.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await context.read<LendingController>().remove(loan.id!);
     }
   }
 
@@ -104,9 +217,17 @@ class LendingScreen extends StatelessWidget {
         ],
       ),
       body: lending.outstanding.isEmpty
-          ? const EmptyState(icon: Icons.handshake_outlined, message: 'Nothing outstanding — all settled up!')
+          ? const EmptyState(
+              icon: Icons.handshake_outlined,
+              message: 'Nothing outstanding — all settled up!',
+            )
           : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 96),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                96,
+              ),
               itemCount: lending.outstanding.length,
               separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
               itemBuilder: (context, i) {
@@ -118,12 +239,36 @@ class LendingScreen extends StatelessWidget {
                     onTap: () => _showRepay(context, r),
                     title: Text(r.counterparty ?? 'Someone'),
                     subtitle: Text(owesYou ? 'owes you' : 'you owe'),
-                    trailing: Text(
-                      formatMoney(r.amount, currency),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: owesYou ? AppColors.income : AppColors.expense,
-                      ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          formatMoney(r.amount, currency),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: owesYou
+                                ? AppColors.income
+                                : AppColors.expense,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert),
+                          onSelected: (v) {
+                            if (v == 'edit') {
+                              _showEditLoan(context, r);
+                            } else if (v == 'delete') {
+                              _confirmDeleteLoan(context, r);
+                            }
+                          },
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(value: 'edit', child: Text('Edit')),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 );

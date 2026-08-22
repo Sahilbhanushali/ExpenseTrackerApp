@@ -14,15 +14,47 @@ class RecurringRepository {
 
   Future<List<RecurringBill>> list() async {
     final db = await _db.database;
-    final rows = await db.query('recurring', where: 'active = 1', orderBy: 'day_of_month ASC');
+    final rows = await db.query(
+      'recurring',
+      where: 'active = 1',
+      orderBy: 'day_of_month ASC',
+    );
     return rows.map(RecurringBill.fromMap).toList();
+  }
+
+  Future<bool> update(
+    int id, {
+    double? amount,
+    String? category,
+    String? note,
+    int? dayOfMonth,
+  }) async {
+    final db = await _db.database;
+    final fields = <String, Object?>{};
+    if (amount != null) fields['amount'] = amount;
+    if (category != null) fields['category'] = category;
+    if (note != null) fields['note'] = note;
+    if (dayOfMonth != null) fields['day_of_month'] = dayOfMonth;
+    if (fields.isEmpty) return false;
+    final count = await db.update(
+      'recurring',
+      fields,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return count > 0;
   }
 
   Future<bool> remove(int id) async {
     final db = await _db.database;
     final rows = await db.query('recurring', where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return false;
-    await db.update('recurring', {'active': 0}, where: 'id = ?', whereArgs: [id]);
+    await db.update(
+      'recurring',
+      {'active': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return true;
   }
 
@@ -43,11 +75,23 @@ class RecurringRepository {
   /// final installment.
   Future<bool> markRun(int id, String month) async {
     final db = await _db.database;
-    final rows = await db.query('recurring', columns: ['installments_remaining'], where: 'id = ?', whereArgs: [id]);
-    final remaining = rows.isNotEmpty ? rows.first['installments_remaining'] as int? : null;
+    final rows = await db.query(
+      'recurring',
+      columns: ['installments_remaining'],
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    final remaining = rows.isNotEmpty
+        ? rows.first['installments_remaining'] as int?
+        : null;
 
     if (remaining == null) {
-      await db.update('recurring', {'last_run_month': month}, where: 'id = ?', whereArgs: [id]);
+      await db.update(
+        'recurring',
+        {'last_run_month': month},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
       return false;
     }
 
@@ -55,12 +99,17 @@ class RecurringRepository {
     final finished = next <= 0;
     await db.update(
       'recurring',
-      {'last_run_month': month, 'installments_remaining': next, 'active': finished ? 0 : 1},
+      {
+        'last_run_month': month,
+        'installments_remaining': next,
+        'active': finished ? 0 : 1,
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
     return finished;
   }
 
-  String _monthKey(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+  String _monthKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
 }

@@ -11,7 +11,8 @@ import 'transaction_repository.dart';
 /// sharing the raw SQLite + config files, replacing /export and /backup.
 class ExportRepository {
   final TransactionRepository _txnRepo;
-  ExportRepository([TransactionRepository? txnRepo]) : _txnRepo = txnRepo ?? TransactionRepository();
+  ExportRepository([TransactionRepository? txnRepo])
+    : _txnRepo = txnRepo ?? TransactionRepository();
 
   Future<File> exportCsv({String? month}) async {
     var rows = await _txnRepo.allRows();
@@ -21,7 +22,9 @@ class ExportRepository {
     final buffer = StringBuffer('date,category,amount,note,type\n');
     for (final r in rows) {
       final note = (r.note ?? '').replaceAll(',', ';');
-      buffer.writeln('${r.date},${r.category},${r.amount},$note,${r.type.name}');
+      buffer.writeln(
+        '${r.date},${r.category},${r.amount},$note,${r.type.name}',
+      );
     }
 
     final dir = await getTemporaryDirectory();
@@ -55,14 +58,16 @@ class ExportRepository {
       }
       if (type == null) continue;
 
-      await _txnRepo.add(Transaction(
-        date: date,
-        category: category,
-        amount: amount,
-        note: note.isEmpty ? null : note,
-        type: type,
-        createdAt: DateTime.now().toIso8601String(),
-      ));
+      await _txnRepo.add(
+        Transaction(
+          date: date,
+          category: category,
+          amount: amount,
+          note: note.isEmpty ? null : note,
+          type: type,
+          createdAt: DateTime.now().toIso8601String(),
+        ),
+      );
       imported++;
     }
     return imported;

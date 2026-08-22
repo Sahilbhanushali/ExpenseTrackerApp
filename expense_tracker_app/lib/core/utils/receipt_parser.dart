@@ -10,14 +10,28 @@ class ParsedReceipt {
   final String category;
   final String note;
 
-  const ParsedReceipt({required this.amount, required this.category, required this.note});
+  const ParsedReceipt({
+    required this.amount,
+    required this.category,
+    required this.note,
+  });
 }
 
 final RegExp _totalLineRe = RegExp(r'\btotal\b', caseSensitive: false);
-final RegExp _subtotalLineRe = RegExp(r'\bsub[\s-]?total\b', caseSensitive: false);
+final RegExp _subtotalLineRe = RegExp(
+  r'\bsub[\s-]?total\b',
+  caseSensitive: false,
+);
 
-ParsedReceipt parseReceiptText(String text, {Map<String, List<String>>? extraCategories}) {
-  final lines = text.split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+ParsedReceipt parseReceiptText(
+  String text, {
+  Map<String, List<String>>? extraCategories,
+}) {
+  final lines = text
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
 
   double? amount;
   for (final line in lines) {
@@ -43,7 +57,9 @@ ParsedReceipt parseReceiptText(String text, {Map<String, List<String>>? extraCat
 
   final fullTextLower = lines.join('\n').toLowerCase();
   final category = detectCategory(fullTextLower, extraCategories);
-  final note = lines.isNotEmpty ? (lines.first.length > 40 ? lines.first.substring(0, 40) : lines.first) : '';
+  final note = lines.isNotEmpty
+      ? (lines.first.length > 40 ? lines.first.substring(0, 40) : lines.first)
+      : '';
 
   return ParsedReceipt(
     amount: amount != null ? double.parse(amount.toStringAsFixed(2)) : null,

@@ -18,11 +18,31 @@ import '../wishlist/wishlist_screen.dart';
 import 'dashboard_screen.dart';
 
 const _navItems = [
-  AppNavItem(icon: Icons.dashboard_outlined, selectedIcon: Icons.dashboard, label: 'Dashboard'),
-  AppNavItem(icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'Transactions'),
-  AppNavItem(icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet, label: 'Accounts'),
-  AppNavItem(icon: Icons.handshake_outlined, selectedIcon: Icons.handshake, label: 'Owed'),
-  AppNavItem(icon: Icons.more_horiz, selectedIcon: Icons.more_horiz, label: 'More'),
+  AppNavItem(
+    icon: Icons.dashboard_outlined,
+    selectedIcon: Icons.dashboard,
+    label: 'Dashboard',
+  ),
+  AppNavItem(
+    icon: Icons.receipt_long_outlined,
+    selectedIcon: Icons.receipt_long,
+    label: 'Transactions',
+  ),
+  AppNavItem(
+    icon: Icons.account_balance_wallet_outlined,
+    selectedIcon: Icons.account_balance_wallet,
+    label: 'Accounts',
+  ),
+  AppNavItem(
+    icon: Icons.handshake_outlined,
+    selectedIcon: Icons.handshake,
+    label: 'Owed',
+  ),
+  AppNavItem(
+    icon: Icons.more_horiz,
+    selectedIcon: Icons.more_horiz,
+    label: 'More',
+  ),
 ];
 
 class HomeShell extends StatefulWidget {
@@ -77,26 +97,32 @@ class _MoreScreen extends StatelessWidget {
             label: 'Wishlist',
             onTap: () {
               context.read<WishlistController>().refresh();
-              Navigator.of(context).push(FadeSlideRoute(page: const WishlistScreen()));
+              Navigator.of(context)
+                  .push(FadeSlideRoute(page: const WishlistScreen()));
             },
           ),
           _MoreTile(
             icon: Icons.event_repeat_outlined,
             label: 'Recurring & EMI',
-            onTap: () => Navigator.of(context).push(FadeSlideRoute(page: const RecurringScreen())),
+            onTap: () =>
+                Navigator.of(context)
+                    .push(FadeSlideRoute(page: const RecurringScreen())),
           ),
           _MoreTile(
             icon: Icons.flag_outlined,
             label: 'Savings goals',
             onTap: () {
               context.read<GoalsController>().refresh();
-              Navigator.of(context).push(FadeSlideRoute(page: const GoalsScreen()));
+              Navigator.of(context)
+                  .push(FadeSlideRoute(page: const GoalsScreen()));
             },
           ),
           _MoreTile(
             icon: Icons.settings_outlined,
             label: 'Settings',
-            onTap: () => Navigator.of(context).push(FadeSlideRoute(page: const SettingsScreen())),
+            onTap: () =>
+                Navigator.of(context)
+                    .push(FadeSlideRoute(page: const SettingsScreen())),
           ),
         ],
       ),
@@ -109,20 +135,32 @@ class _MoreTile extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _MoreTile({required this.icon, required this.label, required this.onTap});
+  const _MoreTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return PressScale(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
         child: Row(
           children: [
             Icon(icon, color: Theme.of(context).colorScheme.outline),
             const SizedBox(width: AppSpacing.md),
-            Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyLarge)),
-            Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.outline),
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.outline,
+            ),
           ],
         ),
       ),

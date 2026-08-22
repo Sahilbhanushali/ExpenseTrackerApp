@@ -58,7 +58,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   void _onTextChanged(String value) {
     final settings = context.read<SettingsController>();
     setState(() {
-      _preview = value.trim().isEmpty ? null : parseMessage(value, extraCategories: settings.config.customCategories);
+      _preview = value.trim().isEmpty
+          ? null
+          : parseMessage(
+              value,
+              extraCategories: settings.config.customCategories,
+            );
     });
   }
 
@@ -70,15 +75,24 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     setState(() => _scanning = true);
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
-      final result = await recognizer.processImage(InputImage.fromFilePath(file.path));
+      final result = await recognizer.processImage(
+        InputImage.fromFilePath(file.path),
+      );
       if (!mounted) return;
       final settings = context.read<SettingsController>();
-      final receipt = parseReceiptText(result.text, extraCategories: settings.config.customCategories);
+      final receipt = parseReceiptText(
+        result.text,
+        extraCategories: settings.config.customCategories,
+      );
 
       if (receipt.amount == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Couldn't find an amount on that receipt — try typing it instead.")),
+            const SnackBar(
+              content: Text(
+                "Couldn't find an amount on that receipt — try typing it instead.",
+              ),
+            ),
           );
         }
         return;
@@ -143,18 +157,21 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   Future<void> _submitDetailed() async {
     final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
     if (amount == null || amount <= 0) return;
-    final iso = '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
+    final iso =
+        '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
     await _logWithWarnings(
       category: _type == TxnType.income ? 'income' : _category,
       isExpense: _type == TxnType.expense,
       date: iso,
       logTxn: () => context.read<ExpensesController>().addManual(
-            amount: amount,
-            category: _type == TxnType.income ? 'income' : _category,
-            note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
-            type: _type,
-            date: iso,
-          ),
+        amount: amount,
+        category: _type == TxnType.income ? 'income' : _category,
+        note: _noteController.text.trim().isEmpty
+            ? null
+            : _noteController.text.trim(),
+        type: _type,
+        date: iso,
+      ),
     );
   }
 
@@ -223,9 +240,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         return Container(
           decoration: BoxDecoration(
             color: isDark ? AppColors.surfaceDark : AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadius.lg)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppRadius.lg),
+            ),
           ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: ListView(
             controller: scrollController,
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -234,21 +255,28 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                 child: Container(
                   width: 40,
                   height: 4,
-                  decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Add transaction', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Add transaction',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   SegmentedButton<bool>(
                     segments: const [
                       ButtonSegment(value: true, label: Text('Quick')),
                       ButtonSegment(value: false, label: Text('Form')),
                     ],
                     selected: {_quickMode},
-                    onSelectionChanged: (s) => setState(() => _quickMode = s.first),
+                    onSelectionChanged: (s) =>
+                        setState(() => _quickMode = s.first),
                   ),
                 ],
               ),
@@ -280,8 +308,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: _scanning
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.document_scanner_outlined, color: AppColors.primary),
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.document_scanner_outlined,
+                        color: AppColors.primary,
+                      ),
               ),
             ),
           ),
@@ -338,7 +373,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: highlight ? AppColors.primary.withValues(alpha: 0.14) : AppColors.categoryPalette.last.withValues(alpha: 0.08),
+        color: highlight
+            ? AppColors.primary.withValues(alpha: 0.14)
+            : AppColors.categoryPalette.last.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Text(
@@ -377,7 +414,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           DropdownButtonFormField<String>(
             initialValue: _category,
             decoration: const InputDecoration(labelText: 'Category'),
-            items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+            items: categories
+                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .toList(),
             onChanged: (v) => setState(() => _category = v ?? kDefaultCategory),
           ),
         const SizedBox(height: AppSpacing.md),
@@ -389,7 +428,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Date'),
-          subtitle: Text('${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}'),
+          subtitle: Text(
+            '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+          ),
           trailing: const Icon(Icons.calendar_today_outlined),
           onTap: () async {
             final picked = await showDatePicker(
@@ -404,7 +445,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         const SizedBox(height: AppSpacing.lg),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton(onPressed: _submitDetailed, child: const Text('Log it')),
+          child: ElevatedButton(
+            onPressed: _submitDetailed,
+            child: const Text('Log it'),
+          ),
         ),
       ],
     );

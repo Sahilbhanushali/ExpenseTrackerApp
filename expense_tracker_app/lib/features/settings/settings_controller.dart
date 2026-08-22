@@ -7,7 +7,8 @@ import '../../data/repositories/config_repository.dart';
 /// goal, custom categories. Mirrors bot.py's load_config/save_config calls.
 class SettingsController extends ChangeNotifier {
   final ConfigRepository _repo;
-  SettingsController([ConfigRepository? repo]) : _repo = repo ?? ConfigRepository();
+  SettingsController([ConfigRepository? repo])
+    : _repo = repo ?? ConfigRepository();
 
   AppConfig _config = const AppConfig();
   AppConfig get config => _config;
@@ -26,19 +27,26 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setMonthlyBudget(double amount) => _persist(_config.copyWith(monthlyBudget: amount));
+  Future<void> setMonthlyBudget(double amount) =>
+      _persist(_config.copyWith(monthlyBudget: amount));
 
   Future<void> setCategoryBudget(String category, double amount) {
-    final budgets = Map<String, double>.from(_config.budgets)..[category] = amount;
+    final budgets = Map<String, double>.from(_config.budgets)
+      ..[category] = amount;
     return _persist(_config.copyWith(budgets: budgets));
   }
 
-  Future<void> setBudgets(Map<String, double> budgets) => _persist(_config.copyWith(budgets: budgets));
+  Future<void> setBudgets(Map<String, double> budgets) =>
+      _persist(_config.copyWith(budgets: budgets));
 
-  Future<void> setSavingsGoal(double amount, String label) =>
-      _persist(_config.copyWith(savingsGoal: SavingsGoal(amount: amount, label: label)));
+  Future<void> setSavingsGoal(double amount, String label) => _persist(
+    _config.copyWith(
+      savingsGoal: SavingsGoal(amount: amount, label: label),
+    ),
+  );
 
-  Future<void> setCurrency(String currency) => _persist(_config.copyWith(currency: currency));
+  Future<void> setCurrency(String currency) =>
+      _persist(_config.copyWith(currency: currency));
 
   Future<void> addCategory(String name, List<String> keywords) {
     final custom = Map<String, List<String>>.from(_config.customCategories);
@@ -47,9 +55,23 @@ class SettingsController extends ChangeNotifier {
     return _persist(_config.copyWith(customCategories: custom));
   }
 
+  Future<void> updateCategoryKeywords(String name, List<String> keywords) {
+    final custom = Map<String, List<String>>.from(_config.customCategories);
+    custom[name] = keywords..sort();
+    return _persist(_config.copyWith(customCategories: custom));
+  }
+
+  Future<void> removeCategory(String name) {
+    final custom = Map<String, List<String>>.from(_config.customCategories)
+      ..remove(name);
+    return _persist(_config.copyWith(customCategories: custom));
+  }
+
   /// Effective budget: capped at logged income once any is logged this
   /// month, same as bot.py's effective_budget().
   double effectiveBudget(double income) {
-    return income > 0 ? (_config.monthlyBudget < income ? _config.monthlyBudget : income) : _config.monthlyBudget;
+    return income > 0
+        ? (_config.monthlyBudget < income ? _config.monthlyBudget : income)
+        : _config.monthlyBudget;
   }
 }

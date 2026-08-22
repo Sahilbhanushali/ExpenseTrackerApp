@@ -30,16 +30,29 @@ class AccountRepository {
 
   Future<bool> setDefault(String name) async {
     final db = await _db.database;
-    final rows = await db.query('accounts', where: 'name = ?', whereArgs: [name]);
+    final rows = await db.query(
+      'accounts',
+      where: 'name = ?',
+      whereArgs: [name],
+    );
     if (rows.isEmpty) return false;
     await db.update('accounts', {'is_default': 0});
-    await db.update('accounts', {'is_default': 1}, where: 'name = ?', whereArgs: [name]);
+    await db.update(
+      'accounts',
+      {'is_default': 1},
+      where: 'name = ?',
+      whereArgs: [name],
+    );
     return true;
   }
 
   Future<double?> balance(String name) async {
     final db = await _db.database;
-    final accRows = await db.query('accounts', where: 'name = ?', whereArgs: [name]);
+    final accRows = await db.query(
+      'accounts',
+      where: 'name = ?',
+      whereArgs: [name],
+    );
     if (accRows.isEmpty) return null;
     var balance = (accRows.first['opening_balance'] as num).toDouble();
 
@@ -69,6 +82,50 @@ class AccountRepository {
     balance += transferredIn - transferredOut;
 
     return balance;
+  }
+
+  /// Renames an account and/or changes its opening balance. A rename
+  /// cascades to every txns/transfers row referencing the old name so
+  /// balances stay correct.
+  Future<bool> update(int id, {String? name, double? openingBalance}) async {
+    final db = await _db.database;
+    final rows = await db.query('accounts', where: 'id = ?', whereArgs: [id]);
+    if (rows.isEmpty) return false;
+    final oldName = rows.first['name'] as String;
+
+    final fields = <String, Object?>{};
+    if (name != null && name != oldName) fields['name'] = name;
+    if (openingBalance != null) fields['opening_balance'] = openingBalance;
+    if (fields.isEmpty) return false;
+
+    await db.update('accounts', fields, where: 'id = ?', whereArgs: [id]);
+    if (fields.containsKey('name')) {
+      await db.update(
+        'txns',
+        {'account': name},
+        where: 'account = ?',
+        whereArgs: [oldName],
+      );
+      await db.update(
+        'transfers',
+        {'from_account': name},
+        where: 'from_account = ?',
+        whereArgs: [oldName],
+      );
+      await db.update(
+        'transfers',
+        {'to_account': name},
+        where: 'to_account = ?',
+        whereArgs: [oldName],
+      );
+    }
+    return true;
+  }
+
+  Future<bool> remove(int id) async {
+    final db = await _db.database;
+    final count = await db.delete('accounts', where: 'id = ?', whereArgs: [id]);
+    return count > 0;
   }
 
   Future<int> addTransfer(Transfer transfer) async {

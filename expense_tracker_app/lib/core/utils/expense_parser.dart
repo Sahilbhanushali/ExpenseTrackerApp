@@ -23,10 +23,30 @@ class ParsedTransaction {
 }
 
 const Map<String, int> _monthNames = {
-  'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
-  'apr': 4, 'april': 4, 'may': 5, 'jun': 6, 'june': 6, 'jul': 7, 'july': 7,
-  'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9, 'oct': 10,
-  'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12,
+  'jan': 1,
+  'january': 1,
+  'feb': 2,
+  'february': 2,
+  'mar': 3,
+  'march': 3,
+  'apr': 4,
+  'april': 4,
+  'may': 5,
+  'jun': 6,
+  'june': 6,
+  'jul': 7,
+  'july': 7,
+  'aug': 8,
+  'august': 8,
+  'sep': 9,
+  'sept': 9,
+  'september': 9,
+  'oct': 10,
+  'october': 10,
+  'nov': 11,
+  'november': 11,
+  'dec': 12,
+  'december': 12,
 };
 
 final RegExp _amountRe = RegExp(
@@ -48,18 +68,47 @@ const Map<String, double> _suffixMultiplier = {
   'lakhs': 100000,
 };
 
-final RegExp _relativeDateRe = RegExp(r'\b(day before yesterday|yesterday|today)\b', caseSensitive: false);
-final RegExp _daysAgoRe = RegExp(r'\b(\d+)\s+days?\s+ago\b', caseSensitive: false);
+final RegExp _relativeDateRe = RegExp(
+  r'\b(day before yesterday|yesterday|today)\b',
+  caseSensitive: false,
+);
+final RegExp _daysAgoRe = RegExp(
+  r'\b(\d+)\s+days?\s+ago\b',
+  caseSensitive: false,
+);
 final RegExp _monthAlt = RegExp(
-  r'\bon\s+(\d{1,2})(?:st|nd|rd|th)?\s+(' '${_monthNames.keys.toList().join('|')}' r')\s*(\d{4})?\b',
+  r'\bon\s+(\d{1,2})(?:st|nd|rd|th)?\s+('
+  '${_monthNames.keys.toList().join('|')}'
+  r')\s*(\d{4})?\b',
   caseSensitive: false,
 );
 
 final RegExp _counterpartyRe = RegExp(r'\b(?:to|from)\s+([A-Za-z][A-Za-z]*)');
 const Set<String> _counterpartyStopwords = {
-  'be', 'get', 'pay', 'give', 'him', 'her', 'them', 'it', 'us', 'the',
-  'my', 'our', 'your', 'his', 'its', 'do', 'go', 'come', 'take', 'make',
-  'this', 'that', 'me', 'you',
+  'be',
+  'get',
+  'pay',
+  'give',
+  'him',
+  'her',
+  'them',
+  'it',
+  'us',
+  'the',
+  'my',
+  'our',
+  'your',
+  'his',
+  'its',
+  'do',
+  'go',
+  'come',
+  'take',
+  'make',
+  'this',
+  'that',
+  'me',
+  'you',
 };
 
 (double, (int, int))? findAmount(String message) {
@@ -78,7 +127,8 @@ const Set<String> _counterpartyStopwords = {
 
     final span = (m.start, m.end);
     final matchedText = message.substring(span.$1, span.$2).toLowerCase();
-    final hasSignal = suffix.isNotEmpty ||
+    final hasSignal =
+        suffix.isNotEmpty ||
         matchedText.contains('rs') ||
         matchedText.contains('₹') ||
         matchedText.contains('inr') ||
@@ -101,10 +151,14 @@ const Set<String> _counterpartyStopwords = {
   if (abs != null) {
     final day = int.parse(abs.group(1)!);
     final month = _monthNames[abs.group(2)!.toLowerCase()]!;
-    final year = abs.group(3) != null ? int.parse(abs.group(3)!) : DateTime.now().year;
+    final year = abs.group(3) != null
+        ? int.parse(abs.group(3)!)
+        : DateTime.now().year;
     try {
       final d = DateTime(year, month, day);
-      if (d.month != month) return null; // invalid day (e.g. Feb 30) rolled over
+      if (d.month != month) {
+        return null; // invalid day (e.g. Feb 30) rolled over
+      }
       return (_isoDate(d), (abs.start, abs.end));
     } catch (_) {
       return null;
@@ -121,7 +175,11 @@ const Set<String> _counterpartyStopwords = {
   final rel = _relativeDateRe.firstMatch(message);
   if (rel != null) {
     final word = rel.group(1)!.toLowerCase();
-    final offset = {'today': 0, 'yesterday': 1, 'day before yesterday': 2}[word]!;
+    final offset = {
+      'today': 0,
+      'yesterday': 1,
+      'day before yesterday': 2,
+    }[word]!;
     final d = DateTime.now().subtract(Duration(days: offset));
     return (_isoDate(d), (rel.start, rel.end));
   }
@@ -139,7 +197,8 @@ String _removeSpan(String text, (int, int)? span) {
 }
 
 bool _keywordIn(String textLower, String keyword) {
-  return RegExp(r'\b' + RegExp.escape(keyword.toLowerCase()) + r'\b').hasMatch(textLower);
+  return RegExp(r'\b' + RegExp.escape(keyword.toLowerCase()) + r'\b')
+      .hasMatch(textLower);
 }
 
 ParsedTxnType _detectType(String messageLower) {
@@ -165,9 +224,13 @@ String? _extractCounterparty(String message) {
   return _titleCase(candidates.last);
 }
 
-String _titleCase(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
+String _titleCase(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}';
 
-String detectCategory(String textLower, Map<String, List<String>>? extraCategories) {
+String detectCategory(
+  String textLower,
+  Map<String, List<String>>? extraCategories,
+) {
   if (extraCategories != null) {
     for (final entry in extraCategories.entries) {
       for (final kw in entry.value) {
@@ -185,13 +248,20 @@ String detectCategory(String textLower, Map<String, List<String>>? extraCategori
 
 String _buildNote(String text, (int, int)? amountSpan) {
   final stripped = _removeSpan(text, amountSpan);
-  final tokens = RegExp(r'[A-Za-z]+').allMatches(stripped).map((m) => m.group(0)!);
-  final kept = tokens.where((t) => !kFillerWords.contains(t.toLowerCase())).toList();
+  final tokens = RegExp(r'[A-Za-z]+')
+      .allMatches(stripped)
+      .map((m) => m.group(0)!);
+  final kept = tokens
+      .where((t) => !kFillerWords.contains(t.toLowerCase()))
+      .toList();
   return kept.join(' ');
 }
 
 /// Port of expense_bot/parser.py's parse_message().
-ParsedTransaction parseMessage(String message, {Map<String, List<String>>? extraCategories}) {
+ParsedTransaction parseMessage(
+  String message, {
+  Map<String, List<String>>? extraCategories,
+}) {
   final trimmed = message.trim();
 
   final dateResult = _findDate(trimmed);
@@ -228,14 +298,23 @@ final RegExp _splitRe = RegExp(r'\s*(?:\band\b|;|\n)\s*', caseSensitive: false);
 
 /// Port of parse_multi() — splits "450 lunch and 200 auto" into two entries;
 /// falls back to a single parse if fewer than two pieces have their own amount.
-List<ParsedTransaction> parseMulti(String message, {Map<String, List<String>>? extraCategories}) {
+List<ParsedTransaction> parseMulti(
+  String message, {
+  Map<String, List<String>>? extraCategories,
+}) {
   final trimmed = message.trim();
-  final parts = trimmed.split(_splitRe).map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+  final parts = trimmed
+      .split(_splitRe)
+      .map((p) => p.trim())
+      .where((p) => p.isNotEmpty)
+      .toList();
   if (parts.length <= 1) {
     return [parseMessage(trimmed, extraCategories: extraCategories)];
   }
 
-  final parsed = parts.map((p) => parseMessage(p, extraCategories: extraCategories)).toList();
+  final parsed = parts
+      .map((p) => parseMessage(p, extraCategories: extraCategories))
+      .toList();
   final valid = parsed.where((p) => p.amount != null).toList();
   if (valid.length < 2) {
     return [parseMessage(trimmed, extraCategories: extraCategories)];

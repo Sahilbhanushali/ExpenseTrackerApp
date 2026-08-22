@@ -7,7 +7,14 @@ class AppDatabase {
   static const _dbName = 'expenses.db';
   static const _dbVersion = 4;
 
-  static const allTables = ['txns', 'recurring', 'accounts', 'transfers', 'wishlist', 'goals'];
+  static const allTables = [
+    'txns',
+    'recurring',
+    'accounts',
+    'transfers',
+    'wishlist',
+    'goals',
+  ];
 
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
@@ -30,12 +37,18 @@ class AppDatabase {
     );
   }
 
-  Future<void> _upgradeSchema(Database db, int oldVersion, int newVersion) async {
+  Future<void> _upgradeSchema(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
     if (oldVersion < 2) {
       await _createWishlistTable(db);
     }
     if (oldVersion < 3) {
-      await db.execute("ALTER TABLE recurring ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'");
+      await db.execute(
+        "ALTER TABLE recurring ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'",
+      );
     }
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE txns ADD COLUMN goal_id INTEGER');

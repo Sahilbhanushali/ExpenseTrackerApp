@@ -37,8 +37,33 @@ class WishlistRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
-    final updated = await db.query('wishlist', where: 'id = ?', whereArgs: [id]);
+    final updated = await db.query(
+      'wishlist',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return WishlistItem.fromMap(updated.first);
+  }
+
+  Future<bool> update(
+    int id, {
+    String? name,
+    double? price,
+    String? note,
+  }) async {
+    final db = await _db.database;
+    final fields = <String, Object?>{};
+    if (name != null) fields['name'] = name;
+    if (price != null) fields['price'] = price;
+    if (note != null) fields['note'] = note;
+    if (fields.isEmpty) return false;
+    final count = await db.update(
+      'wishlist',
+      fields,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return count > 0;
   }
 
   Future<bool> remove(int id) async {

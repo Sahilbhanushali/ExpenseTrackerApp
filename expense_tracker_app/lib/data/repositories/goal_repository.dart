@@ -35,6 +35,27 @@ class GoalRepository {
     return (rows.first['total'] as num?)?.toDouble() ?? 0;
   }
 
+  Future<bool> update(
+    int id, {
+    String? name,
+    double? target,
+    String? note,
+  }) async {
+    final db = await _db.database;
+    final fields = <String, Object?>{};
+    if (name != null) fields['name'] = name;
+    if (target != null) fields['target'] = target;
+    if (note != null) fields['note'] = note;
+    if (fields.isEmpty) return false;
+    final count = await db.update(
+      'goals',
+      fields,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    return count > 0;
+  }
+
   /// Deletes the goal tracker only — contributions already logged stay in
   /// the ledger as ordinary expenses.
   Future<bool> remove(int id) async {

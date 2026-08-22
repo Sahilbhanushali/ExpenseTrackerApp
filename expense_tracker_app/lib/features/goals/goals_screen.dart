@@ -23,14 +23,27 @@ class GoalsScreen extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Goal name')),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Goal name'),
+            ),
             const SizedBox(height: AppSpacing.md),
-            TextField(controller: targetController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target amount')),
+            TextField(
+              controller: targetController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Target amount'),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -42,7 +55,65 @@ class GoalsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _showContribute(BuildContext context, int goalId, String name) async {
+  Future<void> _showEditGoal(
+    BuildContext context,
+    int id,
+    String name,
+    double target,
+  ) async {
+    final nameController = TextEditingController(text: name);
+    final targetController = TextEditingController(
+      text: target.toStringAsFixed(0),
+    );
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit goal'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Goal name'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: targetController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Target amount'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result != true || !context.mounted) return;
+    final newName = nameController.text.trim();
+    final newTarget = double.tryParse(
+      targetController.text.replaceAll(',', ''),
+    );
+    if (newName.isEmpty || newTarget == null || newTarget <= 0) return;
+    await context.read<GoalsController>().update(
+      id,
+      name: newName,
+      target: newTarget,
+    );
+  }
+
+  Future<void> _showContribute(
+    BuildContext context,
+    int goalId,
+    String name,
+  ) async {
     final amountController = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
@@ -55,8 +126,14 @@ class GoalsScreen extends StatelessWidget {
           decoration: const InputDecoration(labelText: 'Amount'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -72,10 +149,18 @@ class GoalsScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete this goal?'),
-        content: Text('Contributions already logged for "$name" stay in your transactions — only the goal tracker is removed.'),
+        content: Text(
+          'Contributions already logged for "$name" stay in your transactions — only the goal tracker is removed.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton.tonal(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -96,9 +181,17 @@ class GoalsScreen extends StatelessWidget {
         child: const Icon(Icons.add),
       ),
       body: goals.goals.isEmpty
-          ? const EmptyState(icon: Icons.flag_outlined, message: 'No savings goals yet.')
+          ? const EmptyState(
+              icon: Icons.flag_outlined,
+              message: 'No savings goals yet.',
+            )
           : GridView.builder(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 96),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                96,
+              ),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 mainAxisSpacing: AppSpacing.sm,
@@ -115,14 +208,42 @@ class GoalsScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(g.goal.name, style: Theme.of(context).textTheme.titleMedium, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => _showEditGoal(
+                            context,
+                            g.goal.id!,
+                            g.goal.name,
+                            g.goal.target,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                g.goal.name,
+                                style: Theme.of(context).textTheme.titleMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                formatMoney(g.saved, currency),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              Text(
+                                'of ${formatMoney(g.goal.target, currency)}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(formatMoney(g.saved, currency), style: Theme.of(context).textTheme.titleMedium),
-                            Text('of ${formatMoney(g.goal.target, currency)}', style: Theme.of(context).textTheme.bodySmall),
                             const SizedBox(height: AppSpacing.sm),
-                            BudgetProgressBar(spent: g.saved, budget: g.goal.target),
+                            BudgetProgressBar(
+                              spent: g.saved,
+                              budget: g.goal.target,
+                            ),
                           ],
                         ),
                         Row(
@@ -130,15 +251,34 @@ class GoalsScreen extends StatelessWidget {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.delete_outline, size: 18),
-                              onPressed: () => _confirmDelete(context, g.goal.id!, g.goal.name),
+                              onPressed: () => _confirmDelete(
+                                context,
+                                g.goal.id!,
+                                g.goal.name,
+                              ),
                             ),
                             if (g.isComplete)
-                              const Icon(Icons.check_circle, color: AppColors.income, size: 20)
+                              const Icon(
+                                Icons.check_circle,
+                                color: AppColors.income,
+                                size: 20,
+                              )
                             else
                               FilledButton.tonal(
-                                onPressed: () => _showContribute(context, g.goal.id!, g.goal.name),
-                                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
-                                child: const Text('Add', style: TextStyle(fontSize: 12)),
+                                onPressed: () => _showContribute(
+                                  context,
+                                  g.goal.id!,
+                                  g.goal.name,
+                                ),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Add',
+                                  style: TextStyle(fontSize: 12),
+                                ),
                               ),
                           ],
                         ),

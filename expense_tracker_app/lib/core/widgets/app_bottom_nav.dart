@@ -10,7 +10,11 @@ class AppNavItem {
   final IconData icon;
   final IconData selectedIcon;
   final String label;
-  const AppNavItem({required this.icon, required this.selectedIcon, required this.label});
+  const AppNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+  });
 }
 
 const double _navBarHeight = 62;
@@ -35,7 +39,12 @@ class AppBottomNav extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          AppSpacing.lg,
+          AppSpacing.sm,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.pill),
           child: BackdropFilter(
@@ -45,9 +54,17 @@ class AppBottomNav extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isDark ? AppColors.glassDark : AppColors.glassLight,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(color: isDark ? AppColors.glassBorderDark : AppColors.glassBorderLight),
+                border: Border.all(
+                  color: isDark
+                      ? AppColors.glassBorderDark
+                      : AppColors.glassBorderLight,
+                ),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.16), blurRadius: 28, offset: const Offset(0, 10)),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.16),
+                    blurRadius: 28,
+                    offset: const Offset(0, 10),
+                  ),
                 ],
               ),
               child: Row(
@@ -80,11 +97,17 @@ class _NavButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _NavButton({required this.item, required this.selected, required this.onTap});
+  const _NavButton({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.primary : Theme.of(context).colorScheme.outline;
+    final color = selected
+        ? AppColors.primary
+        : Theme.of(context).colorScheme.outline;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -95,7 +118,11 @@ class _NavButton extends StatelessWidget {
             scale: selected ? 1.15 : 1.0,
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            child: Icon(selected ? item.selectedIcon : item.icon, color: color, size: 22),
+            child: Icon(
+              selected ? item.selectedIcon : item.icon,
+              color: color,
+              size: 22,
+            ),
           ),
           const SizedBox(height: 3),
           AnimatedDefaultTextStyle(

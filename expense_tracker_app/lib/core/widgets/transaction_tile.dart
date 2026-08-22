@@ -11,9 +11,15 @@ class TransactionTile extends StatelessWidget {
   final String currency;
   final VoidCallback? onTap;
 
-  const TransactionTile({super.key, required this.txn, required this.currency, this.onTap});
+  const TransactionTile({
+    super.key,
+    required this.txn,
+    required this.currency,
+    this.onTap,
+  });
 
-  bool get _isCredit => txn.type == TxnType.income || txn.type == TxnType.borrowed;
+  bool get _isCredit =>
+      txn.type == TxnType.income || txn.type == TxnType.borrowed;
 
   @override
   Widget build(BuildContext context) {
@@ -43,18 +49,26 @@ class TransactionTile extends StatelessWidget {
                 children: [
                   Text(
                     txn.note?.isNotEmpty == true ? txn.note! : txn.category,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                    style: Theme.of(context).textTheme.bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
-                  Text(txn.category, style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    txn.category,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
             ),
             Text(
               '$sign${formatMoney(txn.amount, currency)}',
-              style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15),
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
             ),
           ],
         ),

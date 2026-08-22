@@ -10,18 +10,26 @@ class AppTheme {
   static ThemeData light() {
     final base = ThemeData(
       brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary, brightness: Brightness.light),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.primary,
+        brightness: Brightness.light,
+      ),
       // Transparent so the single root AuroraBackground (see main.dart) shows
       // through every screen instead of each Scaffold painting over it.
       scaffoldBackgroundColor: Colors.transparent,
       useMaterial3: true,
     );
     return base.copyWith(
-      textTheme: _textTheme(base.textTheme, AppColors.textPrimary, AppColors.textSecondary),
+      textTheme: _textTheme(
+        base.textTheme,
+        AppColors.textPrimary,
+        AppColors.textSecondary,
+      ),
       cardTheme: _cardTheme(AppColors.glassLight, AppColors.glassBorderLight),
       appBarTheme: _appBarTheme(AppColors.textPrimary),
       inputDecorationTheme: _inputTheme(AppColors.surface, AppColors.border),
       elevatedButtonTheme: _elevatedButtonTheme(),
+      dialogTheme: _dialogTheme(AppColors.surface),
       dividerColor: AppColors.border,
     );
   }
@@ -29,16 +37,27 @@ class AppTheme {
   static ThemeData dark() {
     final base = ThemeData(
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(seedColor: AppColors.primary, brightness: Brightness.dark),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.primary,
+        brightness: Brightness.dark,
+      ),
       scaffoldBackgroundColor: Colors.transparent,
       useMaterial3: true,
     );
     return base.copyWith(
-      textTheme: _textTheme(base.textTheme, AppColors.textPrimaryDark, AppColors.textSecondaryDark),
+      textTheme: _textTheme(
+        base.textTheme,
+        AppColors.textPrimaryDark,
+        AppColors.textSecondaryDark,
+      ),
       cardTheme: _cardTheme(AppColors.glassDark, AppColors.glassBorderDark),
       appBarTheme: _appBarTheme(AppColors.textPrimaryDark),
-      inputDecorationTheme: _inputTheme(AppColors.surfaceDark, AppColors.borderDark),
+      inputDecorationTheme: _inputTheme(
+        AppColors.surfaceDark,
+        AppColors.borderDark,
+      ),
       elevatedButtonTheme: _elevatedButtonTheme(),
+      dialogTheme: _dialogTheme(AppColors.surfaceDark),
       dividerColor: AppColors.borderDark,
     );
   }
@@ -46,9 +65,19 @@ class AppTheme {
   static TextTheme _textTheme(TextTheme base, Color primary, Color secondary) {
     final scaled = GoogleFonts.manropeTextTheme(base);
     return scaled.copyWith(
-      headlineSmall: scaled.headlineSmall?.copyWith(fontWeight: FontWeight.w800, color: primary, letterSpacing: -0.5),
-      titleLarge: scaled.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: primary),
-      titleMedium: scaled.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: primary),
+      headlineSmall: scaled.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w800,
+        color: primary,
+        letterSpacing: -0.5,
+      ),
+      titleLarge: scaled.titleLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: primary,
+      ),
+      titleMedium: scaled.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: primary,
+      ),
       bodyLarge: scaled.bodyLarge?.copyWith(color: primary),
       bodyMedium: scaled.bodyMedium?.copyWith(color: primary),
       bodySmall: scaled.bodySmall?.copyWith(color: secondary),
@@ -68,6 +97,28 @@ class AppTheme {
     );
   }
 
+  static DialogThemeData _dialogTheme(Color surface) {
+    return DialogThemeData(
+      backgroundColor: surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      titleTextStyle: null,
+      actionsPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: 24,
+      ),
+    );
+  }
+
   static AppBarTheme _appBarTheme(Color fg) {
     return AppBarTheme(
       backgroundColor: Colors.transparent,
@@ -82,7 +133,10 @@ class AppTheme {
     return InputDecorationTheme(
       filled: true,
       fillColor: fill,
-      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AppRadius.md),
         borderSide: BorderSide(color: border),
@@ -103,8 +157,13 @@ class AppTheme {
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.pill)),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+        ),
         elevation: 0,
       ),
     );

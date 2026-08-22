@@ -52,9 +52,10 @@ class ExpenseTrackerApp extends StatelessWidget {
   }
 }
 
-/// Loads config + initial data, then auto-logs any recurring bill that's
-/// come due (mirrors bot.py's check_recurring, which normally runs daily
-/// via a server-side job — here it's checked once on launch instead).
+/// Loads config + initial data, then checks (read-only) which recurring
+/// bills have come due — nothing is auto-logged. The user confirms each one
+/// manually from the Recurring & EMI screen, so re-opening the app can never
+/// double-add a bill.
 class _AppBootstrap extends StatefulWidget {
   const _AppBootstrap();
 
@@ -62,7 +63,8 @@ class _AppBootstrap extends StatefulWidget {
   State<_AppBootstrap> createState() => _AppBootstrapState();
 }
 
-class _AppBootstrapState extends State<_AppBootstrap> with WidgetsBindingObserver {
+class _AppBootstrapState extends State<_AppBootstrap>
+    with WidgetsBindingObserver {
   bool _ready = false;
 
   @override
@@ -111,17 +113,15 @@ class _AppBootstrapState extends State<_AppBootstrap> with WidgetsBindingObserve
 
   Future<void> _checkDueBills() async {
     if (!mounted) return;
-    final expenses = context.read<ExpensesController>();
-    final lending = context.read<LendingController>();
-    final results = await context.read<RecurringController>().checkDue();
-    if (results.isNotEmpty) {
-      await expenses.refresh();
-      await lending.refresh();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${results.length} recurring item(s) auto-logged')),
-        );
-      }
+    final due = await context.read<RecurringController>().refreshDue();
+    if (due.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${due.length} recurring item(s) due — log them from Recurring & EMI',
+          ),
+        ),
+      );
     }
   }
 

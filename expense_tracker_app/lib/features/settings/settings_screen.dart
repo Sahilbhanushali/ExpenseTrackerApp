@@ -27,16 +27,33 @@ import 'settings_controller.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  Future<void> _editAmount(BuildContext context, String title, double current, ValueChanged<double> onSave) async {
-    final controller = TextEditingController(text: current == 0 ? '' : current.toStringAsFixed(0));
+  Future<void> _editAmount(
+    BuildContext context,
+    String title,
+    double current,
+    ValueChanged<double> onSave,
+  ) async {
+    final controller = TextEditingController(
+      text: current == 0 ? '' : current.toStringAsFixed(0),
+    );
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
-        content: TextField(controller: controller, keyboardType: TextInputType.number, autofocus: true),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -46,7 +63,10 @@ class SettingsScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _addCategory(BuildContext context, SettingsController settings) async {
+  Future<void> _addCategory(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
     final nameController = TextEditingController();
     final keywordsController = TextEditingController();
     final result = await showDialog<bool>(
@@ -56,22 +76,87 @@ class SettingsScreen extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name (e.g. pets)')),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Name (e.g. pets)'),
+            ),
             const SizedBox(height: AppSpacing.md),
-            TextField(controller: keywordsController, decoration: const InputDecoration(labelText: 'Keywords, comma-separated')),
+            TextField(
+              controller: keywordsController,
+              decoration: const InputDecoration(
+                labelText: 'Keywords, comma-separated',
+              ),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
     if (result == true) {
       final name = nameController.text.trim().toLowerCase();
-      final keywords = keywordsController.text.split(',').map((k) => k.trim().toLowerCase()).where((k) => k.isNotEmpty).toList();
+      final keywords = keywordsController.text
+          .split(',')
+          .map((k) => k.trim().toLowerCase())
+          .where((k) => k.isNotEmpty)
+          .toList();
       if (name.isEmpty || keywords.isEmpty) return;
       await settings.addCategory(name, keywords);
+    }
+  }
+
+  Future<void> _editCategory(
+    BuildContext context,
+    SettingsController settings,
+    String name,
+    List<String> keywords,
+  ) async {
+    final keywordsController = TextEditingController(text: keywords.join(', '));
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(name),
+        content: TextField(
+          controller: keywordsController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Keywords, comma-separated',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'cancel'),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, 'delete'),
+            child: const Text('Delete category'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'save'),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result == 'delete') {
+      await settings.removeCategory(name);
+    } else if (result == 'save') {
+      final newKeywords = keywordsController.text
+          .split(',')
+          .map((k) => k.trim().toLowerCase())
+          .where((k) => k.isNotEmpty)
+          .toList();
+      if (newKeywords.isEmpty) return;
+      await settings.updateCategoryKeywords(name, newKeywords);
     }
   }
 
@@ -92,8 +177,13 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Future<void> _importCsv(BuildContext context) async {
-    const typeGroup = file_selector.XTypeGroup(label: 'CSV', extensions: ['csv']);
-    final picked = await file_selector.openFile(acceptedTypeGroups: [typeGroup]);
+    const typeGroup = file_selector.XTypeGroup(
+      label: 'CSV',
+      extensions: ['csv'],
+    );
+    final picked = await file_selector.openFile(
+      acceptedTypeGroups: [typeGroup],
+    );
     final path = picked?.path;
     if (path == null || !context.mounted) return;
 
@@ -116,8 +206,14 @@ class SettingsScreen extends StatelessWidget {
           'wishlist item, goal, and budget setting on this device. This cannot be undone.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton.tonal(onPressed: () => Navigator.pop(context, true), child: const Text('Reset everything')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset everything'),
+          ),
         ],
       ),
     );
@@ -162,8 +258,15 @@ class SettingsScreen extends StatelessWidget {
             child: ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Monthly budget'),
-              trailing: Text(formatMoney(config.monthlyBudget, config.currency)),
-              onTap: () => _editAmount(context, 'Monthly budget', config.monthlyBudget, settings.setMonthlyBudget),
+              trailing: Text(
+                formatMoney(config.monthlyBudget, config.currency),
+              ),
+              onTap: () => _editAmount(
+                context,
+                'Monthly budget',
+                config.monthlyBudget,
+                settings.setMonthlyBudget,
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -173,11 +276,16 @@ class SettingsScreen extends StatelessWidget {
               leading: const Icon(Icons.flag_outlined),
               title: const Text('Savings goals'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(FadeSlideRoute(page: const GoalsScreen())),
+              onTap: () =>
+                  Navigator.of(context)
+                      .push(FadeSlideRoute(page: const GoalsScreen())),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Category budgets', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Category budgets',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
             child: Column(
@@ -197,7 +305,9 @@ class SettingsScreen extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     FilledButton.tonal(
-                      onPressed: () => Navigator.of(context).push(FadeSlideRoute(page: const BudgetPlannerScreen())),
+                      onPressed: () => Navigator.of(
+                        context,
+                      ).push(FadeSlideRoute(page: const BudgetPlannerScreen())),
                       child: const Text('Open planner'),
                     ),
                   ],
@@ -216,9 +326,21 @@ class SettingsScreen extends StatelessWidget {
                   const Text('No custom categories yet.')
                 else
                   ...config.customCategories.entries.map(
-                    (e) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Text('${e.key}: ${e.value.join(', ')}'),
+                    (e) => InkWell(
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      onTap: () =>
+                          _editCategory(context, settings, e.key, e.value),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text('${e.key}: ${e.value.join(', ')}'),
+                            ),
+                            const Icon(Icons.chevron_right, size: 18),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 const SizedBox(height: AppSpacing.sm),

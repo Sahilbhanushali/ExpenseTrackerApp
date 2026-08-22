@@ -16,9 +16,9 @@ class WishlistController extends ChangeNotifier {
     WishlistRepository? wishlistRepo,
     TransactionRepository? txnRepo,
     AccountRepository? accountRepo,
-  })  : _wishlistRepo = wishlistRepo ?? WishlistRepository(),
-        _txnRepo = txnRepo ?? TransactionRepository(),
-        _accountRepo = accountRepo ?? AccountRepository();
+  }) : _wishlistRepo = wishlistRepo ?? WishlistRepository(),
+       _txnRepo = txnRepo ?? TransactionRepository(),
+       _accountRepo = accountRepo ?? AccountRepository();
 
   List<WishlistItem> _items = [];
   List<WishlistItem> get items => _items;
@@ -46,15 +46,27 @@ class WishlistController extends ChangeNotifier {
     final now = DateTime.now();
     final date =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await _txnRepo.add(Transaction(
-      date: date,
-      category: 'other',
-      amount: row.price,
-      note: row.name,
-      type: TxnType.expense,
-      createdAt: now.toIso8601String(),
-      account: account,
-    ));
+    await _txnRepo.add(
+      Transaction(
+        date: date,
+        category: 'other',
+        amount: row.price,
+        note: row.name,
+        type: TxnType.expense,
+        createdAt: now.toIso8601String(),
+        account: account,
+      ),
+    );
+    await refresh();
+  }
+
+  Future<void> update(
+    int id, {
+    String? name,
+    double? price,
+    String? note,
+  }) async {
+    await _wishlistRepo.update(id, name: name, price: price, note: note);
     await refresh();
   }
 

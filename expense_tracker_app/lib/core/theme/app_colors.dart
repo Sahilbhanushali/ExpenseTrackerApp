@@ -35,7 +35,9 @@ class AppColors {
   static const Color glassLight = Color(0x8CFFFFFF); // rgba(255,255,255,0.55)
   static const Color glassDark = Color(0x8C24262B); // rgba(36,38,43,0.55)
   static const Color glassBorderLight = Color(0x8CFFFFFF);
-  static const Color glassBorderDark = Color(0x14FFFFFF); // rgba(255,255,255,0.08)
+  static const Color glassBorderDark = Color(
+    0x14FFFFFF,
+  ); // rgba(255,255,255,0.08)
 
   static const List<Color> auroraBlobsLight = [
     Color(0x527896FF), // soft blue

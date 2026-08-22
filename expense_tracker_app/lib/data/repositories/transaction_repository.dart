@@ -7,11 +7,22 @@ class MonthTotal {
   const MonthTotal({this.expense = 0, this.income = 0});
 }
 
+class MonthPoint {
+  final String month; // yyyy-MM
+  final double income;
+  final double expense;
+  const MonthPoint({required this.month, this.income = 0, this.expense = 0});
+}
+
 class RepayResult {
   final Transaction row;
   final double applied;
   final double overpaid;
-  const RepayResult({required this.row, required this.applied, required this.overpaid});
+  const RepayResult({
+    required this.row,
+    required this.applied,
+    required this.overpaid,
+  });
 }
 
 /// Port of expense_bot/db.py's transaction-related functions.
@@ -44,12 +55,19 @@ class TransactionRepository {
     return rows.isEmpty ? null : Transaction.fromMap(rows.first);
   }
 
-  Future<Transaction?> update(int id, {double? amount, String? category, String? note}) async {
+  Future<Transaction?> update(
+    int id, {
+    double? amount,
+    String? category,
+    String? note,
+    String? counterparty,
+  }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
     if (amount != null) fields['amount'] = amount;
     if (category != null) fields['category'] = category;
     if (note != null) fields['note'] = note;
+    if (counterparty != null) fields['counterparty'] = counterparty;
     if (fields.isNotEmpty) {
       await db.update('txns', fields, where: 'id = ?', whereArgs: [id]);
     }
@@ -88,7 +106,9 @@ class TransactionRepository {
   /// not saved. Port of db.py's available_savings().
   Future<double> availableSavings() async {
     final db = await _db.database;
-    final rows = await db.rawQuery("SELECT type, SUM(amount) as total FROM txns GROUP BY type");
+    final rows = await db.rawQuery(
+      "SELECT type, SUM(amount) as total FROM txns GROUP BY type",
+    );
     double income = 0, expense = 0, lent = 0;
     for (final r in rows) {
       final total = (r['total'] as num?)?.toDouble() ?? 0;
@@ -99,20 +119,60 @@ class TransactionRepository {
     return income - expense - lent;
   }
 
+  /// Income/expense totals for each of the last [months] months (oldest
+  /// first, including the current month) — powers the dashboard trend chart.
+  Future<List<MonthPoint>> monthlyTrend(int months) async {
+    final now = DateTime.now();
+    final keys = List.generate(months, (i) {
+      final d = DateTime(now.year, now.month - (months - 1 - i));
+      return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
+    });
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      "SELECT substr(date, 1, 7) as month, type, SUM(amount) as total FROM txns "
+      "WHERE substr(date, 1, 7) >= ? GROUP BY month, type",
+      [keys.first],
+    );
+    final income = <String, double>{};
+    final expense = <String, double>{};
+    for (final r in rows) {
+      final month = r['month'] as String;
+      final total = (r['total'] as num?)?.toDouble() ?? 0;
+      if (r['type'] == 'income') income[month] = total;
+      if (r['type'] == 'expense') expense[month] = total;
+    }
+    return keys
+        .map(
+          (k) => MonthPoint(
+            month: k,
+            income: income[k] ?? 0,
+            expense: expense[k] ?? 0,
+          ),
+        )
+        .toList();
+  }
+
   Future<Map<String, double>> categoryTotals(String month) async {
     final db = await _db.database;
     final rows = await db.rawQuery(
       "SELECT category, SUM(amount) as total FROM txns WHERE date LIKE ? AND type = 'expense' GROUP BY category",
       ['$month%'],
     );
-    return {for (final r in rows) r['category'] as String: (r['total'] as num?)?.toDouble() ?? 0};
+    return {
+      for (final r in rows)
+        r['category'] as String: (r['total'] as num?)?.toDouble() ?? 0,
+    };
   }
 
   Future<List<Transaction>> search(String term) async {
     final all = await allRows();
     final lower = term.toLowerCase();
     return all
-        .where((r) => (r.note ?? '').toLowerCase().contains(lower) || r.category.toLowerCase().contains(lower))
+        .where(
+          (r) =>
+              (r.note ?? '').toLowerCase().contains(lower) ||
+              r.category.toLowerCase().contains(lower),
+        )
         .toList();
   }
 
@@ -120,7 +180,8 @@ class TransactionRepository {
     final db = await _db.database;
     final rows = await db.query(
       'txns',
-      where: "type IN ('lent', 'borrowed') AND (settled IS NULL OR settled = 0)",
+      where:
+          "type IN ('lent', 'borrowed') AND (settled IS NULL OR settled = 0)",
       orderBy: 'date ASC, id ASC',
     );
     return rows.map(Transaction.fromMap).toList();
@@ -151,11 +212,18 @@ class TransactionRepository {
 
     final outstanding = row.amount;
     final applied = repayAmount < outstanding ? repayAmount : outstanding;
-    final overpaid = (repayAmount - outstanding) > 0 ? (repayAmount - outstanding) : 0.0;
+    final overpaid = (repayAmount - outstanding) > 0
+        ? (repayAmount - outstanding)
+        : 0.0;
     final newAmount = outstanding - applied;
     final settled = newAmount <= 0 ? 1 : 0;
 
-    await db.update('txns', {'amount': newAmount, 'settled': settled}, where: 'id = ?', whereArgs: [id]);
+    await db.update(
+      'txns',
+      {'amount': newAmount, 'settled': settled},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     final updated = await getById(id);
     return RepayResult(row: updated!, applied: applied, overpaid: overpaid);
   }

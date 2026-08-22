@@ -8,7 +8,12 @@ class PressScale extends StatefulWidget {
   final VoidCallback? onTap;
   final double scaleTo;
 
-  const PressScale({super.key, required this.child, this.onTap, this.scaleTo = 0.96});
+  const PressScale({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.scaleTo = 0.96,
+  });
 
   @override
   State<PressScale> createState() => _PressScaleState();

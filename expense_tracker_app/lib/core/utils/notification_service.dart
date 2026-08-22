@@ -18,9 +18,13 @@ class NotificationService {
     tzdata.initializeTimeZones();
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings();
-    await _plugin.initialize(const InitializationSettings(android: androidInit, iOS: iosInit));
+    await _plugin.initialize(
+      const InitializationSettings(android: androidInit, iOS: iosInit),
+    );
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
     _initialized = true;
   }
@@ -40,11 +44,16 @@ class NotificationService {
         body,
         next,
         const NotificationDetails(
-          android: AndroidNotificationDetails('recurring_bills', 'Recurring bills', importance: Importance.defaultImportance),
+          android: AndroidNotificationDetails(
+            'recurring_bills',
+            'Recurring bills',
+            importance: Importance.defaultImportance,
+          ),
           iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfMonthAndTime,
       );
     } catch (_) {
@@ -61,7 +70,13 @@ class NotificationService {
     final now = tz.TZDateTime.now(tz.local);
     var scheduled = tz.TZDateTime(tz.local, now.year, now.month, dayOfMonth, 9);
     if (scheduled.isBefore(now)) {
-      scheduled = tz.TZDateTime(tz.local, now.year, now.month + 1, dayOfMonth, 9);
+      scheduled = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month + 1,
+        dayOfMonth,
+        9,
+      );
     }
     return scheduled;
   }

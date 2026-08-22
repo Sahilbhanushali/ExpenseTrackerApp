@@ -54,14 +54,25 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
       body: _total <= 0
           ? const _NoBudgetState()
           : ListView(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, 96),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                96,
+              ),
               children: [
                 AppCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Monthly budget', style: Theme.of(context).textTheme.bodySmall),
-                      Text(formatMoney(_total, config.currency), style: Theme.of(context).textTheme.headlineSmall),
+                      Text(
+                        'Monthly budget',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        formatMoney(_total, config.currency),
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
                         'Fully allocated — ${formatMoney(allocatedSum, config.currency)} across categories',
@@ -71,14 +82,16 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
-                ..._allocations.keys.map((cat) => _CategoryAllocator(
-                      category: cat,
-                      value: _allocations[cat]!,
-                      total: _total,
-                      currency: config.currency,
-                      color: AppColors.categoryColor(cat),
-                      onChanged: (v) => setState(() => _rebalance(cat, v)),
-                    )),
+                ..._allocations.keys.map(
+                  (cat) => _CategoryAllocator(
+                    category: cat,
+                    value: _allocations[cat]!,
+                    total: _total,
+                    currency: config.currency,
+                    color: AppColors.categoryColor(cat),
+                    onChanged: (v) => setState(() => _rebalance(cat, v)),
+                  ),
+                ),
               ],
             ),
       bottomNavigationBar: _total <= 0
@@ -102,7 +115,10 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
   /// Seeds every known category with its existing budget, or 0 if unset,
   /// then scales the whole set so it sums exactly to `total`. If nothing was
   /// ever set, seeds from the recommended split instead of all-zero.
-  Map<String, double> _seedAllocations(Map<String, double> existing, double total) {
+  Map<String, double> _seedAllocations(
+    Map<String, double> existing,
+    double total,
+  ) {
     final categories = [...kCategoryKeywords.keys];
     final hasAny = categories.any((c) => (existing[c] ?? 0) > 0);
     if (!hasAny) return _recommendedSplit(total);
@@ -112,7 +128,10 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
   }
 
   Map<String, double> _recommendedSplit(double total) {
-    return {for (final entry in kRecommendedAllocation.entries) entry.key: total * entry.value.$2};
+    return {
+      for (final entry in kRecommendedAllocation.entries)
+        entry.key: total * entry.value.$2,
+    };
   }
 
   Map<String, double> _scaleToTotal(Map<String, double> raw, double total) {
@@ -186,10 +205,20 @@ class _CategoryAllocator extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(category),
-        content: TextField(controller: controller, keyboardType: TextInputType.number, autofocus: true),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Set')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Set'),
+          ),
         ],
       ),
     );
@@ -213,18 +242,35 @@ class _CategoryAllocator extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(category, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                      category,
+                      style: Theme.of(context).textTheme.bodyLarge
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
                 GestureDetector(
                   onTap: () => _editExact(context),
                   child: Row(
                     children: [
-                      Text(formatMoney(value, currency), style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        formatMoney(value, currency),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(width: 4),
-                      Text('· $pct%', style: Theme.of(context).textTheme.bodySmall),
+                      Text(
+                        '· $pct%',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ],
                   ),
                 ),

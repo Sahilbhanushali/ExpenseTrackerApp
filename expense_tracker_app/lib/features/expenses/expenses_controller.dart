@@ -6,20 +6,22 @@ import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
 
 TxnType _fromParsedType(ParsedTxnType t) => switch (t) {
-      ParsedTxnType.expense => TxnType.expense,
-      ParsedTxnType.income => TxnType.income,
-      ParsedTxnType.lent => TxnType.lent,
-      ParsedTxnType.borrowed => TxnType.borrowed,
-    };
+  ParsedTxnType.expense => TxnType.expense,
+  ParsedTxnType.income => TxnType.income,
+  ParsedTxnType.lent => TxnType.lent,
+  ParsedTxnType.borrowed => TxnType.borrowed,
+};
 
 /// Core ledger — add/edit/undo/search transactions, month + category totals.
 /// Wraps TransactionRepository the way bot.py's handle_message/_log_one_transaction do.
 class ExpensesController extends ChangeNotifier {
   final TransactionRepository _txnRepo;
   final AccountRepository _accountRepo;
-  ExpensesController({TransactionRepository? txnRepo, AccountRepository? accountRepo})
-      : _txnRepo = txnRepo ?? TransactionRepository(),
-        _accountRepo = accountRepo ?? AccountRepository();
+  ExpensesController({
+    TransactionRepository? txnRepo,
+    AccountRepository? accountRepo,
+  }) : _txnRepo = txnRepo ?? TransactionRepository(),
+       _accountRepo = accountRepo ?? AccountRepository();
 
   List<Transaction> _recent = [];
   List<Transaction> get recent => _recent;
@@ -46,9 +48,12 @@ class ExpensesController extends ChangeNotifier {
   }
 
   Future<MonthTotal> monthTotalFor(String month) => _txnRepo.monthTotal(month);
-  Future<Map<String, double>> categoryTotalsFor(String month) => _txnRepo.categoryTotals(month);
+  Future<Map<String, double>> categoryTotalsFor(String month) =>
+      _txnRepo.categoryTotals(month);
   Future<List<Transaction>> allRows() => _txnRepo.allRows();
   Future<List<Transaction>> search(String term) => _txnRepo.search(term);
+  Future<List<MonthPoint>> monthlyTrend(int months) =>
+      _txnRepo.monthlyTrend(months);
 
   Future<Transaction> addManual({
     required double amount,
@@ -92,8 +97,18 @@ class ExpensesController extends ChangeNotifier {
     return row;
   }
 
-  Future<Transaction?> edit(int id, {double? amount, String? category, String? note}) async {
-    final updated = await _txnRepo.update(id, amount: amount, category: category, note: note);
+  Future<Transaction?> edit(
+    int id, {
+    double? amount,
+    String? category,
+    String? note,
+  }) async {
+    final updated = await _txnRepo.update(
+      id,
+      amount: amount,
+      category: category,
+      note: note,
+    );
     await refresh();
     return updated;
   }
