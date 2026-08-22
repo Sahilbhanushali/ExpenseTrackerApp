@@ -308,6 +308,209 @@ class AccountsScreen extends StatelessWidget {
     }
   }
 
+  /// "Money lands in IDFC, keep 10k there, split the rest across the other
+  /// accounts" — a repeatable income-splitting tool instead of doing that
+  /// math by hand every payday. Never moves anything until you tap
+  /// Distribute; every figure is visible and editable first.
+  Future<void> _showDistribute(
+    BuildContext context,
+    List<AccountBalance> accounts,
+    String currency,
+  ) async {
+    if (accounts.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least two accounts first.')),
+      );
+      return;
+    }
+    final defaultSource = accounts.firstWhere(
+      (a) => a.account.isDefault,
+      orElse: () => accounts.first,
+    );
+    String source = defaultSource.account.name;
+    final amountController = TextEditingController();
+    final minKeepController = TextEditingController(text: '10000');
+    final targets = accounts.where((a) => a.account.name != source).toList();
+    final pctControllers = <String, TextEditingController>{
+      for (final t in targets)
+        t.account.name: TextEditingController(text: '20'),
+    };
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          void rebuildTargets(String newSource) {
+            source = newSource;
+            targets
+              ..clear()
+              ..addAll(accounts.where((a) => a.account.name != source));
+            pctControllers.clear();
+            for (final t in targets) {
+              pctControllers[t.account.name] = TextEditingController(
+                text: '20',
+              );
+            }
+          }
+
+          final amount =
+              double.tryParse(amountController.text.replaceAll(',', '')) ?? 0;
+          final minKeep =
+              double.tryParse(minKeepController.text.replaceAll(',', '')) ?? 0;
+          final available = (amount - minKeep).clamp(0, double.infinity);
+          final totalPct = pctControllers.values.fold<double>(
+            0,
+            (s, c) => s + (double.tryParse(c.text) ?? 0),
+          );
+
+          return AlertDialog(
+            title: const Text('Distribute income'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: source,
+                    decoration: const InputDecoration(
+                      labelText: 'Money lands in',
+                    ),
+                    items: accounts
+                        .map(
+                          (a) => DropdownMenuItem(
+                            value: a.account.name,
+                            child: Text(a.account.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => rebuildTargets(v ?? source)),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Amount received',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: minKeepController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Keep at least this much in $source',
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Available to split: ${formatMoney(available.toDouble(), currency)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: available <= 0 && amount > 0
+                          ? AppColors.expense
+                          : null,
+                    ),
+                  ),
+                  if (available <= 0 && amount > 0) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      amount < minKeep
+                          ? '${formatMoney(minKeep - amount, currency)} short of the $source minimum — nothing to split yet.'
+                          : 'This entire amount stays in $source to meet the minimum — nothing left to split.',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AppColors.expense),
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  for (final t in targets) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            '${t.account.name} · ${_typeLabel(t.account.type)}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: pctControllers[t.account.name],
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.end,
+                            decoration: const InputDecoration(suffixText: '%'),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        SizedBox(
+                          width: 90,
+                          child: Text(
+                            formatMoney(
+                              available *
+                                  (double.tryParse(
+                                        pctControllers[t.account.name]!.text,
+                                      ) ??
+                                      0) /
+                                  100,
+                              currency,
+                            ),
+                            textAlign: TextAlign.end,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                  ],
+                  Text(
+                    'Total: ${totalPct.toStringAsFixed(0)}%'
+                    '${totalPct > 100 ? ' — over 100%' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: totalPct > 100 ? AppColors.expense : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: available <= 0 || totalPct > 100
+                    ? null
+                    : () async {
+                        final controller = context.read<AccountsController>();
+                        for (final t in targets) {
+                          final pct =
+                              double.tryParse(
+                                pctControllers[t.account.name]!.text,
+                              ) ??
+                              0;
+                          final share = available * pct / 100;
+                          if (share > 0) {
+                            await controller.transfer(
+                              source,
+                              t.account.name,
+                              share.toDouble(),
+                              'Income distribution',
+                            );
+                          }
+                        }
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                child: const Text('Distribute'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final accounts = context.watch<AccountsController>();
@@ -318,6 +521,12 @@ class AccountsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Accounts'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.call_split),
+            tooltip: 'Distribute income',
+            onPressed: () =>
+                _showDistribute(context, accounts.accounts, currency),
+          ),
           IconButton(
             icon: const Icon(Icons.swap_horiz),
             tooltip: 'Transfer',
