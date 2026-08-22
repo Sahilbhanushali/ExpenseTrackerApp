@@ -1,9 +1,34 @@
+/// Which bucket of net worth this account represents. Cash is spendable
+/// day-to-day money; investment/emergencyFund are still yours, just set
+/// aside for a different purpose — the Dashboard breaks net worth down by
+/// this instead of lumping every account into one "Accounts" figure.
+enum AccountType { cash, investment, emergencyFund }
+
+AccountType accountTypeFromString(String value) => switch (value) {
+  'investment' => AccountType.investment,
+  'emergency_fund' => AccountType.emergencyFund,
+  _ => AccountType.cash,
+};
+
+String accountTypeToString(AccountType type) => switch (type) {
+  AccountType.cash => 'cash',
+  AccountType.investment => 'investment',
+  AccountType.emergencyFund => 'emergency_fund',
+};
+
 class MoneyAccount {
   final int? id;
   final String name;
   final double openingBalance;
   final bool isDefault;
   final String createdAt;
+  final AccountType type;
+
+  /// Investment/emergency-fund accounts only — the current market worth,
+  /// which may differ from [openingBalance] plus contributions. When unset,
+  /// the derived cash balance is used as-is (nothing has been marked up or
+  /// down yet).
+  final double? currentValue;
 
   const MoneyAccount({
     this.id,
@@ -11,6 +36,8 @@ class MoneyAccount {
     this.openingBalance = 0,
     this.isDefault = false,
     required this.createdAt,
+    this.type = AccountType.cash,
+    this.currentValue,
   });
 
   Map<String, Object?> toMap() {
@@ -20,6 +47,8 @@ class MoneyAccount {
       'opening_balance': openingBalance,
       'is_default': isDefault ? 1 : 0,
       'created_at': createdAt,
+      'type': accountTypeToString(type),
+      'current_value': currentValue,
     };
   }
 
@@ -30,6 +59,8 @@ class MoneyAccount {
       openingBalance: (map['opening_balance'] as num).toDouble(),
       isDefault: (map['is_default'] as int) == 1,
       createdAt: map['created_at'] as String,
+      type: accountTypeFromString(map['type'] as String? ?? 'cash'),
+      currentValue: (map['current_value'] as num?)?.toDouble(),
     );
   }
 }

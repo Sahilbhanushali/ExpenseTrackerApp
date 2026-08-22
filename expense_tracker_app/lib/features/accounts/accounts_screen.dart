@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
+import '../../data/models/account.dart';
 import '../settings/settings_controller.dart';
 import 'accounts_controller.dart';
+
+String _typeLabel(AccountType t) => switch (t) {
+  AccountType.cash => 'Cash & bank',
+  AccountType.investment => 'Investments',
+  AccountType.emergencyFund => 'Emergency fund',
+};
+
+IconData _typeIcon(AccountType t) => switch (t) {
+  AccountType.cash => Icons.account_balance_wallet_outlined,
+  AccountType.investment => Icons.trending_up_outlined,
+  AccountType.emergencyFund => Icons.shield_outlined,
+};
 
 class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
@@ -13,37 +27,72 @@ class AccountsScreen extends StatelessWidget {
   Future<void> _showAddAccount(BuildContext context) async {
     final nameController = TextEditingController();
     final balanceController = TextEditingController(text: '0');
+    final currentValueController = TextEditingController();
+    AccountType type = AccountType.cash;
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name (e.g. cash, bank)',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Add account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name (e.g. cash, bank)',
+                ),
               ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: balanceController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: type == AccountType.cash
+                      ? 'Opening balance'
+                      : 'Amount invested / set aside',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              SegmentedButton<AccountType>(
+                segments: const [
+                  ButtonSegment(value: AccountType.cash, label: Text('Cash')),
+                  ButtonSegment(
+                    value: AccountType.investment,
+                    label: Text('Investment'),
+                  ),
+                  ButtonSegment(
+                    value: AccountType.emergencyFund,
+                    label: Text('Emergency'),
+                  ),
+                ],
+                selected: {type},
+                onSelectionChanged: (s) => setState(() => type = s.first),
+              ),
+              if (type == AccountType.investment) ...[
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: currentValueController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Current value (optional)',
+                    helperText: 'Leave blank if it matches what you put in',
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: balanceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Opening balance'),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
     if (result == true && context.mounted) {
@@ -60,7 +109,15 @@ class AccountsScreen extends StatelessWidget {
         }
         return;
       }
-      await controller.add(name, balance);
+      final currentValue = type == AccountType.investment
+          ? double.tryParse(currentValueController.text.replaceAll(',', ''))
+          : null;
+      await controller.add(
+        name,
+        balance,
+        type: type,
+        currentValue: currentValue,
+      );
     }
   }
 
@@ -69,35 +126,72 @@ class AccountsScreen extends StatelessWidget {
     final balanceController = TextEditingController(
       text: a.account.openingBalance.toStringAsFixed(0),
     );
+    final currentValueController = TextEditingController(
+      text: a.account.currentValue?.toStringAsFixed(0) ?? '',
+    );
+    AccountType type = a.account.type;
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit account'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Edit account'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: balanceController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: type == AccountType.cash
+                      ? 'Opening balance'
+                      : 'Amount invested / set aside',
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              SegmentedButton<AccountType>(
+                segments: const [
+                  ButtonSegment(value: AccountType.cash, label: Text('Cash')),
+                  ButtonSegment(
+                    value: AccountType.investment,
+                    label: Text('Investment'),
+                  ),
+                  ButtonSegment(
+                    value: AccountType.emergencyFund,
+                    label: Text('Emergency'),
+                  ),
+                ],
+                selected: {type},
+                onSelectionChanged: (s) => setState(() => type = s.first),
+              ),
+              if (type == AccountType.investment) ...[
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: currentValueController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Current value (optional)',
+                    helperText: 'Leave blank if it matches what you put in',
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: balanceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Opening balance'),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
     if (result != true || !context.mounted) return;
@@ -114,7 +208,16 @@ class AccountsScreen extends StatelessWidget {
       }
       return;
     }
-    await controller.update(a.account.id!, name: name, openingBalance: balance);
+    final currentValue = type == AccountType.investment
+        ? double.tryParse(currentValueController.text.replaceAll(',', ''))
+        : null;
+    await controller.update(
+      a.account.id!,
+      name: name,
+      openingBalance: balance,
+      type: type,
+      currentValue: currentValue,
+    );
   }
 
   Future<void> _confirmDelete(BuildContext context, AccountBalance a) async {
@@ -231,74 +334,183 @@ class AccountsScreen extends StatelessWidget {
               icon: Icons.account_balance_wallet_outlined,
               message: 'No accounts yet. Add one to track balances.',
             )
-          : ListView.separated(
+          : ListView(
               padding: const EdgeInsets.all(AppSpacing.lg),
-              itemCount: accounts.accounts.length,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, i) {
-                final a = accounts.accounts[i];
-                return AppCard(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => _showEditAccount(context, a),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  a.account.name,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (a.account.isDefault) ...[
-                                const SizedBox(width: AppSpacing.sm),
-                                const Chip(
-                                  label: Text('default'),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              ],
-                            ],
+              children: [
+                for (final type in AccountType.values)
+                  if (accounts.accounts.any((a) => a.account.type == type))
+                    _AccountTypeSection(
+                      type: type,
+                      accounts: accounts.accounts
+                          .where((a) => a.account.type == type)
+                          .toList(),
+                      currency: currency,
+                      onTap: (a) => _showEditAccount(context, a),
+                      onSetDefault: (a) => context
+                          .read<AccountsController>()
+                          .setDefault(a.account.name),
+                      onDelete: (a) => _confirmDelete(context, a),
+                    ),
+              ],
+            ),
+    );
+  }
+}
+
+class _AccountTypeSection extends StatelessWidget {
+  final AccountType type;
+  final List<AccountBalance> accounts;
+  final String currency;
+  final ValueChanged<AccountBalance> onTap;
+  final ValueChanged<AccountBalance> onSetDefault;
+  final ValueChanged<AccountBalance> onDelete;
+
+  const _AccountTypeSection({
+    required this.type,
+    required this.accounts,
+    required this.currency,
+    required this.onTap,
+    required this.onSetDefault,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = accounts.fold<double>(
+      0,
+      (s, a) => s + (a.account.currentValue ?? a.balance),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(_typeIcon(type), size: 18),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    _typeLabel(type),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+              Text(
+                formatMoney(total, currency),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final a in accounts) ...[
+            AppCard(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => onTap(a),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              a.account.name,
+                              style: Theme.of(context).textTheme.titleMedium,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        Text(
-                          formatMoney(a.balance, currency),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert),
-                          onSelected: (v) {
-                            if (v == 'default') {
-                              context.read<AccountsController>().setDefault(
-                                a.account.name,
-                              );
-                            } else if (v == 'delete') {
-                              _confirmDelete(context, a);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            if (!a.account.isDefault)
-                              const PopupMenuItem(
-                                value: 'default',
-                                child: Text('Set as default'),
-                              ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Text('Delete'),
+                          if (a.account.isDefault) ...[
+                            const SizedBox(width: AppSpacing.sm),
+                            const Chip(
+                              label: Text('default'),
+                              visualDensity: VisualDensity.compact,
                             ),
                           ],
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          formatMoney(
+                            a.account.currentValue ?? a.balance,
+                            currency,
+                          ),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        if (a.account.currentValue != null)
+                          _GainLossLabel(
+                            invested: a.balance,
+                            current: a.account.currentValue!,
+                            currency: currency,
+                          ),
+                      ],
+                    ),
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (v) {
+                        if (v == 'default') {
+                          onSetDefault(a);
+                        } else if (v == 'delete') {
+                          onDelete(a);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (!a.account.isDefault)
+                          const PopupMenuItem(
+                            value: 'default',
+                            child: Text('Set as default'),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
                         ),
                       ],
                     ),
-                  ),
-                );
-              },
+                  ],
+                ),
+              ),
             ),
+            if (a != accounts.last) const SizedBox(height: AppSpacing.sm),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The gain or loss on an investment — invested vs. current value — shown
+/// as a small colored delta under the balance instead of leaving the user
+/// to do that subtraction themselves.
+class _GainLossLabel extends StatelessWidget {
+  final double invested;
+  final double current;
+  final String currency;
+
+  const _GainLossLabel({
+    required this.invested,
+    required this.current,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final delta = current - invested;
+    if (delta == 0) return const SizedBox();
+    final pct = invested != 0 ? (delta / invested * 100).abs() : 0;
+    final up = delta > 0;
+    return Text(
+      '${up ? '+' : '-'}${formatMoney(delta.abs(), currency)} (${pct.toStringAsFixed(1)}%)',
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: up ? AppColors.income : AppColors.expense,
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../data/models/transaction.dart';
+import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
 import 'lending_controller.dart';
 
@@ -65,28 +66,52 @@ class LendingScreen extends StatelessWidget {
       } else {
         await controller.borrow(amount, person, note);
       }
+      if (context.mounted) await context.read<AccountsController>().refresh();
     }
   }
 
   Future<void> _showRepay(BuildContext context, Transaction loan) async {
     final amountController = TextEditingController();
+    final owesYou = loan.type == TxnType.lent;
     final action = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('${loan.counterparty}'),
-        content: TextField(
-          controller: amountController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Repayment amount'),
+        title: Text(loan.counterparty ?? 'Someone'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              owesYou ? 'Owes you' : 'You owe',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Amount'),
+            ),
+          ],
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, 'settle'),
             child: const Text('Settle fully'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, 'repay'),
-            child: const Text('Apply repayment'),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, 'plan'),
+                child: const Text('Repeat monthly'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, 'repay'),
+                child: const Text('Apply once'),
+              ),
+            ],
           ),
         ],
       ),
@@ -95,11 +120,88 @@ class LendingScreen extends StatelessWidget {
     final controller = context.read<LendingController>();
     if (action == 'settle') {
       await controller.settle(loan.id!);
+      if (context.mounted) await context.read<AccountsController>().refresh();
     } else if (action == 'repay') {
       final amount = double.tryParse(amountController.text.replaceAll(',', ''));
       if (amount == null || amount <= 0) return;
       await controller.repay(loan.id!, amount);
+      if (context.mounted) await context.read<AccountsController>().refresh();
+    } else if (action == 'plan') {
+      final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+      if (amount == null || amount <= 0) return;
+      await _showMonthlyPlan(context, loan, amount);
     }
+  }
+
+  Future<void> _showMonthlyPlan(
+    BuildContext context,
+    Transaction loan,
+    double amount,
+  ) async {
+    final currency = context.read<SettingsController>().config.currency;
+    final dayController = TextEditingController(text: '${DateTime.now().day}');
+    final monthsController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Repeat monthly'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${formatMoney(amount, currency)} every month toward ${loan.counterparty ?? 'them'}, reminded automatically.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: dayController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Day of month (1-28)',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: monthsController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Number of months (optional)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Schedule'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final day = (int.tryParse(dayController.text) ?? DateTime.now().day).clamp(
+      1,
+      28,
+    );
+    final months = int.tryParse(monthsController.text);
+    await context.read<LendingController>().repayPlan(
+      loan.id!,
+      amount,
+      months: months,
+      dayOfMonth: day,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Monthly repayment of ${formatMoney(amount, currency)} scheduled on day $day — log it from Recurring & EMI when due.',
+        ),
+      ),
+    );
   }
 
   Future<void> _showEditLoan(BuildContext context, Transaction loan) async {
@@ -161,6 +263,7 @@ class LendingScreen extends StatelessWidget {
       person: person,
       note: note,
     );
+    if (context.mounted) await context.read<AccountsController>().refresh();
   }
 
   Future<void> _confirmDeleteLoan(
@@ -188,6 +291,7 @@ class LendingScreen extends StatelessWidget {
     );
     if (confirmed == true && context.mounted) {
       await context.read<LendingController>().remove(loan.id!);
+      if (context.mounted) await context.read<AccountsController>().refresh();
     }
   }
 

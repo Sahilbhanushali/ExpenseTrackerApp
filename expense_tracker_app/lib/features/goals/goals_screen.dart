@@ -7,6 +7,7 @@ import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/budget_progress_bar.dart';
 import '../../core/widgets/staggered_list.dart';
+import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
 import 'goals_controller.dart';
 
@@ -141,6 +142,7 @@ class GoalsScreen extends StatelessWidget {
       final amount = double.tryParse(amountController.text.replaceAll(',', ''));
       if (amount == null || amount <= 0) return;
       await context.read<GoalsController>().contribute(goalId, amount);
+      if (context.mounted) await context.read<AccountsController>().refresh();
     }
   }
 

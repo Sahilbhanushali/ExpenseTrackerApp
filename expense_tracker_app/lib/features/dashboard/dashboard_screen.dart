@@ -10,6 +10,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/budget_progress_bar.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/press_scale.dart';
+import '../../data/models/account.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../accounts/accounts_controller.dart';
@@ -114,17 +115,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final lending = context.watch<LendingController>();
     final config = settings.config;
 
-    final cashBalance = accounts.accounts.fold<double>(
-      0,
-      (s, a) => s + a.balance,
-    );
+    final cashBalance = accounts.totalFor(AccountType.cash);
+    final investments = accounts.totalFor(AccountType.investment);
+    final emergencyFund = accounts.totalFor(AccountType.emergencyFund);
     final owedToYou = lending.outstanding
         .where((t) => t.type == TxnType.lent)
         .fold<double>(0, (s, t) => s + t.amount);
     final youOwe = lending.outstanding
         .where((t) => t.type == TxnType.borrowed)
         .fold<double>(0, (s, t) => s + t.amount);
-    final netWorth = cashBalance + owedToYou - youOwe;
+    final netWorth =
+        cashBalance + investments + emergencyFund + owedToYou - youOwe;
 
     final totals = _isCurrentMonth
         ? expenses.monthTotal
@@ -161,6 +162,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _NetWorthCard(
             netWorth: netWorth,
             cashBalance: cashBalance,
+            investments: investments,
+            emergencyFund: emergencyFund,
             owedToYou: owedToYou,
             youOwe: youOwe,
             currency: config.currency,
@@ -296,6 +299,8 @@ class _MonthArrow extends StatelessWidget {
 class _NetWorthCard extends StatelessWidget {
   final double netWorth;
   final double cashBalance;
+  final double investments;
+  final double emergencyFund;
   final double owedToYou;
   final double youOwe;
   final String currency;
@@ -303,6 +308,8 @@ class _NetWorthCard extends StatelessWidget {
   const _NetWorthCard({
     required this.netWorth,
     required this.cashBalance,
+    required this.investments,
+    required this.emergencyFund,
     required this.owedToYou,
     required this.youOwe,
     required this.currency,
@@ -330,12 +337,41 @@ class _NetWorthCard extends StatelessWidget {
                       Navigator.of(context)
                           .push(FadeSlideRoute(page: const AccountsScreen())),
                   child: _NetWorthBreakdownItem(
-                    label: 'Accounts',
+                    label: 'Cash & bank',
                     value: cashBalance,
                     currency: currency,
                   ),
                 ),
               ),
+              Expanded(
+                child: PressScale(
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(FadeSlideRoute(page: const AccountsScreen())),
+                  child: _NetWorthBreakdownItem(
+                    label: 'Investments',
+                    value: investments,
+                    currency: currency,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: PressScale(
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(FadeSlideRoute(page: const AccountsScreen())),
+                  child: _NetWorthBreakdownItem(
+                    label: 'Emergency fund',
+                    value: emergencyFund,
+                    currency: currency,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
               Expanded(
                 child: PressScale(
                   onTap: () =>
@@ -362,6 +398,7 @@ class _NetWorthCard extends StatelessWidget {
                   ),
                 ),
               ),
+              const Expanded(child: SizedBox()),
             ],
           ),
         ],

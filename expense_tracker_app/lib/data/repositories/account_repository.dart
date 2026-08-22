@@ -1,18 +1,30 @@
 import '../datasources/app_database.dart';
 import '../models/account.dart';
 
+/// Sentinel distinguishing "leave current_value untouched" from "explicitly
+/// clear it" in [AccountRepository.update] — a plain `null` default can't
+/// tell those apart since null is also the valid "clear it" value.
+const Object unsetCurrentValue = Object();
+
 /// Port of expense_bot/db.py's accounts/transfers functions.
 class AccountRepository {
   final AppDatabase _db;
   AccountRepository([AppDatabase? db]) : _db = db ?? AppDatabase.instance;
 
-  Future<int> add(String name, double openingBalance) async {
+  Future<int> add(
+    String name,
+    double openingBalance, {
+    AccountType type = AccountType.cash,
+    double? currentValue,
+  }) async {
     final db = await _db.database;
     return db.insert('accounts', {
       'name': name,
       'opening_balance': openingBalance,
       'is_default': 0,
       'created_at': DateTime.now().toIso8601String(),
+      'type': accountTypeToString(type),
+      'current_value': currentValue,
     });
   }
 
@@ -87,7 +99,13 @@ class AccountRepository {
   /// Renames an account and/or changes its opening balance. A rename
   /// cascades to every txns/transfers row referencing the old name so
   /// balances stay correct.
-  Future<bool> update(int id, {String? name, double? openingBalance}) async {
+  Future<bool> update(
+    int id, {
+    String? name,
+    double? openingBalance,
+    AccountType? type,
+    Object? currentValue = unsetCurrentValue,
+  }) async {
     final db = await _db.database;
     final rows = await db.query('accounts', where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return false;
@@ -96,6 +114,10 @@ class AccountRepository {
     final fields = <String, Object?>{};
     if (name != null && name != oldName) fields['name'] = name;
     if (openingBalance != null) fields['opening_balance'] = openingBalance;
+    if (type != null) fields['type'] = accountTypeToString(type);
+    if (!identical(currentValue, unsetCurrentValue)) {
+      fields['current_value'] = currentValue;
+    }
     if (fields.isEmpty) return false;
 
     await db.update('accounts', fields, where: 'id = ?', whereArgs: [id]);

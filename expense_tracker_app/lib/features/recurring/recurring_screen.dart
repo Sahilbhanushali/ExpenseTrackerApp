@@ -7,6 +7,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../data/models/recurring_bill.dart';
+import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
 import 'recurring_controller.dart';
 
@@ -108,6 +109,7 @@ class RecurringScreen extends StatelessWidget {
         months: months,
         dueDay: day,
       );
+      if (context.mounted) await context.read<AccountsController>().refresh();
     } else {
       await controller.addBill(
         amount: amount,
@@ -301,6 +303,7 @@ class RecurringScreen extends StatelessWidget {
   Future<void> _logDueNow(BuildContext context, RecurringBill bill) async {
     final messenger = ScaffoldMessenger.of(context);
     final result = await context.read<RecurringController>().logDue(bill);
+    if (context.mounted) await context.read<AccountsController>().refresh();
     messenger.showSnackBar(SnackBar(content: Text(result.message)));
   }
 

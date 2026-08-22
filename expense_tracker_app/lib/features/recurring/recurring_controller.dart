@@ -138,6 +138,15 @@ class RecurringController extends ChangeNotifier {
     );
     final remainingMonths = months - 1;
     if (remainingMonths > 0) {
+      // The installment just logged above already covers this month — stamp
+      // last_run_month at creation time (not via markRun, which would also
+      // decrement installmentsRemaining a second time for the same
+      // payment), otherwise a due day <= today — the common case, since
+      // "now" is exactly when someone logs the first payment — makes this
+      // brand-new bill show up as due again immediately, inviting a second
+      // payment for the same month.
+      final month =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
       final id = await _recurringRepo.add(
         RecurringBill(
           amount: monthlyAmount,
@@ -145,6 +154,7 @@ class RecurringController extends ChangeNotifier {
           note: note,
           dayOfMonth: dueDay ?? now.day,
           installmentsRemaining: remainingMonths,
+          lastRunMonth: month,
         ),
       );
       await NotificationService.instance.scheduleRecurringReminder(

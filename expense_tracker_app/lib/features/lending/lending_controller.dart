@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/utils/notification_service.dart';
 import '../../data/models/recurring_bill.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/account_repository.dart';
@@ -95,18 +96,25 @@ class LendingController extends ChangeNotifier {
     int loanId,
     double monthlyAmount, {
     int? months,
+    int? dayOfMonth,
   }) async {
     final loan = _outstanding.firstWhere((r) => r.id == loanId);
-    final today = DateTime.now().day;
-    await _recurringRepo.add(
+    final day = dayOfMonth ?? DateTime.now().day;
+    final id = await _recurringRepo.add(
       RecurringBill(
         amount: monthlyAmount,
         category: 'lending',
         note: 'repayment to ${loan.counterparty ?? 'them'}',
-        dayOfMonth: today,
+        dayOfMonth: day,
         installmentsRemaining: months,
         loanId: loanId,
       ),
+    );
+    await NotificationService.instance.scheduleRecurringReminder(
+      billId: id,
+      dayOfMonth: day,
+      title: 'Repayment due',
+      body: 'To ${loan.counterparty ?? 'them'}',
     );
   }
 }

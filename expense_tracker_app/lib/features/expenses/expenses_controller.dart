@@ -10,6 +10,15 @@ TxnType _fromParsedType(ParsedTxnType t) => switch (t) {
   ParsedTxnType.income => TxnType.income,
   ParsedTxnType.lent => TxnType.lent,
   ParsedTxnType.borrowed => TxnType.borrowed,
+  ParsedTxnType.repayment => throw StateError(
+    'repayment must be routed through LendingController.repay, not addFromParsed',
+  ),
+  ParsedTxnType.emiPayment => throw StateError(
+    'emiPayment must be routed through RecurringController.logDue, not addFromParsed',
+  ),
+  ParsedTxnType.emiCreate => throw StateError(
+    'emiCreate must be routed through RecurringController.logEmi, not addFromParsed',
+  ),
 };
 
 /// Core ledger — add/edit/undo/search transactions, month + category totals.

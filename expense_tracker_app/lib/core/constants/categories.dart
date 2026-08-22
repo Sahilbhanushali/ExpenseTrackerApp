@@ -178,14 +178,70 @@ const List<String> kIncomeKeywords = [
   'got paid',
   'earned',
   'earning',
+  'freelance',
+  'freelancing',
+  'gig work',
+  'client payment',
+  'consulting fee',
+  'commission',
 ];
 
-const List<String> kLendKeywords = ['lent', 'loaned', 'loan to', 'lending'];
+const List<String> kLendKeywords = [
+  'lent',
+  'loaned',
+  'loan to',
+  'lending',
+  'give money to',
+  'giving money to',
+  'gave money to',
+  'want to give',
+];
 const List<String> kBorrowKeywords = [
   'borrowed',
   'took a loan',
   'loan from',
   'borrowing',
+];
+const List<String> kRepayKeywords = [
+  'paid back',
+  'pay back',
+  'repaid',
+  'repay',
+  'gave back',
+  'give back',
+  'returned',
+  'return the money',
+  'cleared the debt',
+  'settled up',
+  'settling up',
+];
+
+/// "given emi for fridge of 10000" / "paid emi fridge" — an installment
+/// against an EMI that already exists, matched by name against the
+/// recurring bill's category/note rather than logged as a fresh expense.
+const List<String> kEmiPaymentKeywords = [
+  'given emi',
+  'gave emi',
+  'paid emi',
+  'emi paid',
+  'emi given',
+  'emi done',
+  'emi cleared',
+  'emi payment',
+  'pay emi',
+];
+
+/// "bought fridge for 65000 on emi for 6 months, pay 10000 every month" —
+/// creates a new EMI instead of logging one plain expense. Deliberately
+/// stronger phrases than plain "emi for X" (which is ambiguous with a
+/// payment) — a months count must also be present or this is ignored.
+const List<String> kEmiCreateKeywords = [
+  'on emi',
+  'create emi',
+  'add emi',
+  'new emi',
+  'start emi',
+  'set up emi',
 ];
 
 const Set<String> kFillerWords = {
@@ -211,6 +267,18 @@ const Set<String> kFillerWords = {
   'lent',
   'loaned',
   'borrowed',
+  'given',
+  'gave',
+  'pending',
+  'emi',
+  'bought',
+  'buy',
+  'have',
+  'every',
+  'month',
+  'months',
+  'is',
+  'i',
 };
 
 const String kDefaultCategory = 'other';

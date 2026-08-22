@@ -12,7 +12,11 @@ import '../../core/utils/expense_parser.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/utils/receipt_parser.dart';
 import '../../core/widgets/press_scale.dart';
+import '../../data/models/recurring_bill.dart';
 import '../../data/models/transaction.dart';
+import '../accounts/accounts_controller.dart';
+import '../lending/lending_controller.dart';
+import '../recurring/recurring_controller.dart';
 import '../settings/settings_controller.dart';
 import 'expenses_controller.dart';
 
@@ -146,11 +150,250 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   Future<void> _submitQuick() async {
     if (_preview == null || _preview!.amount == null) return;
     final p = _preview!;
+    if (p.type == ParsedTxnType.repayment) {
+      await _submitRepayment(p);
+      return;
+    }
+    if (p.type == ParsedTxnType.emiPayment) {
+      await _submitEmiPayment(p);
+      return;
+    }
+    if (p.type == ParsedTxnType.emiCreate) {
+      await _submitEmiCreate(p);
+      return;
+    }
+    // "50000 5000 given pending 45000" already resolved amount down to the
+    // 5000 actually handed over — fold the pending balance into the note so
+    // it isn't silently lost, since the loan record itself only holds one
+    // number.
+    final effective = p.pendingAmount == null
+        ? p
+        : ParsedTransaction(
+            amount: p.amount,
+            category: p.category,
+            note: p.note.isEmpty
+                ? '₹${p.pendingAmount!.toStringAsFixed(0)} pending'
+                : '${p.note} — ₹${p.pendingAmount!.toStringAsFixed(0)} pending',
+            type: p.type,
+            counterparty: p.counterparty,
+            date: p.date,
+          );
     await _logWithWarnings(
+      category: effective.category,
+      isExpense: effective.type == ParsedTxnType.expense,
+      date: effective.date,
+      logTxn: () => context.read<ExpensesController>().addFromParsed(effective),
+    );
+  }
+
+  /// "Given emi for fridge of 10000" shouldn't log a disconnected expense —
+  /// it should find the matching active EMI (by category/note) and apply
+  /// this month's installment the same way "Log now" on Recurring & EMI
+  /// does, decrementing what's left.
+  Future<void> _submitEmiPayment(ParsedTransaction p) async {
+    final recurring = context.read<RecurringController>();
+    final tokens = p.note
+        .toLowerCase()
+        .split(RegExp(r'\s+'))
+        .where((t) => t.length >= 3)
+        .toList();
+    final candidates = recurring.bills
+        .where(
+          (b) =>
+              b.type == RecurringType.expense &&
+              b.installmentsRemaining != null,
+        )
+        .where((b) {
+          if (tokens.isEmpty) return false;
+          final haystack = '${b.category} ${b.note ?? ''}'.toLowerCase();
+          return tokens.any((t) => haystack.contains(t));
+        })
+        .toList();
+
+    if (candidates.isEmpty) {
+      final messenger = ScaffoldMessenger.of(context);
+      await context.read<ExpensesController>().addFromParsed(
+        ParsedTransaction(
+          amount: p.amount,
+          category: p.category,
+          note: p.note,
+          type: ParsedTxnType.expense,
+          counterparty: null,
+          date: p.date,
+        ),
+      );
+      if (!mounted) return;
+      await context.read<AccountsController>().refresh();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            p.note.isEmpty
+                ? 'No matching EMI found — logged as an expense instead.'
+                : 'No EMI found for "${p.note}" — logged as an expense instead.',
+          ),
+        ),
+      );
+      HapticFeedback.mediumImpact();
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    final target = candidates.length == 1
+        ? candidates.first
+        : await _pickEmiToPay(candidates);
+    if (target == null || !mounted) return;
+
+    final result = await recurring.logDue(target);
+    if (!mounted) return;
+    await context.read<AccountsController>().refresh();
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    messenger.showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  Future<RecurringBill?> _pickEmiToPay(List<RecurringBill> candidates) {
+    return showDialog<RecurringBill>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Which EMI?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: candidates
+              .map(
+                (b) => ListTile(
+                  title: Text(
+                    b.note?.isNotEmpty == true ? b.note! : b.category,
+                  ),
+                  subtitle: Text('${b.installmentsRemaining} left'),
+                  trailing: Text(b.amount.toStringAsFixed(0)),
+                  onTap: () => Navigator.pop(context, b),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+
+  /// "Bought fridge for 65000 on emi for 6 months, pay 10000 every month" —
+  /// creates the EMI outright instead of logging one plain expense, the
+  /// same as filling out the Recurring & EMI screen's EMI form by hand.
+  Future<void> _submitEmiCreate(ParsedTransaction p) async {
+    final currency = context.read<SettingsController>().config.currency;
+    final recurring = context.read<RecurringController>();
+    await recurring.logEmi(
+      monthlyAmount: p.amount!,
       category: p.category,
-      isExpense: p.type == ParsedTxnType.expense,
-      date: p.date,
-      logTxn: () => context.read<ExpensesController>().addFromParsed(p),
+      note: p.note.isEmpty ? null : p.note,
+      months: p.emiMonths!,
+      dueDay: DateTime.now().day,
+    );
+    if (!mounted) return;
+    await context.read<ExpensesController>().refresh();
+    if (!mounted) return;
+    await context.read<AccountsController>().refresh();
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.of(context).pop();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'EMI created: ${formatMoney(p.amount!, currency)}/month for ${p.emiMonths} months',
+        ),
+      ),
+    );
+  }
+
+  /// "Paid back 500 to sachin" shouldn't log a disconnected expense — it
+  /// should reduce the matching outstanding loan with sachin, the same way
+  /// tapping "Apply repayment" on the Owed screen does.
+  Future<void> _submitRepayment(ParsedTransaction p) async {
+    final lending = context.read<LendingController>();
+    final name = p.counterparty?.toLowerCase();
+    final matches = name == null
+        ? <Transaction>[]
+        : lending.outstanding
+              .where((t) => (t.counterparty ?? '').toLowerCase() == name)
+              .toList();
+
+    if (matches.isEmpty) {
+      final messenger = ScaffoldMessenger.of(context);
+      await context.read<ExpensesController>().addFromParsed(
+        ParsedTransaction(
+          amount: p.amount,
+          category: 'other',
+          note: p.note,
+          type: ParsedTxnType.expense,
+          counterparty: null,
+          date: p.date,
+        ),
+      );
+      if (!mounted) return;
+      await context.read<AccountsController>().refresh();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            p.counterparty == null
+                ? 'No outstanding loan found — logged as an expense instead.'
+                : "No outstanding loan with ${p.counterparty} — logged as an expense instead.",
+          ),
+        ),
+      );
+      HapticFeedback.mediumImpact();
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+
+    final target = matches.length == 1
+        ? matches.first
+        : await _pickLoanToRepay(matches);
+    if (target == null || !mounted) return;
+
+    final result = await lending.repay(target.id!, p.amount!);
+    if (!mounted) return;
+    await context.read<AccountsController>().refresh();
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).pop();
+    if (result != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.row.isSettled
+                ? '${target.counterparty} — fully settled!'
+                : 'Applied to ${target.counterparty}: outstanding now ${result.row.amount.toStringAsFixed(0)}',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<Transaction?> _pickLoanToRepay(List<Transaction> matches) {
+    return showDialog<Transaction>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Which one?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: matches
+              .map(
+                (t) => ListTile(
+                  title: Text(t.counterparty ?? 'Someone'),
+                  subtitle: Text(
+                    t.type == TxnType.lent ? 'Owes you' : 'You owe',
+                  ),
+                  trailing: Text(t.amount.toStringAsFixed(0)),
+                  onTap: () => Navigator.pop(context, t),
+                ),
+              )
+              .toList(),
+        ),
+      ),
     );
   }
 
@@ -196,6 +439,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final beforeCat = expenses.categoryTotals[category] ?? 0;
 
     await logTxn();
+    if (!mounted) return;
+    // Every transaction can move an account's derived balance (expense,
+    // income, or a fresh lend/borrow) — keep the Dashboard's net worth in
+    // sync instead of leaving it stale until the next full refresh.
+    await context.read<AccountsController>().refresh();
     if (!mounted) return;
 
     if (isExpense && isCurrentMonth) {
@@ -354,17 +602,30 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ParsedTxnType.income => 'Income',
       ParsedTxnType.lent => 'Lent to ${p.counterparty ?? 'someone'}',
       ParsedTxnType.borrowed => 'Borrowed from ${p.counterparty ?? 'someone'}',
+      ParsedTxnType.repayment =>
+        p.counterparty == null
+            ? 'Repayment'
+            : 'Repayment to/from ${p.counterparty}',
+      ParsedTxnType.emiPayment => 'EMI payment',
+      ParsedTxnType.emiCreate => 'Create EMI · ${p.emiMonths} months',
     };
     return Wrap(
       key: key,
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
       children: [
-        _previewChip(formatMoney(p.amount!, currency), highlight: true),
+        _previewChip(
+          p.type == ParsedTxnType.emiCreate
+              ? '${formatMoney(p.amount!, currency)}/mo'
+              : formatMoney(p.amount!, currency),
+          highlight: true,
+        ),
         _previewChip(p.category),
         _previewChip(typeLabel),
         _previewChip(p.date),
         if (p.note.isNotEmpty) _previewChip(p.note),
+        if (p.pendingAmount != null)
+          _previewChip('${formatMoney(p.pendingAmount!, currency)} pending'),
       ],
     );
   }

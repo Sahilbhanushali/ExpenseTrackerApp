@@ -59,6 +59,12 @@ void main() {
       expect(r.category, 'income');
     });
 
+    test('freelance income keyword', () {
+      final r = parseMessage('got 5000 from freelance work');
+      expect(r.type, ParsedTxnType.income);
+      expect(r.amount, 5000);
+    });
+
     test('lent keyword with counterparty', () {
       final r = parseMessage('lent 500 to Rahul for lunch');
       expect(r.type, ParsedTxnType.lent);
@@ -70,6 +76,51 @@ void main() {
       final r = parseMessage('borrowed 1000 from Priya');
       expect(r.type, ParsedTxnType.borrowed);
       expect(r.counterparty, 'Priya');
+    });
+
+    test('repayment keyword with counterparty', () {
+      final r = parseMessage('paid back 500 to sachin');
+      expect(r.type, ParsedTxnType.repayment);
+      expect(r.counterparty, 'Sachin');
+      expect(r.category, 'lending');
+    });
+
+    test('repayment "returned" keyword does not get read as a plain expense', () {
+      final r = parseMessage('returned 200 to rahul');
+      expect(r.type, ParsedTxnType.repayment);
+      expect(r.counterparty, 'Rahul');
+    });
+
+    test('emi payment keyword extracts item name', () {
+      final r = parseMessage('given emi for fridge of rs 10000');
+      expect(r.type, ParsedTxnType.emiPayment);
+      expect(r.amount, 10000);
+      expect(r.note, 'fridge');
+    });
+
+    test('emi create keyword builds monthly amount + months + item', () {
+      final r = parseMessage(
+        'bought fridge of 65000 on emi for 6 months every month i have to pay 10000',
+      );
+      expect(r.type, ParsedTxnType.emiCreate);
+      expect(r.amount, 10000);
+      expect(r.emiMonths, 6);
+      expect(r.note, 'fridge');
+    });
+
+    test('emi keyword without a months count falls back to a plain expense', () {
+      final r = parseMessage('fridge on emi 65000');
+      expect(r.type, ParsedTxnType.expense);
+    });
+
+    test('lend with given/pending split creates loan for the given amount only', () {
+      final r = parseMessage(
+        'i want to give money to henil for the project share 50000 5000 given pending 45000 which i will give month by month',
+      );
+      expect(r.type, ParsedTxnType.lent);
+      expect(r.amount, 5000);
+      expect(r.pendingAmount, 45000);
+      expect(r.counterparty, 'Henil');
     });
   });
 

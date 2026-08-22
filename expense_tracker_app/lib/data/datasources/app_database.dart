@@ -5,7 +5,7 @@ import 'package:sqflite/sqflite.dart';
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const _dbName = 'expenses.db';
-  static const _dbVersion = 4;
+  static const _dbVersion = 6;
 
   static const allTables = [
     'txns',
@@ -53,6 +53,14 @@ class AppDatabase {
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE txns ADD COLUMN goal_id INTEGER');
       await _createGoalsTable(db);
+    }
+    if (oldVersion < 5) {
+      await db.execute(
+        "ALTER TABLE accounts ADD COLUMN type TEXT NOT NULL DEFAULT 'cash'",
+      );
+    }
+    if (oldVersion < 6) {
+      await db.execute('ALTER TABLE accounts ADD COLUMN current_value REAL');
     }
   }
 
@@ -120,7 +128,9 @@ class AppDatabase {
         name            TEXT NOT NULL,
         opening_balance REAL NOT NULL DEFAULT 0,
         is_default      INTEGER NOT NULL DEFAULT 0,
-        created_at      TEXT NOT NULL
+        created_at      TEXT NOT NULL,
+        type            TEXT NOT NULL DEFAULT 'cash',
+        current_value   REAL
       )
     ''');
 

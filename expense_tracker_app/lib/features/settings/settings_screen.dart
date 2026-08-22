@@ -191,6 +191,8 @@ class SettingsScreen extends StatelessWidget {
     if (!context.mounted) return;
     await context.read<ExpensesController>().refresh();
     if (!context.mounted) return;
+    await context.read<AccountsController>().refresh();
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Imported $imported transaction(s).')),
     );

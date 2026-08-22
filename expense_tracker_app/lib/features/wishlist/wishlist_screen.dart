@@ -9,6 +9,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/budget_progress_bar.dart';
 import '../../core/widgets/press_scale.dart';
 import '../../core/widgets/staggered_list.dart';
+import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
 import 'wishlist_controller.dart';
 
@@ -152,6 +153,7 @@ class WishlistScreen extends StatelessWidget {
     );
     if (confirmed == true && context.mounted) {
       await context.read<WishlistController>().buy(id);
+      if (context.mounted) await context.read<AccountsController>().refresh();
     }
   }
 

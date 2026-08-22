@@ -8,6 +8,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/staggered_list.dart';
 import '../../core/widgets/transaction_tile.dart';
 import '../../data/models/transaction.dart';
+import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
 import 'expenses_controller.dart';
 
@@ -49,6 +50,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final expenses = context.read<ExpensesController>();
     final row = await expenses.undoLast();
     await _load();
+    if (!mounted) return;
+    await context.read<AccountsController>().refresh();
     if (!mounted || row == null) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -82,6 +85,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     HapticFeedback.mediumImpact();
     await context.read<ExpensesController>().deleteById(txn.id!);
     await _load();
+    if (mounted) await context.read<AccountsController>().refresh();
   }
 
   Future<void> _editTxn(Transaction txn) async {
@@ -128,6 +132,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       note: noteController.text.trim(),
     );
     await _load();
+    if (mounted) await context.read<AccountsController>().refresh();
   }
 
   String _sectionLabel(String isoDate) {

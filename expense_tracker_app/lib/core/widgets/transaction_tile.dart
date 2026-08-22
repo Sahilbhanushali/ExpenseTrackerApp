@@ -20,12 +20,21 @@ class TransactionTile extends StatelessWidget {
 
   bool get _isCredit =>
       txn.type == TxnType.income || txn.type == TxnType.borrowed;
+  bool get _isLending =>
+      txn.type == TxnType.lent || txn.type == TxnType.borrowed;
 
   @override
   Widget build(BuildContext context) {
-    final color = _isCredit ? AppColors.income : AppColors.expense;
+    // Lending entries move cash in/out but aren't real income/expense — a
+    // borrowed amount is a debt you still owe, not money you've earned, so
+    // it gets its own colour instead of looking identical to income.
+    final color = _isLending
+        ? AppColors.warning
+        : (_isCredit ? AppColors.income : AppColors.expense);
     final sign = _isCredit ? '+' : '-';
-    final catColor = AppColors.categoryColor(txn.category);
+    final catColor = _isLending
+        ? AppColors.warning
+        : AppColors.categoryColor(txn.category);
 
     return PressScale(
       onTap: onTap,
@@ -56,8 +65,14 @@ class TransactionTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    txn.category,
-                    style: Theme.of(context).textTheme.bodySmall,
+                    _isLending
+                        ? (txn.type == TxnType.lent
+                              ? '${txn.counterparty ?? 'They'} owe${txn.counterparty == null ? '' : 's'} you'
+                              : 'You owe ${txn.counterparty ?? 'them'}')
+                        : txn.category,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _isLending ? AppColors.warning : null,
+                    ),
                   ),
                 ],
               ),

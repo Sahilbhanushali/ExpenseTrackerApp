@@ -1,6 +1,14 @@
 import '../constants/categories.dart';
 
-enum ParsedTxnType { expense, income, lent, borrowed }
+enum ParsedTxnType {
+  expense,
+  income,
+  lent,
+  borrowed,
+  repayment,
+  emiPayment,
+  emiCreate,
+}
 
 /// Result of parsing one free-text entry — port of expense_bot/parser.py's
 /// parse_message() return shape.
@@ -11,6 +19,14 @@ class ParsedTransaction {
   final ParsedTxnType type;
   final String? counterparty;
   final String date; // 'YYYY-MM-DD'
+  /// Only set when [type] is emiCreate — total installment count. [amount]
+  /// carries the monthly payment for that case, not a one-off total.
+  final int? emiMonths;
+
+  /// Only set for lent/borrowed when the message named both how much has
+  /// already changed hands and how much is still pending — the amount left
+  /// owing, kept alongside the (already-applied) [amount].
+  final double? pendingAmount;
 
   const ParsedTransaction({
     required this.amount,
@@ -19,6 +35,8 @@ class ParsedTransaction {
     required this.type,
     required this.counterparty,
     required this.date,
+    this.emiMonths,
+    this.pendingAmount,
   });
 }
 
@@ -82,6 +100,22 @@ final RegExp _monthAlt = RegExp(
   r')\s*(\d{4})?\b',
   caseSensitive: false,
 );
+
+final RegExp _monthsCountRe = RegExp(
+  r'(\d+)\s*months?\b',
+  caseSensitive: false,
+);
+final RegExp _monthlyAmountRe = RegExp(
+  r'(?:pay|paying|instalment|installment|emi)\s*(?:of\s*)?(?:rs\.?|₹)?\s*(\d[\d,]*(?:\.\d+)?)',
+  caseSensitive: false,
+);
+final RegExp _perMonthAmountRe = RegExp(
+  r'(?:rs\.?|₹)?\s*(\d[\d,]*(?:\.\d+)?)\s*(?:per month|/month|every month|each month|a month)',
+  caseSensitive: false,
+);
+final RegExp _anyNumberRe = RegExp(r'\d[\d,]*(?:\.\d+)?');
+final RegExp _givenKeywordRe = RegExp(r'\bgiven\b', caseSensitive: false);
+final RegExp _pendingKeywordRe = RegExp(r'\bpending\b', caseSensitive: false);
 
 final RegExp _counterpartyRe = RegExp(r'\b(?:to|from)\s+([A-Za-z][A-Za-z]*)');
 const Set<String> _counterpartyStopwords = {
@@ -202,6 +236,21 @@ bool _keywordIn(String textLower, String keyword) {
 }
 
 ParsedTxnType _detectType(String messageLower) {
+  // Checked first: "paid back 500 to sachin" would otherwise never match —
+  // it contains no lend/borrow word, so without this it falls through to a
+  // disconnected plain expense instead of reducing the existing loan.
+  for (final kw in kRepayKeywords) {
+    if (_keywordIn(messageLower, kw)) return ParsedTxnType.repayment;
+  }
+  for (final kw in kEmiPaymentKeywords) {
+    if (_keywordIn(messageLower, kw)) return ParsedTxnType.emiPayment;
+  }
+  final hasEmiCreateKeyword = kEmiCreateKeywords.any(
+    (kw) => _keywordIn(messageLower, kw),
+  );
+  if (hasEmiCreateKeyword && _monthsCountRe.hasMatch(messageLower)) {
+    return ParsedTxnType.emiCreate;
+  }
   for (final kw in kLendKeywords) {
     if (_keywordIn(messageLower, kw)) return ParsedTxnType.lent;
   }
@@ -212,6 +261,78 @@ ParsedTxnType _detectType(String messageLower) {
     if (_keywordIn(messageLower, kw)) return ParsedTxnType.income;
   }
   return ParsedTxnType.expense;
+}
+
+class EmiCreateDetails {
+  final int months;
+  final double monthlyAmount;
+  const EmiCreateDetails(this.months, this.monthlyAmount);
+}
+
+/// "6 months" + a monthly figure (via "pay X", "X per month", or — failing
+/// those — the last number in the message that isn't the months count).
+/// Returns null when no months count is present at all, since without one
+/// there's nothing to distinguish this from a plain expense.
+EmiCreateDetails? extractEmiCreateDetails(String text) {
+  final monthsMatch = _monthsCountRe.firstMatch(text);
+  if (monthsMatch == null) return null;
+  final months = int.tryParse(monthsMatch.group(1)!);
+  if (months == null || months <= 0) return null;
+
+  double? monthly;
+  final perMonth = _perMonthAmountRe.firstMatch(text);
+  if (perMonth != null) {
+    monthly = double.tryParse(perMonth.group(1)!.replaceAll(',', ''));
+  }
+  final payMatch = _monthlyAmountRe.firstMatch(text);
+  if (monthly == null && payMatch != null) {
+    monthly = double.tryParse(payMatch.group(1)!.replaceAll(',', ''));
+  }
+  if (monthly == null) {
+    final candidates = _anyNumberRe
+        .allMatches(text)
+        .where((m) => m.start != monthsMatch.start)
+        .map((m) => double.tryParse(m.group(0)!.replaceAll(',', '')))
+        .whereType<double>()
+        .toList();
+    if (candidates.isNotEmpty) monthly = candidates.last;
+  }
+  if (monthly == null || monthly <= 0) return null;
+  return EmiCreateDetails(months, monthly);
+}
+
+/// The number token closest to [keyword] (before or after it) — handles
+/// both "5000 given" and "pending 45000" without caring which side the
+/// figure landed on.
+double? _nearestNumberTo(String text, RegExp keywordRe) {
+  final kwMatch = keywordRe.firstMatch(text);
+  if (kwMatch == null) return null;
+  Match? closest;
+  var bestDist = 1 << 30;
+  for (final n in _anyNumberRe.allMatches(text)) {
+    final dist = n.start >= kwMatch.end
+        ? n.start - kwMatch.end
+        : kwMatch.start - n.end;
+    if (dist >= 0 && dist < bestDist) {
+      bestDist = dist;
+      closest = n;
+    }
+  }
+  if (closest == null) return null;
+  return double.tryParse(closest.group(0)!.replaceAll(',', ''));
+}
+
+/// Item description for an EMI create/payment message — strips every
+/// number (there are usually several: price, months, monthly amount) and
+/// filler words, unlike [_buildNote] which only removes the one amount
+/// span it identified as "the" amount.
+String _buildEmiNote(String text) {
+  final withoutNumbers = text.replaceAll(_anyNumberRe, ' ');
+  final tokens = RegExp(r'[A-Za-z]+')
+      .allMatches(withoutNumbers)
+      .map((m) => m.group(0)!);
+  final kept = tokens.where((t) => !kFillerWords.contains(t.toLowerCase()));
+  return kept.join(' ');
 }
 
 String? _extractCounterparty(String message) {
@@ -267,30 +388,76 @@ ParsedTransaction parseMessage(
   final dateResult = _findDate(trimmed);
   final text = _removeSpan(trimmed, dateResult?.$2);
   final textLower = text.toLowerCase();
+  final date = dateResult?.$1 ?? _isoDate(DateTime.now());
 
-  final amountResult = findAmount(text);
   final category = detectCategory(textLower, extraCategories);
   final type = _detectType(textLower);
+
+  if (type == ParsedTxnType.emiCreate) {
+    final details = extractEmiCreateDetails(
+      text,
+    )!; // _detectType already checked
+    return ParsedTransaction(
+      amount: details.monthlyAmount,
+      category: category,
+      note: _buildEmiNote(text),
+      type: type,
+      counterparty: null,
+      date: date,
+      emiMonths: details.months,
+    );
+  }
+
+  if (type == ParsedTxnType.emiPayment) {
+    final amountResult = findAmount(text);
+    final amount = amountResult?.$1;
+    return ParsedTransaction(
+      amount: amount != null ? double.parse(amount.toStringAsFixed(2)) : null,
+      category: category,
+      note: _buildEmiNote(text),
+      type: type,
+      counterparty: null,
+      date: date,
+    );
+  }
+
+  final amountResult = findAmount(text);
   final note = _buildNote(text, amountResult?.$2);
 
   String outCategory;
   String? counterparty;
-  if (type == ParsedTxnType.lent || type == ParsedTxnType.borrowed) {
+  double? pendingAmount;
+  var amount = amountResult?.$1;
+  if (type == ParsedTxnType.lent ||
+      type == ParsedTxnType.borrowed ||
+      type == ParsedTxnType.repayment) {
     outCategory = 'lending';
     counterparty = _extractCounterparty(text);
+    if (type != ParsedTxnType.repayment) {
+      // "50000 5000 given pending 45000" — what's actually changed hands
+      // so far is the "given" figure; the loan created should reflect
+      // that, not the larger up-front total, with the rest noted as
+      // still to be paid.
+      final given = _nearestNumberTo(text, _givenKeywordRe);
+      final pending = _nearestNumberTo(text, _pendingKeywordRe);
+      if (given != null && pending != null) {
+        amount = given;
+        pendingAmount = pending;
+      }
+    }
   } else {
     outCategory = type == ParsedTxnType.expense ? category : 'income';
     counterparty = null;
   }
 
-  final amount = amountResult?.$1;
   return ParsedTransaction(
     amount: amount != null ? double.parse(amount.toStringAsFixed(2)) : null,
     category: outCategory,
     note: note,
     type: type,
     counterparty: counterparty,
-    date: dateResult?.$1 ?? _isoDate(DateTime.now()),
+    date: date,
+    pendingAmount: pendingAmount,
   );
 }
 
