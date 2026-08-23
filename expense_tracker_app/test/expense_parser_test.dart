@@ -85,11 +85,14 @@ void main() {
       expect(r.category, 'lending');
     });
 
-    test('repayment "returned" keyword does not get read as a plain expense', () {
-      final r = parseMessage('returned 200 to rahul');
-      expect(r.type, ParsedTxnType.repayment);
-      expect(r.counterparty, 'Rahul');
-    });
+    test(
+      'repayment "returned" keyword does not get read as a plain expense',
+      () {
+        final r = parseMessage('returned 200 to rahul');
+        expect(r.type, ParsedTxnType.repayment);
+        expect(r.counterparty, 'Rahul');
+      },
+    );
 
     test('emi payment keyword extracts item name', () {
       final r = parseMessage('given emi for fridge of rs 10000');
@@ -108,20 +111,26 @@ void main() {
       expect(r.note, 'fridge');
     });
 
-    test('emi keyword without a months count falls back to a plain expense', () {
-      final r = parseMessage('fridge on emi 65000');
-      expect(r.type, ParsedTxnType.expense);
-    });
+    test(
+      'emi keyword without a months count falls back to a plain expense',
+      () {
+        final r = parseMessage('fridge on emi 65000');
+        expect(r.type, ParsedTxnType.expense);
+      },
+    );
 
-    test('lend with given/pending split creates loan for the given amount only', () {
-      final r = parseMessage(
-        'i want to give money to henil for the project share 50000 5000 given pending 45000 which i will give month by month',
-      );
-      expect(r.type, ParsedTxnType.lent);
-      expect(r.amount, 5000);
-      expect(r.pendingAmount, 45000);
-      expect(r.counterparty, 'Henil');
-    });
+    test(
+      'lend with given/pending split creates loan for the given amount only',
+      () {
+        final r = parseMessage(
+          'i want to give money to henil for the project share 50000 5000 given pending 45000 which i will give month by month',
+        );
+        expect(r.type, ParsedTxnType.lent);
+        expect(r.amount, 5000);
+        expect(r.pendingAmount, 45000);
+        expect(r.counterparty, 'Henil');
+      },
+    );
   });
 
   group('parseMessage — dates', () {
@@ -166,9 +175,12 @@ void main() {
 
   group('parseMessage — custom categories', () {
     test('extra category overrides default match', () {
-      final r = parseMessage('vet visit 900', extraCategories: {
-        'pets': ['vet', 'dog food'],
-      });
+      final r = parseMessage(
+        'vet visit 900',
+        extraCategories: {
+          'pets': ['vet', 'dog food'],
+        },
+      );
       expect(r.category, 'pets');
     });
   });

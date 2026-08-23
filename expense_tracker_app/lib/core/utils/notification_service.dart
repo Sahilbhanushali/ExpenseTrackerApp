@@ -61,6 +61,33 @@ class NotificationService {
     }
   }
 
+  /// Fires immediately — used for budget-threshold alerts, which need to
+  /// reach the user even if the app isn't open to show the in-app snackbar.
+  Future<void> showNow({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    if (!_initialized) return;
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'budget_alerts',
+            'Budget alerts',
+            importance: Importance.high,
+          ),
+          iOS: DarwinNotificationDetails(),
+        ),
+      );
+    } catch (_) {
+      // Best-effort only.
+    }
+  }
+
   Future<void> cancel(int billId) async {
     if (!_initialized) return;
     await _plugin.cancel(billId);

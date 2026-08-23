@@ -165,6 +165,7 @@ class WishlistScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Wishlist')),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'wishlist_add',
         onPressed: () => _showAddItem(context),
         child: const Icon(Icons.add),
       ),

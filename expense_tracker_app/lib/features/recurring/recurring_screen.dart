@@ -313,7 +313,7 @@ class RecurringScreen extends StatelessWidget {
     final currency = context.watch<SettingsController>().config.currency;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Recurring & EMI')),
+      appBar: AppBar(title: const Text('Recurring bills')),
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -332,7 +332,7 @@ class RecurringScreen extends StatelessWidget {
               FloatingActionButton.extended(
                 heroTag: 'emi',
                 onPressed: () => _showAddBill(context, isEmi: true),
-                label: const Text('EMI'),
+                label: const Text('Installment'),
                 icon: const Icon(Icons.credit_card_outlined),
               ),
               const SizedBox(width: AppSpacing.sm),

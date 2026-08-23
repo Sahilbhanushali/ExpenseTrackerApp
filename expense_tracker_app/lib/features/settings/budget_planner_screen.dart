@@ -259,6 +259,7 @@ class _CategoryAllocator extends StatelessWidget {
                   ],
                 ),
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => _editExact(context),
                   child: Row(
                     children: [

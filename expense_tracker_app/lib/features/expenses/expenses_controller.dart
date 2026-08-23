@@ -63,6 +63,30 @@ class ExpensesController extends ChangeNotifier {
   Future<List<Transaction>> search(String term) => _txnRepo.search(term);
   Future<List<MonthPoint>> monthlyTrend(int months) =>
       _txnRepo.monthlyTrend(months);
+  Future<List<Transaction>> queryPage({
+    int limit = 50,
+    int offset = 0,
+    TxnType? type,
+    String? category,
+    DateTime? from,
+    DateTime? to,
+    String? searchTerm,
+  }) => _txnRepo.queryPage(
+    limit: limit,
+    offset: offset,
+    type: type,
+    category: category,
+    from: from,
+    to: to,
+    searchTerm: searchTerm,
+  );
+  Future<List<String>> distinctCategories() => _txnRepo.distinctCategories();
+  Future<MonthTotal> totalsRange(DateTime from, DateTime to) =>
+      _txnRepo.totalsRange(from, to);
+  Future<Map<String, double>> categoryTotalsRange(DateTime from, DateTime to) =>
+      _txnRepo.categoryTotalsRange(from, to);
+  Future<RecurringCandidate?> detectRecurring(String category, String? note) =>
+      _txnRepo.detectRecurring(category, note);
 
   Future<Transaction> addManual({
     required double amount,
@@ -111,12 +135,14 @@ class ExpensesController extends ChangeNotifier {
     double? amount,
     String? category,
     String? note,
+    String? date,
   }) async {
     final updated = await _txnRepo.update(
       id,
       amount: amount,
       category: category,
       note: note,
+      date: date,
     );
     await refresh();
     return updated;

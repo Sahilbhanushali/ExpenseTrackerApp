@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart' as file_selector;
 
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/app_lock_service.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/page_transitions.dart';
@@ -20,6 +21,7 @@ import '../goals/goals_controller.dart';
 import '../goals/goals_screen.dart';
 import '../lending/lending_controller.dart';
 import '../recurring/recurring_controller.dart';
+import '../security/lock_screen.dart';
 import '../wishlist/wishlist_controller.dart';
 import 'budget_planner_screen.dart';
 import 'settings_controller.dart';
@@ -355,6 +357,10 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
+          Text('Security', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          const _SecuritySection(),
+          const SizedBox(height: AppSpacing.lg),
           Text('Data', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
@@ -390,6 +396,56 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// PIN + biometric app lock toggle. State lives in secure storage, not
+/// AppConfig — it's device-local security, not synced/exported config — so
+/// it manages its own async load independent of SettingsController.
+class _SecuritySection extends StatefulWidget {
+  const _SecuritySection();
+
+  @override
+  State<_SecuritySection> createState() => _SecuritySectionState();
+}
+
+class _SecuritySectionState extends State<_SecuritySection> {
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final enabled = await AppLockService.instance.isEnabled();
+    if (mounted) setState(() => _enabled = enabled);
+  }
+
+  Future<void> _onToggle(bool value) async {
+    if (value) {
+      final created = await Navigator.of(context)
+          .push<bool>(MaterialPageRoute(builder: (_) => const SetPinScreen()));
+      if (created == true && mounted) setState(() => _enabled = true);
+    } else {
+      await AppLockService.instance.disable();
+      if (mounted) setState(() => _enabled = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        secondary: const Icon(Icons.lock_outline),
+        title: const Text('App lock'),
+        subtitle: const Text('Require a PIN or biometric to open the app'),
+        value: _enabled ?? false,
+        onChanged: _enabled == null ? null : _onToggle,
       ),
     );
   }

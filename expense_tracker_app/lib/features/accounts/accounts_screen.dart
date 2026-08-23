@@ -535,6 +535,7 @@ class AccountsScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'accounts_add',
         onPressed: () => _showAddAccount(context),
         child: const Icon(Icons.add),
       ),

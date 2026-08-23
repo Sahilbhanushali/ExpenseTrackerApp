@@ -11,7 +11,10 @@ import '../expenses/transactions_screen.dart';
 import '../goals/goals_controller.dart';
 import '../goals/goals_screen.dart';
 import '../lending/lending_screen.dart';
+import '../loans/loans_controller.dart';
+import '../loans/loans_screen.dart';
 import '../recurring/recurring_screen.dart';
+import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
 import '../wishlist/wishlist_controller.dart';
 import '../wishlist/wishlist_screen.dart';
@@ -67,8 +70,14 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(index: _index, children: _screens),
+      // Explicit heroTag — every FAB in the app needs a unique one, since
+      // IndexedStack keeps every tab mounted at once, and any two
+      // FloatingActionButtons sharing the implicit default tag crash the
+      // hero animation the moment they're both in the tree simultaneously
+      // (e.g. this FAB plus a pushed screen's own FAB).
       floatingActionButton: _index == 0
           ? FloatingActionButton(
+              heroTag: 'home_add_transaction',
               onPressed: () => showAddTransactionSheet(context),
               child: const Icon(Icons.add),
             )
@@ -102,11 +111,27 @@ class _MoreScreen extends StatelessWidget {
             },
           ),
           _MoreTile(
+            icon: Icons.bar_chart_outlined,
+            label: 'Reports',
+            onTap: () =>
+                Navigator.of(context)
+                    .push(FadeSlideRoute(page: const ReportsScreen())),
+          ),
+          _MoreTile(
             icon: Icons.event_repeat_outlined,
-            label: 'Recurring & EMI',
+            label: 'Recurring bills',
             onTap: () =>
                 Navigator.of(context)
                     .push(FadeSlideRoute(page: const RecurringScreen())),
+          ),
+          _MoreTile(
+            icon: Icons.account_balance_outlined,
+            label: 'Loans & EMI',
+            onTap: () {
+              context.read<LoansController>().refresh();
+              Navigator.of(context)
+                  .push(FadeSlideRoute(page: const LoansScreen()));
+            },
           ),
           _MoreTile(
             icon: Icons.flag_outlined,

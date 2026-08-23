@@ -37,6 +37,16 @@ const _monthNames = [
   'December',
 ];
 
+const _weekdayNames = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -89,13 +99,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  void _shiftMonth(int delta) {
-    setState(
-      () => _viewedMonth = DateTime(
-        _viewedMonth.year,
-        _viewedMonth.month + delta,
+  Future<void> _pickMonth() async {
+    var year = _viewedMonth.year;
+    var month = _viewedMonth.month;
+
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Jump to month'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: () => setDialogState(() => year -= 1),
+                  ),
+                  Text('$year', style: Theme.of(context).textTheme.titleLarge),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: () => setDialogState(() => year += 1),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                alignment: WrapAlignment.center,
+                children: List.generate(12, (i) {
+                  final m = i + 1;
+                  final selected = m == month;
+                  return ChoiceChip(
+                    label: Text(_monthNames[i].substring(0, 3)),
+                    selected: selected,
+                    onSelected: (_) => setDialogState(() => month = m),
+                  );
+                }),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                final now = DateTime.now();
+                Navigator.pop(context, DateTime(now.year, now.month));
+              },
+              child: const Text('This month'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, DateTime(year, month)),
+              child: const Text('Go'),
+            ),
+          ],
+        ),
       ),
     );
+
+    if (picked == null) return;
+    setState(() => _viewedMonth = DateTime(picked.year, picked.month));
     _loadViewedMonth();
   }
 
@@ -138,6 +207,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final monthLabel =
         '${_monthNames[_viewedMonth.month - 1]} ${_viewedMonth.year}';
     final totalSaved = goals.goals.fold<double>(0, (s, g) => s + g.saved);
+    final now = DateTime.now();
+    final todayLabel =
+        '${_weekdayNames[now.weekday - 1]}, ${now.day} ${_monthNames[now.month - 1]} ${now.year}';
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -158,6 +230,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'Expense Tracker',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
+          Text(todayLabel, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: AppSpacing.lg),
           _NetWorthCard(
             netWorth: netWorth,
@@ -169,21 +242,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
             currency: config.currency,
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _MonthArrow(
-                icon: Icons.chevron_left,
-                onTap: () => _shiftMonth(-1),
+          Center(
+            child: PressScale(
+              onTap: _pickMonth,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardTheme.color,
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                  border: Border.all(color: Theme.of(context).dividerColor),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.calendar_month_outlined, size: 18),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      monthLabel,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    const Icon(Icons.expand_more, size: 18),
+                  ],
+                ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              Text(monthLabel, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(width: AppSpacing.md),
-              _MonthArrow(
-                icon: Icons.chevron_right,
-                onTap: () => _shiftMonth(1),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           _HeroCard(
@@ -265,29 +351,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _MonthArrow extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _MonthArrow({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return PressScale(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Theme.of(context).cardTheme.color,
-          border: Border.all(color: Theme.of(context).dividerColor),
-        ),
-        child: Icon(icon, size: 18),
       ),
     );
   }

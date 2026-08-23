@@ -30,6 +30,10 @@ class _PressScaleState extends State<PressScale> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      // Without this, taps only register where the child actually paints
+      // pixels (text, icons) — the gaps in a row (e.g. between a
+      // transaction's note and its amount) would silently swallow taps.
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) => _setPressed(true),
       onTapUp: (_) => _setPressed(false),
       onTapCancel: () => _setPressed(false),

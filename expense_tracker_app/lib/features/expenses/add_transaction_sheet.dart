@@ -10,6 +10,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/utils/budget_alerts.dart';
 import '../../core/utils/expense_parser.dart';
 import '../../core/utils/money_formatter.dart';
+import '../../core/utils/notification_service.dart';
 import '../../core/utils/receipt_parser.dart';
 import '../../core/widgets/press_scale.dart';
 import '../../data/models/recurring_bill.dart';
@@ -43,6 +44,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   // Quick mode
   final _textController = TextEditingController();
   ParsedTransaction? _preview;
+  // Set only once the user explicitly taps the date chip — until then the
+  // date comes from whatever parseMessage found in the text (e.g.
+  // "yesterday"), or today if it found nothing.
+  DateTime? _quickDateOverride;
 
   // Detailed mode
   final _amountController = TextEditingController();
@@ -59,15 +64,62 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     super.dispose();
   }
 
+  String _isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
   void _onTextChanged(String value) {
     final settings = context.read<SettingsController>();
     setState(() {
-      _preview = value.trim().isEmpty
-          ? null
-          : parseMessage(
-              value,
-              extraCategories: settings.config.customCategories,
+      if (value.trim().isEmpty) {
+        _preview = null;
+        return;
+      }
+      final parsed = parseMessage(
+        value,
+        extraCategories: settings.config.customCategories,
+      );
+      // A date the user explicitly picked wins over whatever the parser
+      // found in the text — otherwise typing more after picking a date
+      // would silently snap it back to "today".
+      _preview = _quickDateOverride == null
+          ? parsed
+          : ParsedTransaction(
+              amount: parsed.amount,
+              category: parsed.category,
+              note: parsed.note,
+              type: parsed.type,
+              counterparty: parsed.counterparty,
+              date: _isoDate(_quickDateOverride!),
+              emiMonths: parsed.emiMonths,
+              pendingAmount: parsed.pendingAmount,
             );
+    });
+  }
+
+  Future<void> _pickQuickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _quickDateOverride ?? now,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+    );
+    if (picked == null) return;
+    setState(() {
+      _quickDateOverride = picked;
+      final p = _preview;
+      if (p != null) {
+        _preview = ParsedTransaction(
+          amount: p.amount,
+          category: p.category,
+          note: p.note,
+          type: p.type,
+          counterparty: p.counterparty,
+          date: _isoDate(picked),
+          emiMonths: p.emiMonths,
+          pendingAmount: p.pendingAmount,
+        );
+      }
     });
   }
 
@@ -180,6 +232,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           );
     await _logWithWarnings(
       category: effective.category,
+      note: effective.note.isEmpty ? null : effective.note,
       isExpense: effective.type == ParsedTxnType.expense,
       date: effective.date,
       logTxn: () => context.read<ExpensesController>().addFromParsed(effective),
@@ -402,16 +455,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     if (amount == null || amount <= 0) return;
     final iso =
         '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
+    final note = _noteController.text.trim().isEmpty
+        ? null
+        : _noteController.text.trim();
     await _logWithWarnings(
       category: _type == TxnType.income ? 'income' : _category,
+      note: note,
       isExpense: _type == TxnType.expense,
       date: iso,
       logTxn: () => context.read<ExpensesController>().addManual(
         amount: amount,
         category: _type == TxnType.income ? 'income' : _category,
-        note: _noteController.text.trim().isEmpty
-            ? null
-            : _noteController.text.trim(),
+        note: note,
         type: _type,
         date: iso,
       ),
@@ -424,6 +479,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   /// with bot.py's in-chat threshold warnings, which the app was missing).
   Future<void> _logWithWarnings({
     required String category,
+    String? note,
     required bool isExpense,
     required String date,
     required Future<void> Function() logTxn,
@@ -468,11 +524,55 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             duration: const Duration(seconds: 4),
           ),
         );
+        NotificationService.instance.showNow(
+          id: 'budget_${category.hashCode}'.hashCode,
+          title: 'Budget alert',
+          body: warnings.join(' '),
+        );
       }
     }
 
+    if (isExpense) await _maybeSuggestRecurring(category, note);
+    if (!mounted) return;
+
     HapticFeedback.mediumImpact();
     Navigator.of(context).pop();
+  }
+
+  /// After logging an expense, checks whether the same category+note has
+  /// shown up in 3+ of the last 4 months at a similar amount — if so, and
+  /// there's no recurring reminder for it yet, offers to add one.
+  Future<void> _maybeSuggestRecurring(String category, String? note) async {
+    final recurring = context.read<RecurringController>();
+    final alreadyTracked = recurring.bills.any(
+      (b) => b.category == category && b.note == note,
+    );
+    if (alreadyTracked) return;
+
+    final candidate = await context.read<ExpensesController>().detectRecurring(
+      category,
+      note,
+    );
+    if (candidate == null || !mounted) return;
+
+    final currency = context.read<SettingsController>().config.currency;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Looks recurring: $category · ${formatMoney(candidate.avgAmount, currency)}/mo',
+        ),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Add reminder',
+          onPressed: () => recurring.addBill(
+            amount: candidate.avgAmount,
+            category: candidate.category,
+            note: candidate.note,
+            dayOfMonth: candidate.dayOfMonth,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -567,6 +667,30 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                       ),
               ),
             ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        PressScale(
+          onTap: _pickQuickDate,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 14,
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _quickDateOverride == null
+                    ? (_preview?.date != null
+                          ? 'Date: ${_preview!.date}'
+                          : 'Date: Today — tap to change')
+                    : 'Date: ${_isoDate(_quickDateOverride!)}',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AppColors.primary),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.md),

@@ -179,6 +179,7 @@ class GoalsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Savings goals')),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'goals_add',
         onPressed: () => _showAddGoal(context),
         child: const Icon(Icons.add),
       ),

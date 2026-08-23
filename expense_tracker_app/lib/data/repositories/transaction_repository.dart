@@ -14,6 +14,19 @@ class MonthPoint {
   const MonthPoint({required this.month, this.income = 0, this.expense = 0});
 }
 
+class RecurringCandidate {
+  final String category;
+  final String? note;
+  final double avgAmount;
+  final int dayOfMonth;
+  const RecurringCandidate({
+    required this.category,
+    this.note,
+    required this.avgAmount,
+    required this.dayOfMonth,
+  });
+}
+
 class RepayResult {
   final Transaction row;
   final double applied;
@@ -61,6 +74,7 @@ class TransactionRepository {
     String? category,
     String? note,
     String? counterparty,
+    String? date,
   }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
@@ -68,6 +82,7 @@ class TransactionRepository {
     if (category != null) fields['category'] = category;
     if (note != null) fields['note'] = note;
     if (counterparty != null) fields['counterparty'] = counterparty;
+    if (date != null) fields['date'] = date;
     if (fields.isNotEmpty) {
       await db.update('txns', fields, where: 'id = ?', whereArgs: [id]);
     }
@@ -79,6 +94,65 @@ class TransactionRepository {
     final rows = await db.query('txns', orderBy: 'date ASC, id ASC');
     return rows.map(Transaction.fromMap).toList();
   }
+
+  /// Paginated, filterable, newest-first — powers the transactions screen's
+  /// infinite-scroll list instead of loading the whole table at once.
+  Future<List<Transaction>> queryPage({
+    int limit = 50,
+    int offset = 0,
+    TxnType? type,
+    String? category,
+    DateTime? from,
+    DateTime? to,
+    String? searchTerm,
+  }) async {
+    final db = await _db.database;
+    final where = <String>[];
+    final args = <Object?>[];
+
+    if (type != null) {
+      where.add('type = ?');
+      args.add(type.name);
+    }
+    if (category != null) {
+      where.add('category = ?');
+      args.add(category);
+    }
+    if (from != null) {
+      where.add('date >= ?');
+      args.add(_isoDate(from));
+    }
+    if (to != null) {
+      where.add('date <= ?');
+      args.add(_isoDate(to));
+    }
+    if (searchTerm != null && searchTerm.trim().isNotEmpty) {
+      where.add('(note LIKE ? OR category LIKE ?)');
+      final like = '%${searchTerm.trim()}%';
+      args.addAll([like, like]);
+    }
+
+    final rows = await db.query(
+      'txns',
+      where: where.isEmpty ? null : where.join(' AND '),
+      whereArgs: args,
+      orderBy: 'date DESC, id DESC',
+      limit: limit,
+      offset: offset,
+    );
+    return rows.map(Transaction.fromMap).toList();
+  }
+
+  Future<List<String>> distinctCategories() async {
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      'SELECT DISTINCT category FROM txns ORDER BY category ASC',
+    );
+    return rows.map((r) => r['category'] as String).toList();
+  }
+
+  String _isoDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   Future<List<Transaction>> recent({int limit = 10}) async {
     final db = await _db.database;
@@ -162,6 +236,82 @@ class TransactionRepository {
       for (final r in rows)
         r['category'] as String: (r['total'] as num?)?.toDouble() ?? 0,
     };
+  }
+
+  /// Income/expense totals between two dates (inclusive) — powers custom
+  /// date-range reports, unlike [monthTotal] which is locked to one month.
+  Future<MonthTotal> totalsRange(DateTime from, DateTime to) async {
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      "SELECT type, SUM(amount) as total FROM txns WHERE date >= ? AND date <= ? GROUP BY type",
+      [_isoDate(from), _isoDate(to)],
+    );
+    double expense = 0, income = 0;
+    for (final r in rows) {
+      final total = (r['total'] as num?)?.toDouble() ?? 0;
+      if (r['type'] == 'expense') expense = total;
+      if (r['type'] == 'income') income = total;
+    }
+    return MonthTotal(expense: expense, income: income);
+  }
+
+  Future<Map<String, double>> categoryTotalsRange(
+    DateTime from,
+    DateTime to,
+  ) async {
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      "SELECT category, SUM(amount) as total FROM txns WHERE date >= ? AND date <= ? AND type = 'expense' GROUP BY category",
+      [_isoDate(from), _isoDate(to)],
+    );
+    return {
+      for (final r in rows)
+        r['category'] as String: (r['total'] as num?)?.toDouble() ?? 0,
+    };
+  }
+
+  /// Heuristic: the same category+note expense logged in 3+ of the last 4
+  /// months, with amounts within 15% of each other, looks like a recurring
+  /// bill (subscription, rent, etc.) the user hasn't set up a reminder for.
+  Future<RecurringCandidate?> detectRecurring(
+    String category,
+    String? note,
+  ) async {
+    final db = await _db.database;
+    final now = DateTime.now();
+    final since = DateTime(now.year, now.month - 3, 1);
+    final rows = await db.query(
+      'txns',
+      where: note == null
+          ? "type = 'expense' AND category = ? AND note IS NULL AND date >= ?"
+          : "type = 'expense' AND category = ? AND note = ? AND date >= ?",
+      whereArgs: note == null
+          ? [category, _isoDate(since)]
+          : [category, note, _isoDate(since)],
+      orderBy: 'date ASC',
+    );
+    if (rows.length < 3) return null;
+
+    final txns = rows.map(Transaction.fromMap).toList();
+    final months = txns.map((t) => t.date.substring(0, 7)).toSet();
+    if (months.length < 3) return null;
+
+    final amounts = txns.map((t) => t.amount).toList();
+    final avg = amounts.reduce((a, b) => a + b) / amounts.length;
+    if (avg <= 0) return null;
+    final maxDeviation = amounts
+        .map((a) => (a - avg).abs() / avg)
+        .reduce((a, b) => a > b ? a : b);
+    if (maxDeviation > 0.15) return null;
+
+    final days = txns.map((t) => int.parse(t.date.substring(8, 10))).toList()
+      ..sort();
+    return RecurringCandidate(
+      category: category,
+      note: note,
+      avgAmount: avg,
+      dayOfMonth: days[days.length ~/ 2],
+    );
   }
 
   Future<List<Transaction>> search(String term) async {

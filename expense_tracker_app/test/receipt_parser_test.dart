@@ -35,7 +35,9 @@ Total 100
     });
 
     test('note is the first line, truncated to 40 chars', () {
-      final r = parseReceiptText('This Is A Very Long First Line That Goes On And On\nTotal 50');
+      final r = parseReceiptText(
+        'This Is A Very Long First Line That Goes On And On\nTotal 50',
+      );
       expect(r.note.length, lessThanOrEqualTo(40));
     });
 

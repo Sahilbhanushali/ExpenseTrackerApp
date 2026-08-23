@@ -5,7 +5,7 @@ import 'package:sqflite/sqflite.dart';
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const _dbName = 'expenses.db';
-  static const _dbVersion = 6;
+  static const _dbVersion = 7;
 
   static const allTables = [
     'txns',
@@ -14,11 +14,17 @@ class AppDatabase {
     'transfers',
     'wishlist',
     'goals',
+    'loans',
   ];
 
-  AppDatabase._();
+  AppDatabase._([this._pathOverride]);
   static final AppDatabase instance = AppDatabase._();
 
+  /// A fresh, isolated in-memory database — for tests only. Each call opens
+  /// its own instance so tests never share state.
+  factory AppDatabase.forTesting() => AppDatabase._(':memory:');
+
+  final String? _pathOverride;
   Database? _db;
 
   Future<Database> get database async {
@@ -27,13 +33,16 @@ class AppDatabase {
   }
 
   Future<Database> _open() async {
-    final dir = await getDatabasesPath();
-    final path = join(dir, _dbName);
+    final path = _pathOverride ?? join(await getDatabasesPath(), _dbName);
     return openDatabase(
       path,
       version: _dbVersion,
       onCreate: _createSchema,
       onUpgrade: _upgradeSchema,
+      // sqflite caches same-path connections as one shared instance by
+      // default — every AppDatabase.forTesting() call uses the same
+      // ':memory:' path, so tests would otherwise silently share state.
+      singleInstance: _pathOverride == null,
     );
   }
 
@@ -62,6 +71,27 @@ class AppDatabase {
     if (oldVersion < 6) {
       await db.execute('ALTER TABLE accounts ADD COLUMN current_value REAL');
     }
+    if (oldVersion < 7) {
+      await _createLoansTable(db);
+    }
+  }
+
+  Future<void> _createLoansTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE loans (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT NOT NULL,
+        principal           REAL NOT NULL,
+        interest_amount     REAL NOT NULL DEFAULT 0,
+        emi_amount          REAL NOT NULL,
+        tenure_months       INTEGER NOT NULL,
+        installments_paid   INTEGER NOT NULL DEFAULT 0,
+        start_date          TEXT NOT NULL,
+        note                TEXT,
+        account             TEXT,
+        active              INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
   }
 
   Future<void> _createWishlistTable(Database db) async {
@@ -152,6 +182,7 @@ class AppDatabase {
 
     await _createWishlistTable(db);
     await _createGoalsTable(db);
+    await _createLoansTable(db);
   }
 
   /// Wipes every row from every table, in place — used by Settings' "Reset
