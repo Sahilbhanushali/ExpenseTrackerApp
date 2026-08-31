@@ -223,7 +223,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           AppSpacing.lg,
           MediaQuery.of(context).padding.top + AppSpacing.md,
           AppSpacing.lg,
-          AppSpacing.xxl,
+          // Clears the floating "+" button — AppSpacing.xxl (48) left the
+          // last list row (Budget vs actual) sitting right under the FAB.
+          120,
         ),
         children: [
           Text(_greeting(), style: Theme.of(context).textTheme.bodyMedium),
@@ -629,13 +631,19 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The purple tint is only readable on a light card — on the dark
+    // background (near-black) it needs a much lighter tone, or the label
+    // and amount both disappear against the tinted backdrop.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final labelColor = isDark ? const Color(0xFFDBAFFF) : AppColors.primary;
+    final valueColor = isDark ? Colors.white : AppColors.primaryDark;
     return Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
             vertical: AppSpacing.lg,
           ),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
+            color: AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.1),
             borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
           ),
@@ -644,10 +652,8 @@ class _StatCard extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: labelColor, fontWeight: FontWeight.bold),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -659,7 +665,7 @@ class _StatCard extends StatelessWidget {
                       currency: currency,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
-                        color: AppColors.primaryDark,
+                        color: valueColor,
                       ),
                     ),
             ],
@@ -753,17 +759,28 @@ class _CategoryChartState extends State<_CategoryChart> {
         ? entries[touchedIndex]
         : null;
 
+    // The chart's actual painted diameter is 2 * (centerSpaceRadius +
+    // sectionRadius), not whatever box it's given — fl_chart draws at
+    // these absolute radii regardless of the parent's size, so the box
+    // around it has to be sized to fit the largest possible radius (the
+    // touched state) or the circle paints outside its own card.
+    const centerSpaceRadius = 48.0;
+    const sectionRadius = 48.0;
+    const touchedSectionRadius = 54.0;
+    const chartBoxSize = (centerSpaceRadius + touchedSectionRadius) * 2 + 8;
+
     return Column(
       children: [
         SizedBox(
-          height: 180,
+          height: chartBoxSize,
+          width: chartBoxSize,
           child: Stack(
             alignment: Alignment.center,
             children: [
               PieChart(
                 PieChartData(
                   sectionsSpace: 4,
-                  centerSpaceRadius: 55,
+                  centerSpaceRadius: centerSpaceRadius,
                   pieTouchData: PieTouchData(
                     touchCallback: (event, response) {
                       if (!event.isInterestedForInteractions ||
@@ -789,7 +806,7 @@ class _CategoryChartState extends State<_CategoryChart> {
                       value: e.value,
                       color: AppColors.categoryColor(e.key),
                       title: showTitle ? '${pct.round()}%' : '',
-                      radius: isTouched ? 65 : 55,
+                      radius: isTouched ? touchedSectionRadius : sectionRadius,
                       titlePositionPercentageOffset: 0.62,
                       titleStyle: const TextStyle(
                         fontSize: 13,

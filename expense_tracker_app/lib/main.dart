@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:quick_actions/quick_actions.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_lock_service.dart';
@@ -17,6 +20,7 @@ import 'features/recurring/recurring_controller.dart';
 import 'features/reminders/reminders_controller.dart';
 import 'features/security/lock_screen.dart';
 import 'features/settings/settings_controller.dart';
+import 'features/splash/splash_screen.dart';
 import 'features/wishlist/wishlist_controller.dart';
 
 /// Lets the app-icon long-press shortcut ("Add expense") reach the add-sheet
@@ -81,6 +85,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
   bool _ready = false;
   bool _locked = false;
   DateTime? _pausedAt;
+  StreamSubscription<List<SharedMediaFile>>? _shareSub;
 
   /// How long the app can sit backgrounded before the next resume re-locks
   /// it. Below this, a resume is treated as "still using the app" — e.g.
@@ -98,6 +103,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _shareSub?.cancel();
     super.dispose();
   }
 
@@ -123,7 +129,26 @@ class _AppBootstrapState extends State<_AppBootstrap>
     }
   }
 
+  /// The splash's entrance animation runs for about this long — on a fast
+  /// device the real bootstrap work below finishes well before that, which
+  /// would otherwise cut the animation off mid-sequence.
+  static const _minSplashDuration = Duration(milliseconds: 1400);
+
   Future<void> _bootstrap() async {
+    final minDuration = Future.delayed(_minSplashDuration);
+    await _loadAppState();
+    await minDuration;
+    if (mounted) {
+      setState(() {
+        _ready = true;
+        _locked = _pendingLocked;
+      });
+    }
+  }
+
+  bool _pendingLocked = false;
+
+  Future<void> _loadAppState() async {
     await NotificationService.instance.init();
     if (!mounted) return;
     final settings = context.read<SettingsController>();
@@ -149,13 +174,8 @@ class _AppBootstrapState extends State<_AppBootstrap>
     ]);
     await _checkDueBills();
     _initQuickActions();
-    final locked = await AppLockService.instance.isEnabled();
-    if (mounted) {
-      setState(() {
-        _ready = true;
-        _locked = locked;
-      });
-    }
+    _initShareIntent();
+    _pendingLocked = await AppLockService.instance.isEnabled();
   }
 
   /// Wires the "Add expense" long-press app-icon shortcut straight to the
@@ -172,24 +192,46 @@ class _AppBootstrapState extends State<_AppBootstrap>
     ]);
   }
 
+  /// Lets other apps (a UPI app's payment confirmation "Share" option, SMS,
+  /// etc.) hand text straight to the add-transaction sheet via Android's
+  /// share sheet — the text is only parsed into a preview, never logged
+  /// without the user confirming it, same as the quick-add text field.
+  void _initShareIntent() {
+    _shareSub = ReceiveSharingIntent.instance.getMediaStream().listen(
+      _handleSharedFiles,
+    );
+    ReceiveSharingIntent.instance.getInitialMedia().then((files) {
+      _handleSharedFiles(files);
+      ReceiveSharingIntent.instance.reset();
+    });
+  }
+
+  void _handleSharedFiles(List<SharedMediaFile> files) {
+    for (final file in files) {
+      if (file.type == SharedMediaType.text && file.path.trim().isNotEmpty) {
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          showAddTransactionSheet(ctx, initialText: file.path);
+        }
+        return;
+      }
+    }
+  }
+
+  /// Refreshes which recurring bills are due so the "Due now" section on
+  /// the Recurring screen stays current. Deliberately silent otherwise —
+  /// due bills already get a real push notification
+  /// (RecurringController.addBill schedules one), so a second, in-app
+  /// "X due" banner on every launch/resume was just a redundant nag.
   Future<void> _checkDueBills() async {
     if (!mounted) return;
-    final due = await context.read<RecurringController>().refreshDue();
-    if (due.isNotEmpty && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${due.length} recurring item(s) due — log them from Recurring & EMI',
-          ),
-        ),
-      );
-    }
+    await context.read<RecurringController>().refreshDue();
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const SplashScreen();
     }
     // HomeShell stays mounted underneath even while locked, so its selected
     // tab, scroll positions, etc. survive a lock/unlock cycle instead of

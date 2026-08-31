@@ -22,17 +22,25 @@ import '../recurring/recurring_controller.dart';
 import '../settings/settings_controller.dart';
 import 'expenses_controller.dart';
 
-Future<void> showAddTransactionSheet(BuildContext context) {
+Future<void> showAddTransactionSheet(
+  BuildContext context, {
+  String? initialText,
+}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => const AddTransactionSheet(),
+    builder: (_) => AddTransactionSheet(initialText: initialText),
   );
 }
 
 class AddTransactionSheet extends StatefulWidget {
-  const AddTransactionSheet({super.key});
+  /// Prefills quick-mode text — used when text is shared into the app (e.g.
+  /// a UPI payment confirmation via the system share sheet) so the parsed
+  /// preview is ready immediately, still pending the user's confirmation.
+  final String? initialText;
+
+  const AddTransactionSheet({super.key, this.initialText});
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -56,6 +64,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   TxnType _type = TxnType.expense;
   String _category = kDefaultCategory;
   DateTime _date = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    final shared = widget.initialText?.trim();
+    if (shared != null && shared.isNotEmpty) {
+      _textController.text = shared;
+      _onTextChanged(shared);
+    }
+  }
 
   @override
   void dispose() {
