@@ -14,6 +14,7 @@ import 'features/goals/goals_controller.dart';
 import 'features/lending/lending_controller.dart';
 import 'features/loans/loans_controller.dart';
 import 'features/recurring/recurring_controller.dart';
+import 'features/reminders/reminders_controller.dart';
 import 'features/security/lock_screen.dart';
 import 'features/settings/settings_controller.dart';
 import 'features/wishlist/wishlist_controller.dart';
@@ -41,10 +42,11 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LoansController()),
         ChangeNotifierProvider(create: (_) => WishlistController()),
         ChangeNotifierProvider(create: (_) => GoalsController()),
+        ChangeNotifierProvider(create: (_) => RemindersController()),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
-        title: 'Expense Tracker',
+        title: 'Spendo',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
@@ -132,6 +134,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
     final loans = context.read<LoansController>();
     final wishlist = context.read<WishlistController>();
     final goals = context.read<GoalsController>();
+    final reminders = context.read<RemindersController>();
 
     await settings.init();
     await Future.wait([
@@ -142,6 +145,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
       loans.init(),
       wishlist.init(),
       goals.init(),
+      reminders.init(),
     ]);
     await _checkDueBills();
     _initQuickActions();

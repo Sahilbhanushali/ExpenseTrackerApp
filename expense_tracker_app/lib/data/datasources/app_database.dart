@@ -5,7 +5,7 @@ import 'package:sqflite/sqflite.dart';
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const _dbName = 'expenses.db';
-  static const _dbVersion = 7;
+  static const _dbVersion = 8;
 
   static const allTables = [
     'txns',
@@ -15,6 +15,8 @@ class AppDatabase {
     'wishlist',
     'goals',
     'loans',
+    'loan_payments',
+    'reminders',
   ];
 
   AppDatabase._([this._pathOverride]);
@@ -74,6 +76,36 @@ class AppDatabase {
     if (oldVersion < 7) {
       await _createLoansTable(db);
     }
+    if (oldVersion < 8) {
+      await _createLoanPaymentsTable(db);
+      await _createRemindersTable(db);
+    }
+  }
+
+  Future<void> _createLoanPaymentsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE loan_payments (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        loan_id     INTEGER NOT NULL,
+        amount      REAL NOT NULL,
+        date        TEXT NOT NULL,
+        note        TEXT,
+        created_at  TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _createRemindersTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE reminders (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        title       TEXT NOT NULL,
+        note        TEXT,
+        date_time   TEXT NOT NULL,
+        repeat      TEXT NOT NULL DEFAULT 'none',
+        active      INTEGER NOT NULL DEFAULT 1
+      )
+    ''');
   }
 
   Future<void> _createLoansTable(Database db) async {
@@ -183,6 +215,8 @@ class AppDatabase {
     await _createWishlistTable(db);
     await _createGoalsTable(db);
     await _createLoansTable(db);
+    await _createLoanPaymentsTable(db);
+    await _createRemindersTable(db);
   }
 
   /// Wipes every row from every table, in place — used by Settings' "Reset

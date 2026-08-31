@@ -1,5 +1,5 @@
 name: expense_tracker_app
-description: "A new Flutter project."
+description: "Spendo — a personal expense tracker."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -51,6 +51,7 @@ dependencies:
   quick_actions: ^1.1.0
   local_auth: ^3.0.2
   flutter_secure_storage: ^10.3.1
+  flutter_animate: ^4.5.2
 
 dev_dependencies:
   flutter_test:

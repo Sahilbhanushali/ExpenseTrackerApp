@@ -153,5 +153,19 @@ void main() {
 
       expect(await repo.repay(id, 100), isNull);
     });
+
+    test('each repayment is logged to payment history, newest first', () async {
+      final id = await repo.add(
+        txn(date: '2026-08-01', amount: 500, type: TxnType.borrowed, settled: 0),
+      );
+
+      await repo.repay(id, 200);
+      await repo.repay(id, 150);
+
+      final payments = await repo.paymentsFor(id);
+      expect(payments, hasLength(2));
+      expect(payments[0].amount, 150);
+      expect(payments[1].amount, 200);
+    });
   });
 }

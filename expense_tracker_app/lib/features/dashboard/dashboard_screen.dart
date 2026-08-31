@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -226,10 +227,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         children: [
           Text(_greeting(), style: Theme.of(context).textTheme.bodyMedium),
-          Text(
-            'Expense Tracker',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text('Spendo', style: Theme.of(context).textTheme.headlineSmall),
           Text(todayLabel, style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: AppSpacing.lg),
           _NetWorthCard(
@@ -349,6 +347,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             AppCard(
               child: _TrendChart(points: _trend, currency: config.currency),
             ),
+          ],
+          if (expenses.recent.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              'Recent transactions',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ...expenses.recent
+                .take(5)
+                .map(
+                  (txn) =>
+                      _TransactionTile(txn: txn, currency: config.currency),
+                ),
           ],
         ],
       ),
@@ -521,15 +533,15 @@ class _HeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.xl), // bigger padding
       decoration: BoxDecoration(
         gradient: AppColors.heroGradient,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(AppRadius.xl), // larger radius
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: AppColors.primary.withValues(alpha: 0.4),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -537,11 +549,11 @@ class _HeroCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Spent',
+            'Spent this month',
             style: TextStyle(
               color: Colors.white70,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -550,20 +562,30 @@ class _HeroCard extends StatelessWidget {
             currency: currency,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
+              fontSize: 48, // chunkier
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.5,
             ),
+          ).animate().fadeIn().scaleXY(
+            begin: 0.9,
+            end: 1.0,
+            duration: 300.ms,
+            curve: Curves.easeOutBack,
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.lg),
           ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: LinearProgressIndicator(
-              value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0,
-              minHeight: 8,
-              backgroundColor: Colors.white.withValues(alpha: 0.2),
-              valueColor: const AlwaysStoppedAnimation(Colors.white),
-            ),
+            child:
+                LinearProgressIndicator(
+                  value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0,
+                  minHeight: 12,
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  valueColor: const AlwaysStoppedAnimation(Colors.white),
+                ).animate().slideX(
+                  begin: -1,
+                  duration: 500.ms,
+                  curve: Curves.easeOutCubic,
+                ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
@@ -571,7 +593,11 @@ class _HeroCard extends StatelessWidget {
             children: [
               Text(
                 'Budget ${formatMoney(budget, currency)}',
-                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               Text(
                 remaining >= 0
@@ -579,8 +605,8 @@ class _HeroCard extends StatelessWidget {
                     : '${formatMoney(remaining.abs(), currency)} over',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
@@ -603,27 +629,102 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+    return Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.lg,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          value == null
-              ? Text('—', style: Theme.of(context).textTheme.titleMedium)
-              : AnimatedMoneyText(
-                  amount: value!,
-                  currency: currency,
-                  style: Theme.of(context).textTheme.titleMedium,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
                 ),
-        ],
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              value == null
+                  ? Text('—', style: Theme.of(context).textTheme.titleMedium)
+                  : AnimatedMoneyText(
+                      amount: value!,
+                      currency: currency,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+            ],
+          ),
+        )
+        .animate()
+        .slideY(begin: 0.5, duration: 400.ms, curve: Curves.easeOutBack)
+        .fadeIn();
+  }
+}
+
+class _TransactionTile extends StatelessWidget {
+  final Transaction txn;
+  final String currency;
+
+  const _TransactionTile({required this.txn, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    final isExpense = txn.type == TxnType.expense || txn.type == TxnType.lent;
+    final color = AppColors.categoryColor(txn.category);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
-    );
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 4,
+        ),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.category, color: color),
+        ),
+        title: Text(
+          txn.note?.isNotEmpty == true ? txn.note! : txn.category,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          txn.category.toUpperCase(),
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        trailing: Text(
+          '${isExpense ? '-' : '+'}${formatMoney(txn.amount, currency)}',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+            color: isExpense ? AppColors.textPrimary : AppColors.income,
+          ),
+        ),
+      ),
+    ).animate().fadeIn().slideX(begin: 0.1);
   }
 }
 
@@ -644,8 +745,12 @@ class _CategoryChartState extends State<_CategoryChart> {
     final entries = widget.totals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final total = entries.fold<double>(0, (sum, e) => sum + e.value);
-    final highlighted = _touchedIndex != null && _touchedIndex! < entries.length
-        ? entries[_touchedIndex!]
+    final touchedIndex = _touchedIndex;
+    final highlighted =
+        touchedIndex != null &&
+            touchedIndex >= 0 &&
+            touchedIndex < entries.length
+        ? entries[touchedIndex]
         : null;
 
     return Column(
@@ -657,8 +762,8 @@ class _CategoryChartState extends State<_CategoryChart> {
             children: [
               PieChart(
                 PieChartData(
-                  sectionsSpace: 2,
-                  centerSpaceRadius: 44,
+                  sectionsSpace: 4,
+                  centerSpaceRadius: 55,
                   pieTouchData: PieTouchData(
                     touchCallback: (event, response) {
                       if (!event.isInterestedForInteractions ||
@@ -680,16 +785,16 @@ class _CategoryChartState extends State<_CategoryChart> {
                       value: e.value,
                       color: AppColors.categoryColor(e.key),
                       title: '${pct.round()}%',
-                      radius: isTouched ? 52 : 46,
+                      radius: isTouched ? 65 : 55,
                       titleStyle: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
                         color: Colors.white,
                       ),
                     );
                   }),
                 ),
-              ),
+              ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 150),
                 child: highlighted != null

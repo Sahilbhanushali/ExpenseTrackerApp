@@ -1,4 +1,5 @@
 import '../datasources/app_database.dart';
+import '../models/loan_payment.dart';
 import '../models/transaction.dart';
 
 class MonthTotal {
@@ -374,7 +375,28 @@ class TransactionRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+    await db.insert('loan_payments', {
+      'loan_id': id,
+      'amount': applied,
+      'date': _isoDate(DateTime.now()),
+      'note': null,
+      'created_at': DateTime.now().toIso8601String(),
+    });
     final updated = await getById(id);
     return RepayResult(row: updated!, applied: applied, overpaid: overpaid);
+  }
+
+  /// History of individual installments logged against a loan, newest first
+  /// — [repay] writes one row here every time it's called, so this survives
+  /// even though the loan's own `amount` column just holds the live balance.
+  Future<List<LoanPayment>> paymentsFor(int loanId) async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'loan_payments',
+      where: 'loan_id = ?',
+      whereArgs: [loanId],
+      orderBy: 'date DESC, id DESC',
+    );
+    return rows.map(LoanPayment.fromMap).toList();
   }
 }

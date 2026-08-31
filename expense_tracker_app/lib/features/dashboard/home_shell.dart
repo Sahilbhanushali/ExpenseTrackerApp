@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_bottom_nav.dart';
+import '../../core/widgets/app_card.dart';
+import '../../core/widgets/list_row.dart';
 import '../../core/widgets/page_transitions.dart';
-import '../../core/widgets/press_scale.dart';
+import '../../core/widgets/staggered_list.dart';
 import '../accounts/accounts_screen.dart';
 import '../expenses/add_transaction_sheet.dart';
 import '../expenses/transactions_screen.dart';
@@ -14,6 +16,8 @@ import '../lending/lending_screen.dart';
 import '../loans/loans_controller.dart';
 import '../loans/loans_screen.dart';
 import '../recurring/recurring_screen.dart';
+import '../reminders/reminders_controller.dart';
+import '../reminders/reminders_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
 import '../wishlist/wishlist_controller.dart';
@@ -96,60 +100,72 @@ class _MoreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tiles = [
+      _MoreTile(
+        icon: Icons.stars_outlined,
+        label: 'Wishlist',
+        onTap: () {
+          context.read<WishlistController>().refresh();
+          Navigator.of(context)
+              .push(FadeSlideRoute(page: const WishlistScreen()));
+        },
+      ),
+      _MoreTile(
+        icon: Icons.bar_chart_outlined,
+        label: 'Reports',
+        onTap: () =>
+            Navigator.of(context)
+                .push(FadeSlideRoute(page: const ReportsScreen())),
+      ),
+      _MoreTile(
+        icon: Icons.event_repeat_outlined,
+        label: 'Recurring bills',
+        onTap: () =>
+            Navigator.of(context)
+                .push(FadeSlideRoute(page: const RecurringScreen())),
+      ),
+      _MoreTile(
+        icon: Icons.account_balance_outlined,
+        label: 'Loans & EMI',
+        onTap: () {
+          context.read<LoansController>().refresh();
+          Navigator.of(context).push(FadeSlideRoute(page: const LoansScreen()));
+        },
+      ),
+      _MoreTile(
+        icon: Icons.flag_outlined,
+        label: 'Savings goals',
+        onTap: () {
+          context.read<GoalsController>().refresh();
+          Navigator.of(context).push(FadeSlideRoute(page: const GoalsScreen()));
+        },
+      ),
+      _MoreTile(
+        icon: Icons.notifications_outlined,
+        label: 'Reminders',
+        onTap: () {
+          context.read<RemindersController>().refresh();
+          Navigator.of(context)
+              .push(FadeSlideRoute(page: const RemindersScreen()));
+        },
+      ),
+      _MoreTile(
+        icon: Icons.settings_outlined,
+        label: 'Settings',
+        onTap: () =>
+            Navigator.of(context)
+                .push(FadeSlideRoute(page: const SettingsScreen())),
+      ),
+    ];
+
     return Scaffold(
       appBar: AppBar(title: const Text('More')),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        children: [
-          _MoreTile(
-            icon: Icons.stars_outlined,
-            label: 'Wishlist',
-            onTap: () {
-              context.read<WishlistController>().refresh();
-              Navigator.of(context)
-                  .push(FadeSlideRoute(page: const WishlistScreen()));
-            },
-          ),
-          _MoreTile(
-            icon: Icons.bar_chart_outlined,
-            label: 'Reports',
-            onTap: () =>
-                Navigator.of(context)
-                    .push(FadeSlideRoute(page: const ReportsScreen())),
-          ),
-          _MoreTile(
-            icon: Icons.event_repeat_outlined,
-            label: 'Recurring bills',
-            onTap: () =>
-                Navigator.of(context)
-                    .push(FadeSlideRoute(page: const RecurringScreen())),
-          ),
-          _MoreTile(
-            icon: Icons.account_balance_outlined,
-            label: 'Loans & EMI',
-            onTap: () {
-              context.read<LoansController>().refresh();
-              Navigator.of(context)
-                  .push(FadeSlideRoute(page: const LoansScreen()));
-            },
-          ),
-          _MoreTile(
-            icon: Icons.flag_outlined,
-            label: 'Savings goals',
-            onTap: () {
-              context.read<GoalsController>().refresh();
-              Navigator.of(context)
-                  .push(FadeSlideRoute(page: const GoalsScreen()));
-            },
-          ),
-          _MoreTile(
-            icon: Icons.settings_outlined,
-            label: 'Settings',
-            onTap: () =>
-                Navigator.of(context)
-                    .push(FadeSlideRoute(page: const SettingsScreen())),
-          ),
-        ],
+      body: ListView.separated(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        itemCount: tiles.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
+        itemBuilder: (context, i) =>
+            StaggeredListItem(index: i, child: tiles[i]),
       ),
     );
   }
@@ -168,25 +184,14 @@ class _MoreTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PressScale(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-          ],
+    return AppCard(
+      child: ListRow(
+        icon: icon,
+        title: label,
+        onTap: onTap,
+        trailing: Icon(
+          Icons.chevron_right,
+          color: Theme.of(context).colorScheme.outline,
         ),
       ),
     );

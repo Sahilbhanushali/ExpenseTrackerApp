@@ -6,6 +6,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/list_row.dart';
+import '../../core/widgets/staggered_list.dart';
 import '../../data/models/recurring_bill.dart';
 import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
@@ -414,33 +416,29 @@ class RecurringScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                 ],
-                ...recurring.bills.map((r) {
+                ...recurring.bills.indexed.map((entry) {
+                  final (i, r) = entry;
                   final remaining = r.installmentsRemaining;
                   final isIncome = r.type == RecurringType.income;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: AppCard(
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(AppRadius.lg),
-                        onTap: () => _showEditBill(context, r),
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(
-                            isIncome
-                                ? Icons.savings_outlined
-                                : Icons.event_repeat_outlined,
-                            color: isIncome ? AppColors.income : null,
-                          ),
-                          title: Text(
-                            '${isIncome ? r.note ?? 'Income' : r.category} · '
-                            '${isIncome ? '+' : ''}${formatMoney(r.amount, currency)}',
-                            style: isIncome
-                                ? const TextStyle(color: AppColors.income)
-                                : null,
-                          ),
-                          subtitle: Text(
-                            'Day ${r.dayOfMonth}${!isIncome && r.note?.isNotEmpty == true ? ' · ${r.note}' : ''}${remaining != null ? ' · $remaining left' : ''}',
-                          ),
+                    child: StaggeredListItem(
+                      index: i,
+                      child: AppCard(
+                        child: ListRow(
+                          icon: isIncome
+                              ? Icons.savings_outlined
+                              : Icons.event_repeat_outlined,
+                          iconColor: isIncome ? AppColors.income : null,
+                          title:
+                              '${isIncome ? r.note ?? 'Income' : r.category} · '
+                              '${isIncome ? '+' : ''}${formatMoney(r.amount, currency)}',
+                          titleStyle: isIncome
+                              ? const TextStyle(color: AppColors.income)
+                              : null,
+                          subtitle:
+                              'Day ${r.dayOfMonth}${!isIncome && r.note?.isNotEmpty == true ? ' · ${r.note}' : ''}${remaining != null ? ' · $remaining left' : ''}',
+                          onTap: () => _showEditBill(context, r),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline),
                             onPressed: () => _confirmDelete(context, r),

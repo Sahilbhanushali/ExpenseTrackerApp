@@ -10,6 +10,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/utils/app_lock_service.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/list_row.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../data/datasources/app_database.dart';
 import '../../data/models/app_config.dart';
@@ -259,9 +260,9 @@ class SettingsScreen extends StatelessWidget {
           Text('Budget', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Monthly budget'),
+            child: ListRow(
+              icon: Icons.account_balance_wallet_outlined,
+              title: 'Monthly budget',
               trailing: Text(
                 formatMoney(config.monthlyBudget, config.currency),
               ),
@@ -275,10 +276,9 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           AppCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.flag_outlined),
-              title: const Text('Savings goals'),
+            child: ListRow(
+              icon: Icons.flag_outlined,
+              title: 'Savings goals',
               trailing: const Icon(Icons.chevron_right),
               onTap: () =>
                   Navigator.of(context)
@@ -366,30 +366,26 @@ class SettingsScreen extends StatelessWidget {
           AppCard(
             child: Column(
               children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.file_download_outlined),
-                  title: const Text('Export transactions (CSV)'),
+                ListRow(
+                  icon: Icons.file_download_outlined,
+                  title: 'Export transactions (CSV)',
                   onTap: () => _exportCsv(context),
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.backup_outlined),
-                  title: const Text('Backup (database + config)'),
+                ListRow(
+                  icon: Icons.backup_outlined,
+                  title: 'Backup (database + config)',
                   onTap: () => _exportBackup(context),
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.file_upload_outlined),
-                  title: const Text('Import transactions (CSV)'),
+                ListRow(
+                  icon: Icons.file_upload_outlined,
+                  title: 'Import transactions (CSV)',
                   onTap: () => _importCsv(context),
                 ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.delete_forever_outlined),
-                  title: const Text('Reset all data'),
-                  textColor: Colors.red,
+                ListRow(
+                  icon: Icons.delete_forever_outlined,
                   iconColor: Colors.red,
+                  title: 'Reset all data',
+                  titleStyle: const TextStyle(color: Colors.red),
                   onTap: () => _resetAll(context),
                 ),
               ],
@@ -439,13 +435,14 @@ class _SecuritySectionState extends State<_SecuritySection> {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        secondary: const Icon(Icons.lock_outline),
-        title: const Text('App lock'),
-        subtitle: const Text('Require a PIN or biometric to open the app'),
-        value: _enabled ?? false,
-        onChanged: _enabled == null ? null : _onToggle,
+      child: ListRow(
+        icon: Icons.lock_outline,
+        title: 'App lock',
+        subtitle: 'Require a PIN or biometric to open the app',
+        trailing: Switch(
+          value: _enabled ?? false,
+          onChanged: _enabled == null ? null : _onToggle,
+        ),
       ),
     );
   }

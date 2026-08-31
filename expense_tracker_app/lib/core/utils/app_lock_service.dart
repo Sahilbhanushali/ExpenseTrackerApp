@@ -45,7 +45,7 @@ class AppLockService {
   Future<bool> authenticateWithBiometrics() async {
     try {
       return await _localAuth.authenticate(
-        localizedReason: 'Unlock Expense Tracker',
+        localizedReason: 'Unlock Spendo',
         biometricOnly: true,
       );
     } catch (_) {

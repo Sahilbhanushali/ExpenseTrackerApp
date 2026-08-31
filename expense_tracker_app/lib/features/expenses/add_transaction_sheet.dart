@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -780,31 +781,113 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       key: const ValueKey('detailed'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SegmentedButton<TxnType>(
-          segments: const [
-            ButtonSegment(value: TxnType.expense, label: Text('Expense')),
-            ButtonSegment(value: TxnType.income, label: Text('Income')),
-          ],
-          selected: {_type},
-          onSelectionChanged: (s) => setState(() => _type = s.first),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        TextField(
-          controller: _amountController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(labelText: 'Amount'),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (_type == TxnType.expense)
-          DropdownButtonFormField<String>(
-            initialValue: _category,
-            decoration: const InputDecoration(labelText: 'Category'),
-            items: categories
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _category = v ?? kDefaultCategory),
+        Center(
+          child: SegmentedButton<TxnType>(
+            segments: const [
+              ButtonSegment(value: TxnType.expense, label: Text('Expense')),
+              ButtonSegment(value: TxnType.income, label: Text('Income')),
+            ],
+            selected: {_type},
+            onSelectionChanged: (s) => setState(() => _type = s.first),
           ),
-        const SizedBox(height: AppSpacing.md),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Center(
+          child: IntrinsicWidth(
+            child: TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -2,
+              ),
+              decoration: const InputDecoration(
+                hintText: '0',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        if (_type == TxnType.expense) ...[
+          Text('Category', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              itemBuilder: (context, index) {
+                final cat = categories[index];
+                final isSelected = _category == cat;
+                return PressScale(
+                  onTap: () => setState(() => _category = cat),
+                  child:
+                      AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            margin: const EdgeInsets.only(right: AppSpacing.md),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppColors.categoryColor(cat)
+                                  : AppColors.categoryColor(cat)
+                                        .withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(AppRadius.lg),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.transparent
+                                    : AppColors.categoryColor(cat)
+                                          .withValues(alpha: 0.3),
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.category, // You can replace with custom icons
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.categoryColor(cat),
+                                  size: 32,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  cat,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : AppColors.categoryColor(cat),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                          .animate(target: isSelected ? 1 : 0)
+                          .scale(
+                            begin: const Offset(1, 1),
+                            end: const Offset(1.05, 1.05),
+                            duration: 150.ms,
+                          ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
         TextField(
           controller: _noteController,
           decoration: const InputDecoration(labelText: 'Note (optional)'),
@@ -830,9 +913,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         const SizedBox(height: AppSpacing.lg),
         SizedBox(
           width: double.infinity,
+          height: 56, // Chunky button
           child: ElevatedButton(
             onPressed: _submitDetailed,
-            child: const Text('Log it'),
+            child: const Text(
+              'Log transaction',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
       ],

@@ -5,6 +5,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/budget_progress_bar.dart';
+import '../../core/widgets/list_row.dart';
+import '../../core/widgets/staggered_list.dart';
+import '../../data/models/loan_payment.dart';
 import '../../data/models/transaction.dart';
 import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
@@ -204,6 +208,70 @@ class LendingScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showHistory(BuildContext context, Transaction loan) async {
+    final controller = context.read<LendingController>();
+    final currency = context.read<SettingsController>().config.currency;
+    final payments = await controller.paymentHistory(loan.id!);
+    if (!context.mounted) return;
+    final original = controller.originalAmount(loan, payments);
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        expand: false,
+        builder: (context, scrollController) => Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${loan.counterparty ?? 'Someone'} — payment history',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              BudgetProgressBar(
+                spent: original - loan.amount,
+                budget: original,
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${formatMoney(original - loan.amount, currency)} paid of ${formatMoney(original, currency)} · ${formatMoney(loan.amount, currency)} left',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Expanded(
+                child: payments.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No installments logged yet.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: scrollController,
+                        itemCount: payments.length,
+                        separatorBuilder: (_, _) =>
+                            const SizedBox(height: AppSpacing.xs),
+                        itemBuilder: (context, i) => _PaymentRow(
+                          payment: payments[i],
+                          currency: currency,
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showEditLoan(BuildContext context, Transaction loan) async {
     final amountController = TextEditingController(
       text: loan.amount.toStringAsFixed(0),
@@ -337,47 +405,87 @@ class LendingScreen extends StatelessWidget {
               itemBuilder: (context, i) {
                 final r = lending.outstanding[i];
                 final owesYou = r.type == TxnType.lent;
-                return AppCard(
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    onTap: () => _showRepay(context, r),
-                    title: Text(r.counterparty ?? 'Someone'),
-                    subtitle: Text(owesYou ? 'owes you' : 'you owe'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          formatMoney(r.amount, currency),
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: owesYou
-                                ? AppColors.income
-                                : AppColors.expense,
-                          ),
-                        ),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert),
-                          onSelected: (v) {
-                            if (v == 'edit') {
-                              _showEditLoan(context, r);
-                            } else if (v == 'delete') {
-                              _confirmDeleteLoan(context, r);
-                            }
-                          },
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(value: 'edit', child: Text('Edit')),
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Text('Delete'),
+                return StaggeredListItem(
+                  index: i,
+                  child: AppCard(
+                    child: ListRow(
+                      icon: owesYou
+                          ? Icons.upload_outlined
+                          : Icons.download_outlined,
+                      iconColor: owesYou ? AppColors.income : AppColors.expense,
+                      title: r.counterparty ?? 'Someone',
+                      subtitle: owesYou ? 'owes you' : 'you owe',
+                      onTap: () => _showRepay(context, r),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            formatMoney(r.amount, currency),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: owesYou
+                                  ? AppColors.income
+                                  : AppColors.expense,
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (v) {
+                              if (v == 'history') {
+                                _showHistory(context, r);
+                              } else if (v == 'edit') {
+                                _showEditLoan(context, r);
+                              } else if (v == 'delete') {
+                                _confirmDeleteLoan(context, r);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'history',
+                                child: Text('Payment history'),
+                              ),
+                              PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
               },
             ),
+    );
+  }
+}
+
+class _PaymentRow extends StatelessWidget {
+  final LoanPayment payment;
+  final String currency;
+
+  const _PaymentRow({required this.payment, required this.currency});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(payment.date, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            formatMoney(payment.amount, currency),
+            style: Theme.of(context).textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 }

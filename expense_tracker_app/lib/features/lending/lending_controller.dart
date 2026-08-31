@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/utils/notification_service.dart';
+import '../../data/models/loan_payment.dart';
 import '../../data/models/recurring_bill.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/account_repository.dart';
@@ -89,6 +90,15 @@ class LendingController extends ChangeNotifier {
     await refresh();
     return result;
   }
+
+  Future<List<LoanPayment>> paymentHistory(int loanId) =>
+      _txnRepo.paymentsFor(loanId);
+
+  /// The loan's original amount, reconstructed from its current outstanding
+  /// balance plus everything logged against it so far — works retroactively
+  /// even for loans that predate payment history being tracked.
+  double originalAmount(Transaction loan, List<LoanPayment> payments) =>
+      loan.amount + payments.fold(0.0, (s, p) => s + p.amount);
 
   /// Schedules automatic monthly repayments against a loan — creates a
   /// recurring row with loan_id set, same as bot.py's repayplan_cmd.

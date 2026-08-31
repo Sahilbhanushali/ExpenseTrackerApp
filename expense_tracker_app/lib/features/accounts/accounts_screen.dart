@@ -5,6 +5,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/press_scale.dart';
+import '../../core/widgets/staggered_list.dart';
 import '../../data/models/account.dart';
 import '../settings/settings_controller.dart';
 import 'accounts_controller.dart';
@@ -615,74 +617,76 @@ class _AccountTypeSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          for (final a in accounts) ...[
-            AppCard(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () => onTap(a),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              a.account.name,
-                              style: Theme.of(context).textTheme.titleMedium,
-                              overflow: TextOverflow.ellipsis,
+          for (final (i, a) in accounts.indexed) ...[
+            StaggeredListItem(
+              index: i,
+              child: AppCard(
+                child: PressScale(
+                  onTap: () => onTap(a),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                a.account.name,
+                                style: Theme.of(context).textTheme.titleMedium,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
-                          if (a.account.isDefault) ...[
-                            const SizedBox(width: AppSpacing.sm),
-                            const Chip(
-                              label: Text('default'),
-                              visualDensity: VisualDensity.compact,
-                            ),
+                            if (a.account.isDefault) ...[
+                              const SizedBox(width: AppSpacing.sm),
+                              const Chip(
+                                label: Text('default'),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ],
                           ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            formatMoney(
+                              a.account.currentValue ?? a.balance,
+                              currency,
+                            ),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          if (a.account.currentValue != null)
+                            _GainLossLabel(
+                              invested: a.balance,
+                              current: a.account.currentValue!,
+                              currency: currency,
+                            ),
                         ],
                       ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          formatMoney(
-                            a.account.currentValue ?? a.balance,
-                            currency,
-                          ),
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        if (a.account.currentValue != null)
-                          _GainLossLabel(
-                            invested: a.balance,
-                            current: a.account.currentValue!,
-                            currency: currency,
-                          ),
-                      ],
-                    ),
-                    PopupMenuButton<String>(
-                      icon: const Icon(Icons.more_vert),
-                      onSelected: (v) {
-                        if (v == 'default') {
-                          onSetDefault(a);
-                        } else if (v == 'delete') {
-                          onDelete(a);
-                        }
-                      },
-                      itemBuilder: (context) => [
-                        if (!a.account.isDefault)
+                      PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert),
+                        onSelected: (v) {
+                          if (v == 'default') {
+                            onSetDefault(a);
+                          } else if (v == 'delete') {
+                            onDelete(a);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          if (!a.account.isDefault)
+                            const PopupMenuItem(
+                              value: 'default',
+                              child: Text('Set as default'),
+                            ),
                           const PopupMenuItem(
-                            value: 'default',
-                            child: Text('Set as default'),
+                            value: 'delete',
+                            child: Text('Delete'),
                           ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Text('Delete'),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

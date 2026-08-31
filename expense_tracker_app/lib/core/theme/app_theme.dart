@@ -63,25 +63,38 @@ class AppTheme {
   }
 
   static TextTheme _textTheme(TextTheme base, Color primary, Color secondary) {
-    final scaled = GoogleFonts.manropeTextTheme(base);
+    final scaled = GoogleFonts.nunitoTextTheme(base);
     return scaled.copyWith(
       headlineSmall: scaled.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w900,
+        color: primary,
+        letterSpacing: -1.0,
+      ),
+      titleLarge: scaled.titleLarge?.copyWith(
         fontWeight: FontWeight.w800,
         color: primary,
         letterSpacing: -0.5,
       ),
-      titleLarge: scaled.titleLarge?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: primary,
-      ),
       titleMedium: scaled.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w800,
         color: primary,
       ),
-      bodyLarge: scaled.bodyLarge?.copyWith(color: primary),
-      bodyMedium: scaled.bodyMedium?.copyWith(color: primary),
-      bodySmall: scaled.bodySmall?.copyWith(color: secondary),
-      labelMedium: scaled.labelMedium?.copyWith(color: secondary),
+      bodyLarge: scaled.bodyLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: primary,
+      ),
+      bodyMedium: scaled.bodyMedium?.copyWith(
+        fontWeight: FontWeight.w500,
+        color: primary,
+      ),
+      bodySmall: scaled.bodySmall?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: secondary,
+      ),
+      labelMedium: scaled.labelMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: secondary,
+      ),
     );
   }
 

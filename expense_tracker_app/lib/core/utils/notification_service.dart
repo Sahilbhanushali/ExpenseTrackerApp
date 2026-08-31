@@ -2,6 +2,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../data/models/reminder.dart';
+
 /// Best-effort local reminders for recurring bills — there's no server-side
 /// JobQueue like bot.py's, so this schedules a notification near each bill's
 /// day-of-month in case the app isn't opened that day. Auto-logging itself
@@ -21,11 +23,20 @@ class NotificationService {
     await _plugin.initialize(
       const InitializationSettings(android: androidInit, iOS: iosInit),
     );
-    await _plugin
+    final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
+        >();
+    await android?.requestNotificationsPermission();
+    // Android 12+ requires this as a separate, explicit grant (unlike
+    // POST_NOTIFICATIONS above) — without it, every zonedSchedule call below
+    // silently falls back to an inexact alarm that the OS can delay by
+    // several minutes, so custom reminders wouldn't fire "on time" as
+    // promised. Declaring SCHEDULE_EXACT_ALARM in the manifest alone does
+    // not grant this; the user must approve it once here.
+    if (await android?.canScheduleExactNotifications() == false) {
+      await android?.requestExactAlarmsPermission();
+    }
     _initialized = true;
   }
 
@@ -91,6 +102,75 @@ class NotificationService {
   Future<void> cancel(int billId) async {
     if (!_initialized) return;
     await _plugin.cancel(billId);
+  }
+
+  /// Custom reminder notification ids are offset well clear of bill/loan
+  /// autoincrement ids (both start from 1) so the two id spaces never clash.
+  int _reminderNotificationId(int reminderId) => reminderId + 100000;
+
+  Future<void> scheduleReminder({
+    required int id,
+    required String title,
+    String? body,
+    required DateTime dateTime,
+    required ReminderRepeat repeat,
+  }) async {
+    if (!_initialized) return;
+    final notifId = _reminderNotificationId(id);
+    final scheduled = tz.TZDateTime.from(dateTime, tz.local);
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'custom_reminders',
+        'Reminders',
+        importance: Importance.high,
+      ),
+      iOS: DarwinNotificationDetails(),
+    );
+    final matchComponents = switch (repeat) {
+      ReminderRepeat.none => null,
+      ReminderRepeat.daily => DateTimeComponents.time,
+      ReminderRepeat.weekly => DateTimeComponents.dayOfWeekAndTime,
+      ReminderRepeat.monthly => DateTimeComponents.dayOfMonthAndTime,
+    };
+    try {
+      await _plugin.zonedSchedule(
+        notifId,
+        title,
+        body,
+        scheduled,
+        details,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: matchComponents,
+      );
+    } catch (_) {
+      // The exact-alarm permission requested in init() may still be denied
+      // — fall back to an inexact schedule rather than dropping the
+      // reminder outright (the OS may then delay delivery by several
+      // minutes).
+      try {
+        await _plugin.zonedSchedule(
+          notifId,
+          title,
+          body,
+          scheduled,
+          details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: matchComponents,
+        );
+      } catch (_) {
+        // Best-effort only — a failed schedule shouldn't block saving the
+        // reminder itself.
+      }
+    }
+  }
+
+  Future<void> cancelReminder(int id) async {
+    if (!_initialized) return;
+    await _plugin.cancel(_reminderNotificationId(id));
   }
 
   tz.TZDateTime _nextOccurrence(int dayOfMonth) {
