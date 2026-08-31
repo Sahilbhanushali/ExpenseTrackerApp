@@ -781,11 +781,16 @@ class _CategoryChartState extends State<_CategoryChart> {
                     final e = entries[i];
                     final pct = total > 0 ? e.value / total * 100 : 0.0;
                     final isTouched = i == _touchedIndex;
+                    // Slivers under ~8% can't fit a readable label without
+                    // the text clipping into neighboring slices — omit it
+                    // rather than let it overlap.
+                    final showTitle = pct >= 8 || isTouched;
                     return PieChartSectionData(
                       value: e.value,
                       color: AppColors.categoryColor(e.key),
-                      title: '${pct.round()}%',
+                      title: showTitle ? '${pct.round()}%' : '',
                       radius: isTouched ? 65 : 55,
+                      titlePositionPercentageOffset: 0.62,
                       titleStyle: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
