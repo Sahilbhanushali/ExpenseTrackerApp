@@ -162,7 +162,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _TransactionDetailSheet(
+      builder: (context) => TransactionDetailSheet(
         txn: txn,
         currency: currency,
         categories: _categories,
@@ -501,13 +501,17 @@ class _FilterChip extends StatelessWidget {
 /// Full detail view for one transaction — how much, what category, what
 /// note, and what date — all editable in place, instead of the amount+note
 /// only dialog this replaced.
-class _TransactionDetailSheet extends StatefulWidget {
+/// Public so the amount round-trip (paise in, rupees shown, paise back out)
+/// can be widget-tested — prefilling this field with raw paise multiplied
+/// every edited amount by 100.
+class TransactionDetailSheet extends StatefulWidget {
   final Transaction txn;
   final String currency;
   final List<String> categories;
   final VoidCallback onDelete;
 
-  const _TransactionDetailSheet({
+  const TransactionDetailSheet({
+    super.key,
     required this.txn,
     required this.currency,
     required this.categories,
@@ -515,13 +519,15 @@ class _TransactionDetailSheet extends StatefulWidget {
   });
 
   @override
-  State<_TransactionDetailSheet> createState() =>
-      _TransactionDetailSheetState();
+  State<TransactionDetailSheet> createState() =>
+      TransactionDetailSheetState();
 }
 
-class _TransactionDetailSheetState extends State<_TransactionDetailSheet> {
+class TransactionDetailSheetState extends State<TransactionDetailSheet> {
+  // Rupees, because that is what the user types and what _save parses back.
+  // Prefilling raw paise here made every edit multiply the amount by 100.
   late final _amountController = TextEditingController(
-    text: widget.txn.amountPaise.toStringAsFixed(2),
+    text: paiseToEditString(widget.txn.amountPaise),
   );
   late final _noteController = TextEditingController(
     text: widget.txn.note ?? '',
