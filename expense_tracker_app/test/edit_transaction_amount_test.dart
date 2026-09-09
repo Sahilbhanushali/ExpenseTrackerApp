@@ -25,6 +25,9 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: TransactionDetailSheet(
+            // A distinct key per amount, so each pump builds a fresh State
+            // instead of reusing the previous one's controller.
+            key: ValueKey(amountPaise),
             txn: txn(amountPaise),
             currency: '₹',
             categories: const ['food', 'travel'],

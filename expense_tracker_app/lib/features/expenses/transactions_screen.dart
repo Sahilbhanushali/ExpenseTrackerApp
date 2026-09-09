@@ -519,8 +519,7 @@ class TransactionDetailSheet extends StatefulWidget {
   });
 
   @override
-  State<TransactionDetailSheet> createState() =>
-      TransactionDetailSheetState();
+  State<TransactionDetailSheet> createState() => TransactionDetailSheetState();
 }
 
 class TransactionDetailSheetState extends State<TransactionDetailSheet> {
