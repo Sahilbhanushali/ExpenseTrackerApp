@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/budget_alerts.dart';
 import '../../core/utils/expense_parser.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/utils/notification_service.dart';
 import '../../core/utils/receipt_parser.dart';
@@ -103,14 +104,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _preview = _quickDateOverride == null
           ? parsed
           : ParsedTransaction(
-              amount: parsed.amount,
+              amountPaise: parsed.amountPaise,
               category: parsed.category,
               note: parsed.note,
               type: parsed.type,
               counterparty: parsed.counterparty,
               date: _isoDate(_quickDateOverride!),
               emiMonths: parsed.emiMonths,
-              pendingAmount: parsed.pendingAmount,
+              pendingAmountPaise: parsed.pendingAmountPaise,
             );
     });
   }
@@ -129,14 +130,14 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       final p = _preview;
       if (p != null) {
         _preview = ParsedTransaction(
-          amount: p.amount,
+          amountPaise: p.amountPaise,
           category: p.category,
           note: p.note,
           type: p.type,
           counterparty: p.counterparty,
           date: _isoDate(picked),
           emiMonths: p.emiMonths,
-          pendingAmount: p.pendingAmount,
+          pendingAmountPaise: p.pendingAmountPaise,
         );
       }
     });
@@ -160,7 +161,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         extraCategories: settings.config.customCategories,
       );
 
-      if (receipt.amount == null) {
+      if (receipt.amountPaise == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -180,7 +181,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         _quickMode = true;
         _textController.text = receipt.note;
         _preview = ParsedTransaction(
-          amount: receipt.amount,
+          amountPaise: receipt.amountPaise,
           category: receipt.category,
           note: receipt.note,
           type: ParsedTxnType.expense,
@@ -219,7 +220,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   Future<void> _submitQuick() async {
-    if (_preview == null || _preview!.amount == null) return;
+    if (_preview == null || _preview!.amountPaise == null) return;
     final p = _preview!;
     if (p.type == ParsedTxnType.repayment) {
       await _submitRepayment(p);
@@ -237,14 +238,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     // 5000 actually handed over — fold the pending balance into the note so
     // it isn't silently lost, since the loan record itself only holds one
     // number.
-    final effective = p.pendingAmount == null
+    final effective = p.pendingAmountPaise == null
         ? p
         : ParsedTransaction(
-            amount: p.amount,
+            amountPaise: p.amountPaise,
             category: p.category,
             note: p.note.isEmpty
-                ? '₹${p.pendingAmount!.toStringAsFixed(0)} pending'
-                : '${p.note} — ₹${p.pendingAmount!.toStringAsFixed(0)} pending',
+                ? '${formatMoney(p.pendingAmountPaise!, '₹')} pending'
+                : '${p.note} — '
+                      '${formatMoney(p.pendingAmountPaise!, '₹')} pending',
             type: p.type,
             counterparty: p.counterparty,
             date: p.date,
@@ -286,7 +288,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       final messenger = ScaffoldMessenger.of(context);
       await context.read<ExpensesController>().addFromParsed(
         ParsedTransaction(
-          amount: p.amount,
+          amountPaise: p.amountPaise,
           category: p.category,
           note: p.note,
           type: ParsedTxnType.expense,
@@ -340,7 +342,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                     b.note?.isNotEmpty == true ? b.note! : b.category,
                   ),
                   subtitle: Text('${b.installmentsRemaining} left'),
-                  trailing: Text(b.amount.toStringAsFixed(0)),
+                  trailing: Text(formatMoney(b.amountPaise, '₹')),
                   onTap: () => Navigator.pop(context, b),
                 ),
               )
@@ -357,7 +359,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final currency = context.read<SettingsController>().config.currency;
     final recurring = context.read<RecurringController>();
     await recurring.logEmi(
-      monthlyAmount: p.amount!,
+      monthlyPaise: p.amountPaise!,
       category: p.category,
       note: p.note.isEmpty ? null : p.note,
       months: p.emiMonths!,
@@ -374,7 +376,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          'EMI created: ${formatMoney(p.amount!, currency)}/month for ${p.emiMonths} months',
+          'EMI created: ${formatMoney(p.amountPaise!, currency)}/month for ${p.emiMonths} months',
         ),
       ),
     );
@@ -396,7 +398,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       final messenger = ScaffoldMessenger.of(context);
       await context.read<ExpensesController>().addFromParsed(
         ParsedTransaction(
-          amount: p.amount,
+          amountPaise: p.amountPaise,
           category: 'other',
           note: p.note,
           type: ParsedTxnType.expense,
@@ -426,7 +428,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         : await _pickLoanToRepay(matches);
     if (target == null || !mounted) return;
 
-    final result = await lending.repay(target.id!, p.amount!);
+    final result = await lending.repay(target.id!, p.amountPaise!);
     if (!mounted) return;
     await context.read<AccountsController>().refresh();
     if (!mounted) return;
@@ -438,7 +440,8 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           content: Text(
             result.row.isSettled
                 ? '${target.counterparty} — fully settled!'
-                : 'Applied to ${target.counterparty}: outstanding now ${result.row.amount.toStringAsFixed(0)}',
+                : 'Applied to ${target.counterparty}: outstanding now '
+                      '${formatMoney(result.row.amountPaise, '₹')}',
           ),
         ),
       );
@@ -459,7 +462,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   subtitle: Text(
                     t.type == TxnType.lent ? 'Owes you' : 'You owe',
                   ),
-                  trailing: Text(t.amount.toStringAsFixed(0)),
+                  trailing: Text(formatMoney(t.amountPaise, '₹')),
                   onTap: () => Navigator.pop(context, t),
                 ),
               )
@@ -470,7 +473,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   Future<void> _submitDetailed() async {
-    final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
+    final amount = parseRupeesToPaise(_amountController.text);
     if (amount == null || amount <= 0) return;
     final iso =
         '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
@@ -483,7 +486,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       isExpense: _type == TxnType.expense,
       date: iso,
       logTxn: () => context.read<ExpensesController>().addManual(
-        amount: amount,
+        amountPaise: amount,
         category: _type == TxnType.income ? 'income' : _category,
         note: note,
         type: _type,
@@ -578,13 +581,13 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Looks recurring: $category · ${formatMoney(candidate.avgAmount, currency)}/mo',
+          'Looks recurring: $category · ${formatMoney(candidate.avgAmountPaise, currency)}/mo',
         ),
         duration: const Duration(seconds: 6),
         action: SnackBarAction(
           label: 'Add reminder',
           onPressed: () => recurring.addBill(
-            amount: candidate.avgAmount,
+            amountPaise: candidate.avgAmountPaise,
             category: candidate.category,
             note: candidate.note,
             dayOfMonth: candidate.dayOfMonth,
@@ -723,7 +726,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: _preview?.amount != null ? _submitQuick : null,
+            onPressed: _preview?.amountPaise != null ? _submitQuick : null,
             child: const Text('Log it'),
           ),
         ),
@@ -733,7 +736,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   Widget _buildPreview(String currency, {Key? key}) {
     final p = _preview!;
-    if (p.amount == null) {
+    if (p.amountPaise == null) {
       return Text(
         key: key,
         "Couldn't find an amount — try e.g. \"500 ola\"",
@@ -759,16 +762,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       children: [
         _previewChip(
           p.type == ParsedTxnType.emiCreate
-              ? '${formatMoney(p.amount!, currency)}/mo'
-              : formatMoney(p.amount!, currency),
+              ? '${formatMoney(p.amountPaise!, currency)}/mo'
+              : formatMoney(p.amountPaise!, currency),
           highlight: true,
         ),
         _previewChip(p.category),
         _previewChip(typeLabel),
         _previewChip(p.date),
         if (p.note.isNotEmpty) _previewChip(p.note),
-        if (p.pendingAmount != null)
-          _previewChip('${formatMoney(p.pendingAmount!, currency)} pending'),
+        if (p.pendingAmountPaise != null)
+          _previewChip(
+            '${formatMoney(p.pendingAmountPaise!, currency)} pending',
+          ),
       ],
     );
   }

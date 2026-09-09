@@ -3,35 +3,41 @@ import '../models/loan_payment.dart';
 import '../models/transaction.dart';
 
 class MonthTotal {
-  final double expense;
-  final double income;
+  /// Both in paise.
+  final int expense;
+  final int income;
   const MonthTotal({this.expense = 0, this.income = 0});
 }
 
 class MonthPoint {
   final String month; // yyyy-MM
-  final double income;
-  final double expense;
+  /// Both in paise.
+  final int income;
+  final int expense;
   const MonthPoint({required this.month, this.income = 0, this.expense = 0});
 }
 
 class RecurringCandidate {
   final String category;
   final String? note;
-  final double avgAmount;
+
+  /// In paise.
+  final int avgAmountPaise;
   final int dayOfMonth;
   const RecurringCandidate({
     required this.category,
     this.note,
-    required this.avgAmount,
+    required this.avgAmountPaise,
     required this.dayOfMonth,
   });
 }
 
 class RepayResult {
   final Transaction row;
-  final double applied;
-  final double overpaid;
+
+  /// Both in paise.
+  final int applied;
+  final int overpaid;
   const RepayResult({
     required this.row,
     required this.applied,
@@ -54,13 +60,59 @@ class TransactionRepository {
     final rows = await db.query('txns', orderBy: 'id DESC', limit: 1);
     if (rows.isEmpty) return null;
     final row = Transaction.fromMap(rows.first);
-    await db.delete('txns', where: 'id = ?', whereArgs: [row.id]);
+    await deleteById(row.id!);
     return row;
+  }
+
+  /// Deletes a transaction and rolls back whatever it was linked to.
+  ///
+  /// An EMI installment doesn't just add an expense — it also advances the
+  /// loan's paid count and writes a payment-history row. Deleting only the
+  /// expense used to leave the loan permanently one installment ahead of
+  /// what was actually paid, so all three are undone together, atomically.
+  /// Deletes every transaction that came from automatic detection rather
+  /// than from the user, e.g. everything SMS import wrote.
+  ///
+  /// Scoped by `source` so hand-entered rows are never touched, and loans
+  /// are left alone — an auto-detected row never carries a loan_id, so
+  /// there is no installment count to roll back the way [deleteById] does.
+  Future<int> deleteBySource(String source) async {
+    final db = await _db.database;
+    return db.delete(
+      'txns',
+      where: 'source = ? AND loan_id IS NULL',
+      whereArgs: [source],
+    );
   }
 
   Future<void> deleteById(int id) async {
     final db = await _db.database;
-    await db.delete('txns', where: 'id = ?', whereArgs: [id]);
+    await db.transaction((txn) async {
+      final rows = await txn.query('txns', where: 'id = ?', whereArgs: [id]);
+      if (rows.isEmpty) return;
+      final row = Transaction.fromMap(rows.first);
+
+      await txn.delete('txns', where: 'id = ?', whereArgs: [id]);
+
+      final loanId = row.loanId;
+      if (loanId == null) return;
+
+      await txn.rawUpdate(
+        'UPDATE loans SET installments_paid = MAX(installments_paid - 1, 0), '
+        'active = 1 WHERE id = ?',
+        [loanId],
+      );
+      await txn.delete(
+        'loan_payments',
+        where: 'owner_type = ? AND loan_id = ? AND amount = ? AND date = ?',
+        whereArgs: [
+          LoanPaymentOwner.emiLoan,
+          loanId,
+          row.amountPaise,
+          row.date,
+        ],
+      );
+    });
   }
 
   Future<Transaction?> getById(int id) async {
@@ -71,7 +123,7 @@ class TransactionRepository {
 
   Future<Transaction?> update(
     int id, {
-    double? amount,
+    int? amountPaise,
     String? category,
     String? note,
     String? counterparty,
@@ -79,7 +131,7 @@ class TransactionRepository {
   }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
-    if (amount != null) fields['amount'] = amount;
+    if (amountPaise != null) fields['amount'] = amountPaise;
     if (category != null) fields['category'] = category;
     if (note != null) fields['note'] = note;
     if (counterparty != null) fields['counterparty'] = counterparty;
@@ -167,9 +219,9 @@ class TransactionRepository {
       "SELECT type, SUM(amount) as total FROM txns WHERE date LIKE ? GROUP BY type",
       ['$month%'],
     );
-    double expense = 0, income = 0;
+    int expense = 0, income = 0;
     for (final r in rows) {
-      final total = (r['total'] as num?)?.toDouble() ?? 0;
+      final total = (r['total'] as num?)?.round() ?? 0;
       if (r['type'] == 'expense') expense = total;
       if (r['type'] == 'income') income = total;
     }
@@ -179,14 +231,15 @@ class TransactionRepository {
   /// All-time spare cash: income − expense − outstanding lent money.
   /// Deliberately excludes outstanding borrowed money — that cash is owed,
   /// not saved. Port of db.py's available_savings().
-  Future<double> availableSavings() async {
+  /// In paise.
+  Future<int> availableSavings() async {
     final db = await _db.database;
     final rows = await db.rawQuery(
       "SELECT type, SUM(amount) as total FROM txns GROUP BY type",
     );
-    double income = 0, expense = 0, lent = 0;
+    int income = 0, expense = 0, lent = 0;
     for (final r in rows) {
-      final total = (r['total'] as num?)?.toDouble() ?? 0;
+      final total = (r['total'] as num?)?.round() ?? 0;
       if (r['type'] == 'income') income = total;
       if (r['type'] == 'expense') expense = total;
       if (r['type'] == 'lent') lent = total;
@@ -208,11 +261,11 @@ class TransactionRepository {
       "WHERE substr(date, 1, 7) >= ? GROUP BY month, type",
       [keys.first],
     );
-    final income = <String, double>{};
-    final expense = <String, double>{};
+    final income = <String, int>{};
+    final expense = <String, int>{};
     for (final r in rows) {
       final month = r['month'] as String;
-      final total = (r['total'] as num?)?.toDouble() ?? 0;
+      final total = (r['total'] as num?)?.round() ?? 0;
       if (r['type'] == 'income') income[month] = total;
       if (r['type'] == 'expense') expense[month] = total;
     }
@@ -227,7 +280,8 @@ class TransactionRepository {
         .toList();
   }
 
-  Future<Map<String, double>> categoryTotals(String month) async {
+  /// Category → paise.
+  Future<Map<String, int>> categoryTotals(String month) async {
     final db = await _db.database;
     final rows = await db.rawQuery(
       "SELECT category, SUM(amount) as total FROM txns WHERE date LIKE ? AND type = 'expense' GROUP BY category",
@@ -235,7 +289,7 @@ class TransactionRepository {
     );
     return {
       for (final r in rows)
-        r['category'] as String: (r['total'] as num?)?.toDouble() ?? 0,
+        r['category'] as String: (r['total'] as num?)?.round() ?? 0,
     };
   }
 
@@ -247,16 +301,17 @@ class TransactionRepository {
       "SELECT type, SUM(amount) as total FROM txns WHERE date >= ? AND date <= ? GROUP BY type",
       [_isoDate(from), _isoDate(to)],
     );
-    double expense = 0, income = 0;
+    int expense = 0, income = 0;
     for (final r in rows) {
-      final total = (r['total'] as num?)?.toDouble() ?? 0;
+      final total = (r['total'] as num?)?.round() ?? 0;
       if (r['type'] == 'expense') expense = total;
       if (r['type'] == 'income') income = total;
     }
     return MonthTotal(expense: expense, income: income);
   }
 
-  Future<Map<String, double>> categoryTotalsRange(
+  /// Category → paise.
+  Future<Map<String, int>> categoryTotalsRange(
     DateTime from,
     DateTime to,
   ) async {
@@ -267,7 +322,7 @@ class TransactionRepository {
     );
     return {
       for (final r in rows)
-        r['category'] as String: (r['total'] as num?)?.toDouble() ?? 0,
+        r['category'] as String: (r['total'] as num?)?.round() ?? 0,
     };
   }
 
@@ -297,11 +352,11 @@ class TransactionRepository {
     final months = txns.map((t) => t.date.substring(0, 7)).toSet();
     if (months.length < 3) return null;
 
-    final amounts = txns.map((t) => t.amount).toList();
-    final avg = amounts.reduce((a, b) => a + b) / amounts.length;
-    if (avg <= 0) return null;
+    final amounts = txns.map((t) => t.amountPaise).toList();
+    final avgPaise = amounts.reduce((a, b) => a + b) ~/ amounts.length;
+    if (avgPaise <= 0) return null;
     final maxDeviation = amounts
-        .map((a) => (a - avg).abs() / avg)
+        .map((a) => (a - avgPaise).abs() / avgPaise)
         .reduce((a, b) => a > b ? a : b);
     if (maxDeviation > 0.15) return null;
 
@@ -310,7 +365,7 @@ class TransactionRepository {
     return RecurringCandidate(
       category: category,
       note: note,
-      avgAmount: avg,
+      avgAmountPaise: avgPaise,
       dayOfMonth: days[days.length ~/ 2],
     );
   }
@@ -350,7 +405,7 @@ class TransactionRepository {
     return getById(id);
   }
 
-  Future<RepayResult?> repay(int id, double repayAmount) async {
+  Future<RepayResult?> repay(int id, int repayPaise) async {
     final db = await _db.database;
     final rows = await db.query(
       'txns',
@@ -361,11 +416,11 @@ class TransactionRepository {
     final row = Transaction.fromMap(rows.first);
     if (row.isSettled) return null;
 
-    final outstanding = row.amount;
-    final applied = repayAmount < outstanding ? repayAmount : outstanding;
-    final overpaid = (repayAmount - outstanding) > 0
-        ? (repayAmount - outstanding)
-        : 0.0;
+    final outstanding = row.amountPaise;
+    final applied = repayPaise < outstanding ? repayPaise : outstanding;
+    final overpaid = (repayPaise - outstanding) > 0
+        ? (repayPaise - outstanding)
+        : 0;
     final newAmount = outstanding - applied;
     final settled = newAmount <= 0 ? 1 : 0;
 
@@ -377,6 +432,7 @@ class TransactionRepository {
     );
     await db.insert('loan_payments', {
       'loan_id': id,
+      'owner_type': LoanPaymentOwner.personLoan,
       'amount': applied,
       'date': _isoDate(DateTime.now()),
       'note': null,
@@ -389,12 +445,18 @@ class TransactionRepository {
   /// History of individual installments logged against a loan, newest first
   /// — [repay] writes one row here every time it's called, so this survives
   /// even though the loan's own `amount` column just holds the live balance.
-  Future<List<LoanPayment>> paymentsFor(int loanId) async {
+  Future<List<LoanPayment>> paymentsFor(
+    int loanId, {
+    String ownerType = LoanPaymentOwner.personLoan,
+  }) async {
     final db = await _db.database;
     final rows = await db.query(
       'loan_payments',
-      where: 'loan_id = ?',
-      whereArgs: [loanId],
+      // owner_type is essential, not optional: person-loan ids come from
+      // `txns` and EMI ids from `loans`, so the same number means two
+      // different loans depending on which table it came from.
+      where: 'owner_type = ? AND loan_id = ?',
+      whereArgs: [ownerType, loanId],
       orderBy: 'date DESC, id DESC',
     );
     return rows.map(LoanPayment.fromMap).toList();

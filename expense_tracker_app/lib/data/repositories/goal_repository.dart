@@ -9,11 +9,11 @@ class GoalRepository {
   final AppDatabase _db;
   GoalRepository([AppDatabase? db]) : _db = db ?? AppDatabase.instance;
 
-  Future<int> add(String name, double target, {String? note}) async {
+  Future<int> add(String name, int targetPaise, {String? note}) async {
     final db = await _db.database;
     return db.insert('goals', {
       'name': name,
-      'target': target,
+      'target': targetPaise,
       'note': note,
       'created_at': DateTime.now().toIso8601String(),
     });
@@ -26,25 +26,26 @@ class GoalRepository {
   }
 
   /// Sum of all transactions contributed toward this goal so far.
-  Future<double> savedAmount(int goalId) async {
+  /// In paise.
+  Future<int> savedAmount(int goalId) async {
     final db = await _db.database;
     final rows = await db.rawQuery(
       "SELECT SUM(amount) as total FROM txns WHERE goal_id = ?",
       [goalId],
     );
-    return (rows.first['total'] as num?)?.toDouble() ?? 0;
+    return (rows.first['total'] as num?)?.round() ?? 0;
   }
 
   Future<bool> update(
     int id, {
     String? name,
-    double? target,
+    int? targetPaise,
     String? note,
   }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
     if (name != null) fields['name'] = name;
-    if (target != null) fields['target'] = target;
+    if (targetPaise != null) fields['target'] = targetPaise;
     if (note != null) fields['note'] = note;
     if (fields.isEmpty) return false;
     final count = await db.update(

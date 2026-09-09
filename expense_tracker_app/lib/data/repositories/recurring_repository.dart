@@ -24,14 +24,14 @@ class RecurringRepository {
 
   Future<bool> update(
     int id, {
-    double? amount,
+    int? amountPaise,
     String? category,
     String? note,
     int? dayOfMonth,
   }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
-    if (amount != null) fields['amount'] = amount;
+    if (amountPaise != null) fields['amount'] = amountPaise;
     if (category != null) fields['category'] = category;
     if (note != null) fields['note'] = note;
     if (dayOfMonth != null) fields['day_of_month'] = dayOfMonth;

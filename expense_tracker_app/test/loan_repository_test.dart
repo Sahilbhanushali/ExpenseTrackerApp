@@ -21,8 +21,8 @@ void main() {
       final id = await repo.add(
         Loan(
           name: 'Fridge',
-          principal: 1000,
-          emiAmount: 500,
+          principalPaise: 100000,
+          emiPaise: 50000,
           tenureMonths: 2,
           startDate: DateTime(2026, 1, 1),
         ),
@@ -40,8 +40,8 @@ void main() {
     final id = await repo.add(
       Loan(
         name: 'Fridge',
-        principal: 1000,
-        emiAmount: 500,
+        principalPaise: 100000,
+        emiPaise: 50000,
         tenureMonths: 2,
         startDate: DateTime(2026, 1, 1),
         installmentsPaid: 1,
@@ -60,8 +60,8 @@ void main() {
     final id = await repo.add(
       Loan(
         name: 'Bike',
-        principal: 2000,
-        emiAmount: 1000,
+        principalPaise: 200000,
+        emiPaise: 100000,
         tenureMonths: 2,
         startDate: DateTime(2026, 1, 1),
       ),

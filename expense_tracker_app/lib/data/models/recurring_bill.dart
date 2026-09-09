@@ -5,7 +5,9 @@ RecurringType recurringTypeFromString(String value) =>
 
 class RecurringBill {
   final int? id;
-  final double amount;
+
+  /// In paise.
+  final int amountPaise;
   final String category;
   final String? note;
   final int dayOfMonth;
@@ -17,7 +19,7 @@ class RecurringBill {
 
   const RecurringBill({
     this.id,
-    required this.amount,
+    required this.amountPaise,
     required this.category,
     this.note,
     required this.dayOfMonth,
@@ -31,7 +33,7 @@ class RecurringBill {
   Map<String, Object?> toMap() {
     return {
       'id': id,
-      'amount': amount,
+      'amount': amountPaise,
       'category': category,
       'note': note,
       'day_of_month': dayOfMonth,
@@ -46,7 +48,7 @@ class RecurringBill {
   factory RecurringBill.fromMap(Map<String, Object?> map) {
     return RecurringBill(
       id: map['id'] as int?,
-      amount: (map['amount'] as num).toDouble(),
+      amountPaise: (map['amount'] as num).round(),
       category: map['category'] as String,
       note: map['note'] as String?,
       dayOfMonth: map['day_of_month'] as int,

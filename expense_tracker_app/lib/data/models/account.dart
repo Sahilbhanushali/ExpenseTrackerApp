@@ -19,7 +19,9 @@ String accountTypeToString(AccountType type) => switch (type) {
 class MoneyAccount {
   final int? id;
   final String name;
-  final double openingBalance;
+
+  /// In paise.
+  final int openingBalancePaise;
   final bool isDefault;
   final String createdAt;
   final AccountType type;
@@ -28,27 +30,27 @@ class MoneyAccount {
   /// which may differ from [openingBalance] plus contributions. When unset,
   /// the derived cash balance is used as-is (nothing has been marked up or
   /// down yet).
-  final double? currentValue;
+  final int? currentValuePaise;
 
   const MoneyAccount({
     this.id,
     required this.name,
-    this.openingBalance = 0,
+    this.openingBalancePaise = 0,
     this.isDefault = false,
     required this.createdAt,
     this.type = AccountType.cash,
-    this.currentValue,
+    this.currentValuePaise,
   });
 
   Map<String, Object?> toMap() {
     return {
       'id': id,
       'name': name,
-      'opening_balance': openingBalance,
+      'opening_balance': openingBalancePaise,
       'is_default': isDefault ? 1 : 0,
       'created_at': createdAt,
       'type': accountTypeToString(type),
-      'current_value': currentValue,
+      'current_value': currentValuePaise,
     };
   }
 
@@ -56,11 +58,11 @@ class MoneyAccount {
     return MoneyAccount(
       id: map['id'] as int?,
       name: map['name'] as String,
-      openingBalance: (map['opening_balance'] as num).toDouble(),
+      openingBalancePaise: (map['opening_balance'] as num).round(),
       isDefault: (map['is_default'] as int) == 1,
       createdAt: map['created_at'] as String,
       type: accountTypeFromString(map['type'] as String? ?? 'cash'),
-      currentValue: (map['current_value'] as num?)?.toDouble(),
+      currentValuePaise: (map['current_value'] as num?)?.round(),
     );
   }
 }
@@ -69,7 +71,9 @@ class Transfer {
   final int? id;
   final String fromAccount;
   final String toAccount;
-  final double amount;
+
+  /// In paise.
+  final int amountPaise;
   final String? note;
   final String date;
   final String createdAt;
@@ -78,7 +82,7 @@ class Transfer {
     this.id,
     required this.fromAccount,
     required this.toAccount,
-    required this.amount,
+    required this.amountPaise,
     this.note,
     required this.date,
     required this.createdAt,
@@ -89,7 +93,7 @@ class Transfer {
       'id': id,
       'from_account': fromAccount,
       'to_account': toAccount,
-      'amount': amount,
+      'amount': amountPaise,
       'note': note,
       'date': date,
       'created_at': createdAt,
@@ -101,7 +105,7 @@ class Transfer {
       id: map['id'] as int?,
       fromAccount: map['from_account'] as String,
       toAccount: map['to_account'] as String,
-      amount: (map['amount'] as num).toDouble(),
+      amountPaise: (map['amount'] as num).round(),
       note: map['note'] as String?,
       date: map['date'] as String,
       createdAt: map['created_at'] as String,

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import '../../data/datasources/app_database.dart';
 import '../../data/models/loan.dart';
+import '../../data/models/loan_payment.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/loan_repository.dart';
@@ -33,9 +35,9 @@ class LoansController extends ChangeNotifier {
 
   Future<void> addLoan({
     required String name,
-    required double principal,
-    required double interestAmount,
-    required double emiAmount,
+    required int principalPaise,
+    required int interestPaise,
+    required int emiPaise,
     required int tenureMonths,
     required DateTime startDate,
     String? note,
@@ -44,9 +46,9 @@ class LoansController extends ChangeNotifier {
     await _loanRepo.add(
       Loan(
         name: name,
-        principal: principal,
-        interestAmount: interestAmount,
-        emiAmount: emiAmount,
+        principalPaise: principalPaise,
+        interestPaise: interestPaise,
+        emiPaise: emiPaise,
         tenureMonths: tenureMonths,
         startDate: startDate,
         note: note,
@@ -59,19 +61,23 @@ class LoansController extends ChangeNotifier {
   Future<void> update(
     int id, {
     String? name,
-    double? principal,
-    double? interestAmount,
-    double? emiAmount,
+    int? principalPaise,
+    int? interestPaise,
+    int? emiPaise,
     int? tenureMonths,
+    int? installmentsPaid,
+    DateTime? startDate,
     String? note,
   }) async {
     await _loanRepo.update(
       id,
       name: name,
-      principal: principal,
-      interestAmount: interestAmount,
-      emiAmount: emiAmount,
+      principalPaise: principalPaise,
+      interestPaise: interestPaise,
+      emiPaise: emiPaise,
       tenureMonths: tenureMonths,
+      installmentsPaid: installmentsPaid,
+      startDate: startDate,
       note: note,
     );
     await refresh();
@@ -88,19 +94,24 @@ class LoansController extends ChangeNotifier {
     final now = DateTime.now();
     final date =
         '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    await _txnRepo.add(
+    // One atomic write: expense + payment history + paid count.
+    final finished = await _loanRepo.payInstallment(
+      loan,
       Transaction(
         date: date,
         category: 'EMI',
-        amount: loan.emiAmount,
+        amountPaise: loan.emiPaise,
         note: loan.name,
         type: TxnType.expense,
         createdAt: now.toIso8601String(),
         account: loan.account,
       ),
     );
-    final finished = await _loanRepo.markPaid(loan.id!);
     await refresh();
     return finished;
   }
+
+  /// Installments logged against this loan, newest first.
+  Future<List<LoanPayment>> paymentsFor(Loan loan) =>
+      _txnRepo.paymentsFor(loan.id!, ownerType: LoanPaymentOwner.emiLoan);
 }

@@ -1,4 +1,5 @@
 import 'expense_parser.dart';
+import 'money.dart';
 
 /// Port of expense_bot/parser.py's parse_receipt_text() — best-effort parse
 /// of OCR'd receipt text into the same shape parseMessage() returns.
@@ -6,12 +7,13 @@ import 'expense_parser.dart';
 /// largest number on the receipt. Always expense, dated today — OCR text
 /// has no notion of income vs. expense or a stated date.
 class ParsedReceipt {
-  final double? amount;
+  /// In paise.
+  final int? amountPaise;
   final String category;
   final String note;
 
   const ParsedReceipt({
-    required this.amount,
+    required this.amountPaise,
     required this.category,
     required this.note,
   });
@@ -62,7 +64,7 @@ ParsedReceipt parseReceiptText(
       : '';
 
   return ParsedReceipt(
-    amount: amount != null ? double.parse(amount.toStringAsFixed(2)) : null,
+    amountPaise: amount == null ? null : rupeesToPaise(amount),
     category: category,
     note: note,
   );

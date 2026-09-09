@@ -12,7 +12,7 @@ Subtotal 75
 Tax 5
 Total 80
 ''');
-      expect(r.amount, 80);
+      expect(r.amountPaise, 8000);
     });
 
     test('falls back to the largest number when no total line exists', () {
@@ -21,7 +21,7 @@ Cafe Coffee Day
 Latte 180
 Sandwich 220
 ''');
-      expect(r.amount, 220);
+      expect(r.amountPaise, 22000);
     });
 
     test('detects category from full receipt text', () {
@@ -43,7 +43,7 @@ Total 100
 
     test('no amount found on empty text', () {
       final r = parseReceiptText('');
-      expect(r.amount, isNull);
+      expect(r.amountPaise, isNull);
     });
   });
 }

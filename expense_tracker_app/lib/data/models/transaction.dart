@@ -9,7 +9,9 @@ class Transaction {
   final int? id;
   final String date;
   final String category;
-  final double amount;
+
+  /// In paise. ₹100.50 is stored as 10050.
+  final int amountPaise;
   final String? note;
   final TxnType type;
   final String createdAt;
@@ -18,11 +20,25 @@ class Transaction {
   final String? account;
   final int? goalId;
 
+  /// Set when this expense is an EMI installment, pointing at `loans.id`.
+  /// Without it, deleting the expense would leave the loan's paid count
+  /// one ahead of reality.
+  final int? loanId;
+
+  /// Where this row came from: 'manual', 'sms', or 'notification'. Lets the
+  /// UI mark auto-detected rows and lets an import know what it already
+  /// created.
+  final String source;
+
+  /// Dedupe key for auto-detected rows (see [ParsedSms.dedupeKey]) — null
+  /// for anything typed by hand.
+  final String? externalRef;
+
   const Transaction({
     this.id,
     required this.date,
     required this.category,
-    required this.amount,
+    required this.amountPaise,
     this.note,
     required this.type,
     required this.createdAt,
@@ -30,7 +46,12 @@ class Transaction {
     this.settled,
     this.account,
     this.goalId,
+    this.loanId,
+    this.source = 'manual',
+    this.externalRef,
   });
+
+  bool get isAutoDetected => source != 'manual';
 
   bool get isLoan => type == TxnType.lent || type == TxnType.borrowed;
   bool get isSettled => settled == 1;
@@ -39,25 +60,35 @@ class Transaction {
     int? id,
     String? date,
     String? category,
-    double? amount,
+    int? amountPaise,
     String? note,
     TxnType? type,
     String? createdAt,
     String? counterparty,
     int? settled,
     String? account,
+    int? goalId,
+    int? loanId,
+    String? source,
+    String? externalRef,
   }) {
     return Transaction(
       id: id ?? this.id,
       date: date ?? this.date,
       category: category ?? this.category,
-      amount: amount ?? this.amount,
+      amountPaise: amountPaise ?? this.amountPaise,
       note: note ?? this.note,
       type: type ?? this.type,
       createdAt: createdAt ?? this.createdAt,
       counterparty: counterparty ?? this.counterparty,
       settled: settled ?? this.settled,
       account: account ?? this.account,
+      // goalId used to be dropped here, silently unlinking a goal
+      // contribution from its goal on any copy.
+      goalId: goalId ?? this.goalId,
+      loanId: loanId ?? this.loanId,
+      source: source ?? this.source,
+      externalRef: externalRef ?? this.externalRef,
     );
   }
 
@@ -66,7 +97,7 @@ class Transaction {
       'id': id,
       'date': date,
       'category': category,
-      'amount': amount,
+      'amount': amountPaise,
       'note': note,
       'type': type.name,
       'created_at': createdAt,
@@ -74,6 +105,9 @@ class Transaction {
       'settled': settled,
       'account': account,
       'goal_id': goalId,
+      'loan_id': loanId,
+      'source': source,
+      'external_ref': externalRef,
     };
   }
 
@@ -82,7 +116,7 @@ class Transaction {
       id: map['id'] as int?,
       date: map['date'] as String,
       category: map['category'] as String,
-      amount: (map['amount'] as num).toDouble(),
+      amountPaise: (map['amount'] as num).round(),
       note: map['note'] as String?,
       type: txnTypeFromString(map['type'] as String),
       createdAt: map['created_at'] as String,
@@ -90,6 +124,9 @@ class Transaction {
       settled: map['settled'] as int?,
       account: map['account'] as String?,
       goalId: map['goal_id'] as int?,
+      loanId: map['loan_id'] as int?,
+      source: map['source'] as String? ?? 'manual',
+      externalRef: map['external_ref'] as String?,
     );
   }
 }

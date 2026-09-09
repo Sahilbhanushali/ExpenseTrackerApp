@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../data/models/loan.dart';
@@ -13,19 +14,34 @@ import 'loans_controller.dart';
 class LoansScreen extends StatelessWidget {
   const LoansScreen({super.key});
 
-  Future<void> _showAddLoan(BuildContext context) async {
-    final nameController = TextEditingController();
-    final principalController = TextEditingController();
-    final interestController = TextEditingController(text: '0');
-    final emiController = TextEditingController();
-    final tenureController = TextEditingController();
-    DateTime startDate = DateTime.now();
+  /// Add when [existing] is null, edit otherwise. Editing matters as much
+  /// as adding: a bank's real EMI schedule rarely matches what you guessed
+  /// when you first entered it, and a wrong start date or paid count throws
+  /// off every due date and the outstanding balance.
+  Future<void> _showLoanEditor(BuildContext context, {Loan? existing}) async {
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    final principalController = TextEditingController(
+      text: existing != null ? paiseToEditString(existing.principalPaise) : '',
+    );
+    final interestController = TextEditingController(
+      text: existing != null ? paiseToEditString(existing.interestPaise) : '0',
+    );
+    final emiController = TextEditingController(
+      text: existing != null ? paiseToEditString(existing.emiPaise) : '',
+    );
+    final tenureController = TextEditingController(
+      text: existing != null ? '${existing.tenureMonths}' : '',
+    );
+    final paidController = TextEditingController(
+      text: '${existing?.installmentsPaid ?? 0}',
+    );
+    DateTime startDate = existing?.startDate ?? DateTime.now();
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('Add loan / EMI'),
+          title: Text(existing == null ? 'Add loan / EMI' : 'Edit loan / EMI'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -86,6 +102,17 @@ class LoansScreen extends StatelessWidget {
                     if (picked != null) setState(() => startDate = picked);
                   },
                 ),
+                if (existing != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: paidController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Installments already paid',
+                      helperText: 'of ${existing.tenureMonths}',
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -105,12 +132,9 @@ class LoansScreen extends StatelessWidget {
 
     if (result != true || !context.mounted) return;
     final name = nameController.text.trim();
-    final principal = double.tryParse(
-      principalController.text.replaceAll(',', ''),
-    );
-    final interest =
-        double.tryParse(interestController.text.replaceAll(',', '')) ?? 0;
-    final emi = double.tryParse(emiController.text.replaceAll(',', ''));
+    final principal = parseRupeesToPaise(principalController.text);
+    final interest = parseRupeesToPaise(interestController.text) ?? 0;
+    final emi = parseRupeesToPaise(emiController.text);
     final tenure = int.tryParse(tenureController.text);
     if (name.isEmpty ||
         principal == null ||
@@ -120,14 +144,31 @@ class LoansScreen extends StatelessWidget {
       return;
     }
 
-    await context.read<LoansController>().addLoan(
-      name: name,
-      principal: principal,
-      interestAmount: interest,
-      emiAmount: emi,
-      tenureMonths: tenure,
-      startDate: startDate,
-    );
+    final controller = context.read<LoansController>();
+    if (existing == null) {
+      await controller.addLoan(
+        name: name,
+        principalPaise: principal,
+        interestPaise: interest,
+        emiPaise: emi,
+        tenureMonths: tenure,
+        startDate: startDate,
+      );
+    } else {
+      await controller.update(
+        existing.id!,
+        name: name,
+        principalPaise: principal,
+        interestPaise: interest,
+        emiPaise: emi,
+        tenureMonths: tenure,
+        installmentsPaid: (int.tryParse(paidController.text) ?? 0).clamp(
+          0,
+          tenure,
+        ),
+        startDate: startDate,
+      );
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, Loan loan) async {
@@ -179,7 +220,7 @@ class LoansScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Loans & EMI')),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'loans_add',
-        onPressed: () => _showAddLoan(context),
+        onPressed: () => _showLoanEditor(context),
         label: const Text('Add loan'),
         icon: const Icon(Icons.account_balance_outlined),
       ),
@@ -200,6 +241,7 @@ class LoansScreen extends StatelessWidget {
                 loan: loans[index],
                 currency: currency,
                 onPay: () => _payInstallment(context, loans[index]),
+                onEdit: () => _showLoanEditor(context, existing: loans[index]),
                 onDelete: () => _confirmDelete(context, loans[index]),
               ),
             ),
@@ -211,12 +253,14 @@ class _LoanCard extends StatelessWidget {
   final Loan loan;
   final String currency;
   final VoidCallback onPay;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _LoanCard({
     required this.loan,
     required this.currency,
     required this.onPay,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -259,11 +303,16 @@ class _LoanCard extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                if (loan.isFullyPaid)
-                  const Chip(label: Text('Paid off'))
-                else
+                if (loan.isFullyPaid) const Chip(label: Text('Paid off')),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Edit loan',
+                  onPressed: onEdit,
+                ),
+                if (!loan.isFullyPaid)
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Remove loan',
                     onPressed: onDelete,
                   ),
               ],
@@ -274,7 +323,7 @@ class _LoanCard extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     label: 'Outstanding',
-                    value: formatMoney(loan.outstanding, currency),
+                    value: formatMoney(loan.outstandingPaise, currency),
                     color: AppColors.expense,
                     emphasize: true,
                   ),
@@ -282,7 +331,7 @@ class _LoanCard extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     label: 'Total payable',
-                    value: formatMoney(loan.totalPayable, currency),
+                    value: formatMoney(loan.totalPayablePaise, currency),
                   ),
                 ),
               ],
@@ -293,13 +342,13 @@ class _LoanCard extends StatelessWidget {
                 Expanded(
                   child: _Stat(
                     label: 'Principal',
-                    value: formatMoney(loan.principal, currency),
+                    value: formatMoney(loan.principalPaise, currency),
                   ),
                 ),
                 Expanded(
                   child: _Stat(
                     label: 'Interest',
-                    value: formatMoney(loan.interestAmount, currency),
+                    value: formatMoney(loan.interestPaise, currency),
                   ),
                 ),
               ],
@@ -351,7 +400,7 @@ class _LoanCard extends StatelessWidget {
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
-                        'Next EMI: ${formatMoney(loan.emiAmount, currency)} '
+                        'Next EMI: ${formatMoney(loan.emiPaise, currency)} '
                         'on ${_fmtDate(nextDue)}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),

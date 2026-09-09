@@ -38,8 +38,10 @@ class ExpensesController extends ChangeNotifier {
   MonthTotal _monthTotal = const MonthTotal();
   MonthTotal get monthTotal => _monthTotal;
 
-  Map<String, double> _categoryTotals = {};
-  Map<String, double> get categoryTotals => _categoryTotals;
+  Map<String, int> _categoryTotals = {};
+
+  /// Category → paise.
+  Map<String, int> get categoryTotals => _categoryTotals;
 
   String _currentMonth() {
     final now = DateTime.now();
@@ -57,7 +59,7 @@ class ExpensesController extends ChangeNotifier {
   }
 
   Future<MonthTotal> monthTotalFor(String month) => _txnRepo.monthTotal(month);
-  Future<Map<String, double>> categoryTotalsFor(String month) =>
+  Future<Map<String, int>> categoryTotalsFor(String month) =>
       _txnRepo.categoryTotals(month);
   Future<List<Transaction>> allRows() => _txnRepo.allRows();
   Future<List<Transaction>> search(String term) => _txnRepo.search(term);
@@ -83,13 +85,13 @@ class ExpensesController extends ChangeNotifier {
   Future<List<String>> distinctCategories() => _txnRepo.distinctCategories();
   Future<MonthTotal> totalsRange(DateTime from, DateTime to) =>
       _txnRepo.totalsRange(from, to);
-  Future<Map<String, double>> categoryTotalsRange(DateTime from, DateTime to) =>
+  Future<Map<String, int>> categoryTotalsRange(DateTime from, DateTime to) =>
       _txnRepo.categoryTotalsRange(from, to);
   Future<RecurringCandidate?> detectRecurring(String category, String? note) =>
       _txnRepo.detectRecurring(category, note);
 
   Future<Transaction> addManual({
-    required double amount,
+    required int amountPaise,
     required String category,
     String? note,
     required TxnType type,
@@ -100,7 +102,7 @@ class ExpensesController extends ChangeNotifier {
     final txn = Transaction(
       date: date ?? _isoToday(),
       category: category,
-      amount: amount,
+      amountPaise: amountPaise,
       note: note,
       type: type,
       createdAt: DateTime.now().toIso8601String(),
@@ -115,7 +117,7 @@ class ExpensesController extends ChangeNotifier {
 
   Future<Transaction> addFromParsed(ParsedTransaction parsed) async {
     return addManual(
-      amount: parsed.amount!,
+      amountPaise: parsed.amountPaise!,
       category: parsed.category,
       note: parsed.note.isEmpty ? null : parsed.note,
       type: _fromParsedType(parsed.type),
@@ -132,14 +134,14 @@ class ExpensesController extends ChangeNotifier {
 
   Future<Transaction?> edit(
     int id, {
-    double? amount,
+    int? amountPaise,
     String? category,
     String? note,
     String? date,
   }) async {
     final updated = await _txnRepo.update(
       id,
-      amount: amount,
+      amountPaise: amountPaise,
       category: category,
       note: note,
       date: date,

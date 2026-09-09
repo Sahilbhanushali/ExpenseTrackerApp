@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/categories.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/list_row.dart';
@@ -91,7 +92,7 @@ class RecurringScreen extends StatelessWidget {
     );
 
     if (result != true || !context.mounted) return;
-    final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+    final amount = parseRupeesToPaise(amountController.text);
     if (amount == null || amount <= 0) return;
     final note = noteController.text.trim().isEmpty
         ? null
@@ -105,7 +106,7 @@ class RecurringScreen extends StatelessWidget {
     if (isEmi) {
       final months = int.tryParse(monthsController.text) ?? 1;
       await controller.logEmi(
-        monthlyAmount: amount,
+        monthlyPaise: amount,
         category: category,
         note: note,
         months: months,
@@ -114,7 +115,7 @@ class RecurringScreen extends StatelessWidget {
       if (context.mounted) await context.read<AccountsController>().refresh();
     } else {
       await controller.addBill(
-        amount: amount,
+        amountPaise: amount,
         category: category,
         note: note,
         dayOfMonth: day,
@@ -168,7 +169,7 @@ class RecurringScreen extends StatelessWidget {
     );
 
     if (result != true || !context.mounted) return;
-    final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+    final amount = parseRupeesToPaise(amountController.text);
     if (amount == null || amount <= 0) return;
     final note = noteController.text.trim().isEmpty
         ? 'Salary'
@@ -179,7 +180,7 @@ class RecurringScreen extends StatelessWidget {
     );
 
     await context.read<RecurringController>().addBill(
-      amount: amount,
+      amountPaise: amount,
       category: 'income',
       note: note,
       dayOfMonth: day,
@@ -190,7 +191,7 @@ class RecurringScreen extends StatelessWidget {
   Future<void> _showEditBill(BuildContext context, RecurringBill bill) async {
     final isIncome = bill.type == RecurringType.income;
     final amountController = TextEditingController(
-      text: bill.amount.toStringAsFixed(0),
+      text: paiseToEditString(bill.amountPaise),
     );
     final noteController = TextEditingController(text: bill.note ?? '');
     final dayController = TextEditingController(text: '${bill.dayOfMonth}');
@@ -258,7 +259,7 @@ class RecurringScreen extends StatelessWidget {
     );
 
     if (result != true || !context.mounted) return;
-    final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+    final amount = parseRupeesToPaise(amountController.text);
     if (amount == null || amount <= 0) return;
     final note = noteController.text.trim().isEmpty
         ? null
@@ -270,7 +271,7 @@ class RecurringScreen extends StatelessWidget {
 
     await context.read<RecurringController>().update(
       bill.id!,
-      amount: amount,
+      amountPaise: amount,
       category: bill.loanId == null && !isIncome ? category : null,
       note: note,
       dayOfMonth: day,
@@ -386,7 +387,7 @@ class RecurringScreen extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '${isIncome ? r.note ?? 'Income' : r.category} · ${formatMoney(r.amount, currency)}',
+                                    '${isIncome ? r.note ?? 'Income' : r.category} · ${formatMoney(r.amountPaise, currency)}',
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium,
@@ -432,7 +433,7 @@ class RecurringScreen extends StatelessWidget {
                           iconColor: isIncome ? AppColors.income : null,
                           title:
                               '${isIncome ? r.note ?? 'Income' : r.category} · '
-                              '${isIncome ? '+' : ''}${formatMoney(r.amount, currency)}',
+                              '${isIncome ? '+' : ''}${formatMoney(r.amountPaise, currency)}',
                           titleStyle: isIncome
                               ? const TextStyle(color: AppColors.income)
                               : null,

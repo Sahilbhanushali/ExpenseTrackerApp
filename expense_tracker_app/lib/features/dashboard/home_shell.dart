@@ -20,6 +20,8 @@ import '../reminders/reminders_controller.dart';
 import '../reminders/reminders_screen.dart';
 import '../reports/reports_screen.dart';
 import '../settings/settings_screen.dart';
+import '../sms_import/sms_import_controller.dart';
+import '../sms_import/sms_review_screen.dart';
 import '../wishlist/wishlist_controller.dart';
 import '../wishlist/wishlist_screen.dart';
 import 'dashboard_screen.dart';
@@ -147,6 +149,15 @@ class _MoreScreen extends StatelessWidget {
           context.read<RemindersController>().refresh();
           Navigator.of(context)
               .push(FadeSlideRoute(page: const RemindersScreen()));
+        },
+      ),
+      _MoreTile(
+        icon: Icons.sms_outlined,
+        label: 'SMS import',
+        onTap: () {
+          context.read<SmsImportController>().refresh();
+          Navigator.of(context)
+              .push(FadeSlideRoute(page: const SmsReviewScreen()));
         },
       ),
       _MoreTile(

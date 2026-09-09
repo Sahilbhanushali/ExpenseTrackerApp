@@ -34,14 +34,14 @@ class LendingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> lend(double amount, String person, String? note) =>
-      _record(TxnType.lent, amount, person, note);
-  Future<void> borrow(double amount, String person, String? note) =>
-      _record(TxnType.borrowed, amount, person, note);
+  Future<void> lend(int amountPaise, String person, String? note) =>
+      _record(TxnType.lent, amountPaise, person, note);
+  Future<void> borrow(int amountPaise, String person, String? note) =>
+      _record(TxnType.borrowed, amountPaise, person, note);
 
   Future<void> _record(
     TxnType type,
-    double amount,
+    int amountPaise,
     String person,
     String? note,
   ) async {
@@ -53,7 +53,7 @@ class LendingController extends ChangeNotifier {
       Transaction(
         date: date,
         category: 'lending',
-        amount: amount,
+        amountPaise: amountPaise,
         note: note,
         type: type,
         createdAt: now.toIso8601String(),
@@ -67,11 +67,16 @@ class LendingController extends ChangeNotifier {
 
   Future<void> update(
     int id, {
-    double? amount,
+    int? amountPaise,
     String? person,
     String? note,
   }) async {
-    await _txnRepo.update(id, amount: amount, note: note, counterparty: person);
+    await _txnRepo.update(
+      id,
+      amountPaise: amountPaise,
+      note: note,
+      counterparty: person,
+    );
     await refresh();
   }
 
@@ -85,8 +90,8 @@ class LendingController extends ChangeNotifier {
     await refresh();
   }
 
-  Future<RepayResult?> repay(int id, double amount) async {
-    final result = await _txnRepo.repay(id, amount);
+  Future<RepayResult?> repay(int id, int amountPaise) async {
+    final result = await _txnRepo.repay(id, amountPaise);
     await refresh();
     return result;
   }
@@ -97,14 +102,15 @@ class LendingController extends ChangeNotifier {
   /// The loan's original amount, reconstructed from its current outstanding
   /// balance plus everything logged against it so far — works retroactively
   /// even for loans that predate payment history being tracked.
-  double originalAmount(Transaction loan, List<LoanPayment> payments) =>
-      loan.amount + payments.fold(0.0, (s, p) => s + p.amount);
+  /// In paise.
+  int originalAmount(Transaction loan, List<LoanPayment> payments) =>
+      loan.amountPaise + payments.fold<int>(0, (s, p) => s + p.amountPaise);
 
   /// Schedules automatic monthly repayments against a loan — creates a
   /// recurring row with loan_id set, same as bot.py's repayplan_cmd.
   Future<void> repayPlan(
     int loanId,
-    double monthlyAmount, {
+    int monthlyPaise, {
     int? months,
     int? dayOfMonth,
   }) async {
@@ -112,7 +118,7 @@ class LendingController extends ChangeNotifier {
     final day = dayOfMonth ?? DateTime.now().day;
     final id = await _recurringRepo.add(
       RecurringBill(
-        amount: monthlyAmount,
+        amountPaise: monthlyPaise,
         category: 'lending',
         note: 'repayment to ${loan.counterparty ?? 'them'}',
         dayOfMonth: day,

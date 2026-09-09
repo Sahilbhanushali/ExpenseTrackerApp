@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/animated_money_text.dart';
 import '../../core/widgets/app_card.dart';
@@ -52,7 +53,7 @@ class WishlistScreen extends StatelessWidget {
     );
     if (result == true && context.mounted) {
       final name = nameController.text.trim();
-      final price = double.tryParse(priceController.text.replaceAll(',', ''));
+      final price = parseRupeesToPaise(priceController.text);
       if (name.isEmpty || price == null || price <= 0) return;
       await context.read<WishlistController>().add(name, price);
     }
@@ -62,11 +63,11 @@ class WishlistScreen extends StatelessWidget {
     BuildContext context,
     int id,
     String name,
-    double price,
+    int pricePaise,
   ) async {
     final nameController = TextEditingController(text: name);
     final priceController = TextEditingController(
-      text: price.toStringAsFixed(0),
+      text: paiseToEditString(pricePaise),
     );
     final result = await showDialog<bool>(
       context: context,
@@ -101,12 +102,12 @@ class WishlistScreen extends StatelessWidget {
     );
     if (result != true || !context.mounted) return;
     final newName = nameController.text.trim();
-    final newPrice = double.tryParse(priceController.text.replaceAll(',', ''));
+    final newPrice = parseRupeesToPaise(priceController.text);
     if (newName.isEmpty || newPrice == null || newPrice <= 0) return;
     await context.read<WishlistController>().update(
       id,
       name: newName,
-      price: newPrice,
+      pricePaise: newPrice,
     );
   }
 
@@ -187,7 +188,7 @@ class WishlistScreen extends StatelessWidget {
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   AnimatedMoneyText(
-                    amount: wishlist.availableSavings,
+                    amountPaise: wishlist.availableSavings,
                     currency: currency,
                     style: Theme.of(context).textTheme.titleMedium
                         ?.copyWith(color: AppColors.primary),
@@ -214,9 +215,10 @@ class WishlistScreen extends StatelessWidget {
                         const SizedBox(height: AppSpacing.sm),
                     itemBuilder: (context, i) {
                       final item = wishlist.items[i];
-                      final available = wishlist.availableSavings
-                          .clamp(0, double.infinity)
-                          .toDouble();
+                      final available = wishlist.availableSavings.clamp(
+                        0,
+                        item.pricePaise,
+                      );
                       return StaggeredListItem(
                         index: i,
                         child: AppCard(
@@ -229,7 +231,7 @@ class WishlistScreen extends StatelessWidget {
                                   context,
                                   item.id!,
                                   item.name,
-                                  item.price,
+                                  item.pricePaise,
                                 ),
                                 child: Row(
                                   mainAxisAlignment:
@@ -244,7 +246,7 @@ class WishlistScreen extends StatelessWidget {
                                       ),
                                     ),
                                     Text(
-                                      formatMoney(item.price, currency),
+                                      formatMoney(item.pricePaise, currency),
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium,
@@ -255,7 +257,7 @@ class WishlistScreen extends StatelessWidget {
                               const SizedBox(height: AppSpacing.sm),
                               BudgetProgressBar(
                                 spent: available,
-                                budget: item.price,
+                                budget: item.pricePaise,
                               ),
                               const SizedBox(height: AppSpacing.sm),
                               Row(

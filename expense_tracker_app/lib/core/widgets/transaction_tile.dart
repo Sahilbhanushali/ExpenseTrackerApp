@@ -78,7 +78,7 @@ class TransactionTile extends StatelessWidget {
               ),
             ),
             Text(
-              '$sign${formatMoney(txn.amount, currency)}',
+              '$sign${formatMoney(txn.amountPaise, currency)}',
               style: TextStyle(
                 color: color,
                 fontWeight: FontWeight.w700,

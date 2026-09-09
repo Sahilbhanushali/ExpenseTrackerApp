@@ -5,7 +5,9 @@ import '../../data/repositories/account_repository.dart';
 
 class AccountBalance {
   final MoneyAccount account;
-  final double balance;
+
+  /// In paise.
+  final int balance;
   const AccountBalance({required this.account, required this.balance});
 }
 
@@ -21,13 +23,17 @@ class AccountsController extends ChangeNotifier {
   Future<void> init() => refresh();
 
   Future<void> refresh() async {
+    // One batched balance query for every account, instead of four queries
+    // per account — this runs after every write in the app.
     final list = await _repo.list();
-    final withBalances = <AccountBalance>[];
-    for (final a in list) {
-      final balance = await _repo.balance(a.name) ?? a.openingBalance;
-      withBalances.add(AccountBalance(account: a, balance: balance));
-    }
-    _accounts = withBalances;
+    final balances = await _repo.allBalances();
+    _accounts = [
+      for (final a in list)
+        AccountBalance(
+          account: a,
+          balance: balances[a.name] ?? a.openingBalancePaise,
+        ),
+    ];
     notifyListeners();
   }
 
@@ -39,15 +45,15 @@ class AccountsController extends ChangeNotifier {
 
   Future<void> add(
     String name,
-    double openingBalance, {
+    int openingBalancePaise, {
     AccountType type = AccountType.cash,
-    double? currentValue,
+    int? currentValuePaise,
   }) async {
     await _repo.add(
       name,
-      openingBalance,
+      openingBalancePaise,
       type: type,
-      currentValue: currentValue,
+      currentValuePaise: currentValuePaise,
     );
     if (_accounts.isEmpty) {
       await _repo.setDefault(name);
@@ -58,14 +64,14 @@ class AccountsController extends ChangeNotifier {
   Future<void> update(
     int id, {
     String? name,
-    double? openingBalance,
+    int? openingBalancePaise,
     AccountType? type,
     Object? currentValue = unsetCurrentValue,
   }) async {
     await _repo.update(
       id,
       name: name,
-      openingBalance: openingBalance,
+      openingBalancePaise: openingBalancePaise,
       type: type,
       currentValue: currentValue,
     );
@@ -77,13 +83,21 @@ class AccountsController extends ChangeNotifier {
   /// undifferentiated "Accounts" figure. Investment/emergency-fund accounts
   /// use their marked-up currentValue when set, so gains/losses actually
   /// move net worth instead of only ever reflecting contributions.
-  double totalFor(AccountType type) => _accounts
+  /// In paise.
+  int totalFor(AccountType type) => _accounts
       .where((a) => a.account.type == type)
-      .fold(0, (s, a) => s + (a.account.currentValue ?? a.balance));
+      .fold(0, (s, a) => s + (a.account.currentValuePaise ?? a.balance));
 
-  Future<void> remove(int id) async {
-    await _repo.remove(id);
-    await refresh();
+  /// Number of transactions/transfers that would be orphaned by deleting
+  /// this account — the UI uses it to ask where they should go.
+  Future<int> linkedRecordCount(String name) => _repo.linkedRecordCount(name);
+
+  /// Returns false when the account still has history and no [reassignTo]
+  /// was given, rather than silently orphaning it.
+  Future<bool> remove(int id, {String? reassignTo}) async {
+    final removed = await _repo.remove(id, reassignTo: reassignTo);
+    if (removed) await refresh();
+    return removed;
   }
 
   Future<void> setDefault(String name) async {
@@ -94,7 +108,7 @@ class AccountsController extends ChangeNotifier {
   Future<void> transfer(
     String from,
     String to,
-    double amount,
+    int amountPaise,
     String? note,
   ) async {
     final now = DateTime.now();
@@ -104,7 +118,7 @@ class AccountsController extends ChangeNotifier {
       Transfer(
         fromAccount: from,
         toAccount: to,
-        amount: amount,
+        amountPaise: amountPaise,
         note: note,
         date: date,
         createdAt: now.toIso8601String(),

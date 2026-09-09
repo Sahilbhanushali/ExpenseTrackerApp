@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/utils/money_formatter.dart';
 import '../../core/utils/notification_service.dart';
 import '../../data/models/recurring_bill.dart';
 import '../../data/models/transaction.dart';
@@ -48,7 +49,7 @@ class RecurringController extends ChangeNotifier {
   }
 
   Future<int> addBill({
-    required double amount,
+    required int amountPaise,
     required String category,
     String? note,
     required int dayOfMonth,
@@ -56,7 +57,7 @@ class RecurringController extends ChangeNotifier {
   }) async {
     final id = await _recurringRepo.add(
       RecurringBill(
-        amount: amount,
+        amountPaise: amountPaise,
         category: category,
         note: note,
         dayOfMonth: dayOfMonth,
@@ -81,14 +82,14 @@ class RecurringController extends ChangeNotifier {
 
   Future<void> update(
     int id, {
-    double? amount,
+    int? amountPaise,
     String? category,
     String? note,
     int? dayOfMonth,
   }) async {
     await _recurringRepo.update(
       id,
-      amount: amount,
+      amountPaise: amountPaise,
       category: category,
       note: note,
       dayOfMonth: dayOfMonth,
@@ -97,7 +98,7 @@ class RecurringController extends ChangeNotifier {
       final bill = _bills.firstWhere(
         (b) => b.id == id,
         orElse: () =>
-            RecurringBill(amount: 0, category: '', dayOfMonth: dayOfMonth),
+            RecurringBill(amountPaise: 0, category: '', dayOfMonth: dayOfMonth),
       );
       await NotificationService.instance.scheduleRecurringReminder(
         billId: id,
@@ -115,7 +116,7 @@ class RecurringController extends ChangeNotifier {
   /// Logs this month's installment now, schedules the rest as a
   /// self-limiting recurring entry — port of emi_cmd.
   Future<void> logEmi({
-    required double monthlyAmount,
+    required int monthlyPaise,
     required String category,
     String? note,
     required int months,
@@ -129,7 +130,7 @@ class RecurringController extends ChangeNotifier {
       Transaction(
         date: date,
         category: category,
-        amount: monthlyAmount,
+        amountPaise: monthlyPaise,
         note: note,
         type: TxnType.expense,
         createdAt: now.toIso8601String(),
@@ -149,7 +150,7 @@ class RecurringController extends ChangeNotifier {
           '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
       final id = await _recurringRepo.add(
         RecurringBill(
-          amount: monthlyAmount,
+          amountPaise: monthlyPaise,
           category: category,
           note: note,
           dayOfMonth: dueDay ?? now.day,
@@ -186,7 +187,7 @@ class RecurringController extends ChangeNotifier {
     DueBillResult result;
 
     if (bill.loanId != null) {
-      final repayResult = await _txnRepo.repay(bill.loanId!, bill.amount);
+      final repayResult = await _txnRepo.repay(bill.loanId!, bill.amountPaise);
       if (repayResult == null) {
         await _recurringRepo.remove(bill.id!);
         result = DueBillResult(
@@ -204,7 +205,8 @@ class RecurringController extends ChangeNotifier {
           bill: bill,
           message: loanSettled
               ? 'Applied repayment to $person — fully settled!'
-              : 'Applied repayment to $person: ${repayResult.applied}',
+              : 'Applied repayment to $person: '
+                    '${formatMoney(repayResult.applied, '₹')}',
         );
       }
     } else {
@@ -215,7 +217,7 @@ class RecurringController extends ChangeNotifier {
           date:
               '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}',
           category: bill.category,
-          amount: bill.amount,
+          amountPaise: bill.amountPaise,
           note: bill.note,
           type: isIncome ? TxnType.income : TxnType.expense,
           createdAt: today.toIso8601String(),
@@ -227,7 +229,7 @@ class RecurringController extends ChangeNotifier {
         bill: bill,
         message:
             '${isIncome ? 'Logged income' : 'Logged bill'}: '
-            '${bill.category} ${bill.amount}'
+            '${bill.category} ${formatMoney(bill.amountPaise, '₹')}'
             '${finished ? ' — that was the last installment' : ''}',
       );
     }

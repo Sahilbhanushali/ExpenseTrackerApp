@@ -8,6 +8,7 @@ import 'package:file_selector/file_selector.dart' as file_selector;
 
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/app_lock_service.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/list_row.dart';
@@ -21,6 +22,7 @@ import '../expenses/expenses_controller.dart';
 import '../goals/goals_controller.dart';
 import '../goals/goals_screen.dart';
 import '../lending/lending_controller.dart';
+import '../loans/loans_controller.dart';
 import '../recurring/recurring_controller.dart';
 import '../security/lock_screen.dart';
 import '../wishlist/wishlist_controller.dart';
@@ -33,11 +35,11 @@ class SettingsScreen extends StatelessWidget {
   Future<void> _editAmount(
     BuildContext context,
     String title,
-    double current,
-    ValueChanged<double> onSave,
+    int currentPaise,
+    ValueChanged<int> onSave,
   ) async {
     final controller = TextEditingController(
-      text: current == 0 ? '' : current.toStringAsFixed(0),
+      text: currentPaise == 0 ? '' : paiseToEditString(currentPaise),
     );
     final result = await showDialog<bool>(
       context: context,
@@ -61,7 +63,7 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
     if (result == true) {
-      final value = double.tryParse(controller.text.replaceAll(',', ''));
+      final value = parseRupeesToPaise(controller.text);
       if (value != null && value >= 0) onSave(value);
     }
   }
@@ -201,6 +203,75 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  /// Swaps the live database for a previously exported backup. Destructive
+  /// in the same way Reset is, so it asks the same way.
+  Future<void> _restoreBackup(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Restore from backup?'),
+        content: const Text(
+          'Everything currently in Spendo is replaced by the backup you '
+          'pick. Export a backup first if you want to keep what is here now.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Pick a backup'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    const typeGroup = file_selector.XTypeGroup(label: 'Spendo backup');
+    final picked = await file_selector.openFile(
+      acceptedTypeGroups: [typeGroup],
+    );
+    final path = picked?.path;
+    if (path == null || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final settingsController = context.read<SettingsController>();
+    final reload = _reloadAll(context);
+
+    try {
+      await ExportRepository().restoreFromFile(File(path));
+    } on RestoreException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      return;
+    }
+
+    await settingsController.init();
+    await reload();
+    messenger.showSnackBar(const SnackBar(content: Text('Backup restored.')));
+  }
+
+  /// Re-reads every controller from the database — used after any operation
+  /// that replaces the data underneath them.
+  Future<void> Function() _reloadAll(BuildContext context) {
+    final expenses = context.read<ExpensesController>();
+    final accounts = context.read<AccountsController>();
+    final lending = context.read<LendingController>();
+    final recurring = context.read<RecurringController>();
+    final wishlist = context.read<WishlistController>();
+    final goals = context.read<GoalsController>();
+    final loans = context.read<LoansController>();
+    return () => Future.wait([
+      expenses.refresh(),
+      accounts.refresh(),
+      lending.refresh(),
+      recurring.refresh(),
+      wishlist.refresh(),
+      goals.refresh(),
+      loans.refresh(),
+    ]);
+  }
+
   Future<void> _resetAll(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -264,12 +335,12 @@ class SettingsScreen extends StatelessWidget {
               icon: Icons.account_balance_wallet_outlined,
               title: 'Monthly budget',
               trailing: Text(
-                formatMoney(config.monthlyBudget, config.currency),
+                formatMoney(config.monthlyBudgetPaise, config.currency),
               ),
               onTap: () => _editAmount(
                 context,
                 'Monthly budget',
-                config.monthlyBudget,
+                config.monthlyBudgetPaise,
                 settings.setMonthlyBudget,
               ),
             ),
@@ -305,7 +376,7 @@ class SettingsScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Allocated: ${formatMoney(config.budgets.values.fold(0.0, (s, v) => s + v), config.currency)}',
+                      'Allocated: ${formatMoney(config.budgets.values.fold<int>(0, (s, v) => s + v), config.currency)}',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     FilledButton.tonal(
@@ -380,6 +451,12 @@ class SettingsScreen extends StatelessWidget {
                   icon: Icons.file_upload_outlined,
                   title: 'Import transactions (CSV)',
                   onTap: () => _importCsv(context),
+                ),
+                ListRow(
+                  icon: Icons.settings_backup_restore,
+                  title: 'Restore from backup',
+                  subtitle: 'Replaces everything on this device',
+                  onTap: () => _restoreBackup(context),
                 ),
                 ListRow(
                   icon: Icons.delete_forever_outlined,

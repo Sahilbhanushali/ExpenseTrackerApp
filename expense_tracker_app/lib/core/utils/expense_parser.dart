@@ -1,4 +1,5 @@
 import '../constants/categories.dart';
+import 'money.dart';
 
 enum ParsedTxnType {
   expense,
@@ -13,7 +14,8 @@ enum ParsedTxnType {
 /// Result of parsing one free-text entry — port of expense_bot/parser.py's
 /// parse_message() return shape.
 class ParsedTransaction {
-  final double? amount;
+  /// In paise.
+  final int? amountPaise;
   final String category;
   final String note;
   final ParsedTxnType type;
@@ -26,17 +28,18 @@ class ParsedTransaction {
   /// Only set for lent/borrowed when the message named both how much has
   /// already changed hands and how much is still pending — the amount left
   /// owing, kept alongside the (already-applied) [amount].
-  final double? pendingAmount;
+  /// In paise.
+  final int? pendingAmountPaise;
 
   const ParsedTransaction({
-    required this.amount,
+    required this.amountPaise,
     required this.category,
     required this.note,
     required this.type,
     required this.counterparty,
     required this.date,
     this.emiMonths,
-    this.pendingAmount,
+    this.pendingAmountPaise,
   });
 }
 
@@ -398,7 +401,7 @@ ParsedTransaction parseMessage(
       text,
     )!; // _detectType already checked
     return ParsedTransaction(
-      amount: details.monthlyAmount,
+      amountPaise: rupeesToPaise(details.monthlyAmount),
       category: category,
       note: _buildEmiNote(text),
       type: type,
@@ -412,7 +415,7 @@ ParsedTransaction parseMessage(
     final amountResult = findAmount(text);
     final amount = amountResult?.$1;
     return ParsedTransaction(
-      amount: amount != null ? double.parse(amount.toStringAsFixed(2)) : null,
+      amountPaise: amount == null ? null : rupeesToPaise(amount),
       category: category,
       note: _buildEmiNote(text),
       type: type,
@@ -451,13 +454,15 @@ ParsedTransaction parseMessage(
   }
 
   return ParsedTransaction(
-    amount: amount != null ? double.parse(amount.toStringAsFixed(2)) : null,
+    amountPaise: amount == null ? null : rupeesToPaise(amount),
     category: outCategory,
     note: note,
     type: type,
     counterparty: counterparty,
     date: date,
-    pendingAmount: pendingAmount,
+    pendingAmountPaise: pendingAmount == null
+        ? null
+        : rupeesToPaise(pendingAmount),
   );
 }
 
@@ -482,7 +487,7 @@ List<ParsedTransaction> parseMulti(
   final parsed = parts
       .map((p) => parseMessage(p, extraCategories: extraCategories))
       .toList();
-  final valid = parsed.where((p) => p.amount != null).toList();
+  final valid = parsed.where((p) => p.amountPaise != null).toList();
   if (valid.length < 2) {
     return [parseMessage(trimmed, extraCategories: extraCategories)];
   }

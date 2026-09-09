@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/budget_progress_bar.dart';
@@ -58,7 +59,7 @@ class LendingScreen extends StatelessWidget {
       ),
     );
     if (result == true && context.mounted) {
-      final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+      final amount = parseRupeesToPaise(amountController.text);
       final person = personController.text.trim();
       if (amount == null || amount <= 0 || person.isEmpty) return;
       final note = noteController.text.trim().isEmpty
@@ -126,12 +127,12 @@ class LendingScreen extends StatelessWidget {
       await controller.settle(loan.id!);
       if (context.mounted) await context.read<AccountsController>().refresh();
     } else if (action == 'repay') {
-      final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+      final amount = parseRupeesToPaise(amountController.text);
       if (amount == null || amount <= 0) return;
       await controller.repay(loan.id!, amount);
       if (context.mounted) await context.read<AccountsController>().refresh();
     } else if (action == 'plan') {
-      final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+      final amount = parseRupeesToPaise(amountController.text);
       if (amount == null || amount <= 0) return;
       await _showMonthlyPlan(context, loan, amount);
     }
@@ -140,7 +141,7 @@ class LendingScreen extends StatelessWidget {
   Future<void> _showMonthlyPlan(
     BuildContext context,
     Transaction loan,
-    double amount,
+    int amountPaise,
   ) async {
     final currency = context.read<SettingsController>().config.currency;
     final dayController = TextEditingController(text: '${DateTime.now().day}');
@@ -153,7 +154,7 @@ class LendingScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '${formatMoney(amount, currency)} every month toward ${loan.counterparty ?? 'them'}, reminded automatically.',
+              '${formatMoney(amountPaise, currency)} every month toward ${loan.counterparty ?? 'them'}, reminded automatically.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -194,7 +195,7 @@ class LendingScreen extends StatelessWidget {
     final months = int.tryParse(monthsController.text);
     await context.read<LendingController>().repayPlan(
       loan.id!,
-      amount,
+      amountPaise,
       months: months,
       dayOfMonth: day,
     );
@@ -202,7 +203,7 @@ class LendingScreen extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Monthly repayment of ${formatMoney(amount, currency)} scheduled on day $day — log it from Recurring & EMI when due.',
+          'Monthly repayment of ${formatMoney(amountPaise, currency)} scheduled on day $day — log it from Recurring & EMI when due.',
         ),
       ),
     );
@@ -237,12 +238,12 @@ class LendingScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.md),
               BudgetProgressBar(
-                spent: original - loan.amount,
+                spent: original - loan.amountPaise,
                 budget: original,
               ),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${formatMoney(original - loan.amount, currency)} paid of ${formatMoney(original, currency)} · ${formatMoney(loan.amount, currency)} left',
+                '${formatMoney(original - loan.amountPaise, currency)} paid of ${formatMoney(original, currency)} · ${formatMoney(loan.amountPaise, currency)} left',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -274,7 +275,7 @@ class LendingScreen extends StatelessWidget {
 
   Future<void> _showEditLoan(BuildContext context, Transaction loan) async {
     final amountController = TextEditingController(
-      text: loan.amount.toStringAsFixed(0),
+      text: paiseToEditString(loan.amountPaise),
     );
     final personController = TextEditingController(
       text: loan.counterparty ?? '',
@@ -319,7 +320,7 @@ class LendingScreen extends StatelessWidget {
       ),
     );
     if (result != true || !context.mounted) return;
-    final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+    final amount = parseRupeesToPaise(amountController.text);
     final person = personController.text.trim();
     if (amount == null || amount <= 0 || person.isEmpty) return;
     final note = noteController.text.trim().isEmpty
@@ -327,7 +328,7 @@ class LendingScreen extends StatelessWidget {
         : noteController.text.trim();
     await context.read<LendingController>().update(
       loan.id!,
-      amount: amount,
+      amountPaise: amount,
       person: person,
       note: note,
     );
@@ -420,7 +421,7 @@ class LendingScreen extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            formatMoney(r.amount, currency),
+                            formatMoney(r.amountPaise, currency),
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
                               color: owesYou
@@ -480,7 +481,7 @@ class _PaymentRow extends StatelessWidget {
         children: [
           Text(payment.date, style: Theme.of(context).textTheme.bodyMedium),
           Text(
-            formatMoney(payment.amount, currency),
+            formatMoney(payment.amountPaise, currency),
             style: Theme.of(context).textTheme.bodyMedium
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),

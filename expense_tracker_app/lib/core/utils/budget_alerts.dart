@@ -1,19 +1,20 @@
 /// Port of bot.py's _crossed()/_threshold_warnings() — fires a warning only
 /// the moment a transaction pushes a total across the 80%/100% line, not on
 /// every message after.
-bool _crossed(double before, double after, double cap, double frac) {
+bool _crossed(int before, int after, int cap, double frac) {
   return cap > 0 && before < cap * frac && after >= cap * frac;
 }
 
 List<String> buildThresholdWarnings({
-  required double beforeSpent,
-  required double afterSpent,
-  required double budget,
-  required double beforeCat,
-  required double afterCat,
-  required double catCap,
+  /// All money arguments are in paise.
+  required int beforeSpent,
+  required int afterSpent,
+  required int budget,
+  required int beforeCat,
+  required int afterCat,
+  required int catCap,
   required String category,
-  required String Function(double) fmt,
+  required String Function(int) fmt,
 }) {
   final warnings = <String>[];
   final remaining = budget - afterSpent;

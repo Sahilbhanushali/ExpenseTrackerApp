@@ -27,7 +27,13 @@ class ConfigRepository {
       return defaultConfig;
     }
     final text = await file.readAsString();
-    return AppConfig.fromJson(jsonDecode(text) as Map<String, dynamic>);
+    final json = jsonDecode(text) as Map<String, dynamic>;
+    final config = AppConfig.fromJson(json);
+    // Persist the rupees→paise conversion so it only ever runs once.
+    if (((json['schema'] as num?)?.toInt() ?? 1) < AppConfig.schemaVersion) {
+      await save(config);
+    }
+    return config;
   }
 
   Future<void> save(AppConfig config) async {

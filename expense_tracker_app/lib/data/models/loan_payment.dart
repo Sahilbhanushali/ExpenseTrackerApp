@@ -5,7 +5,9 @@
 class LoanPayment {
   final int? id;
   final int loanId;
-  final double amount;
+
+  /// In paise.
+  final int amountPaise;
   final String date;
   final String? note;
   final String createdAt;
@@ -13,7 +15,7 @@ class LoanPayment {
   const LoanPayment({
     this.id,
     required this.loanId,
-    required this.amount,
+    required this.amountPaise,
     required this.date,
     this.note,
     required this.createdAt,
@@ -23,7 +25,7 @@ class LoanPayment {
     return {
       'id': id,
       'loan_id': loanId,
-      'amount': amount,
+      'amount': amountPaise,
       'date': date,
       'note': note,
       'created_at': createdAt,
@@ -34,7 +36,7 @@ class LoanPayment {
     return LoanPayment(
       id: map['id'] as int?,
       loanId: map['loan_id'] as int,
-      amount: (map['amount'] as num).toDouble(),
+      amountPaise: (map['amount'] as num).round(),
       date: map['date'] as String,
       note: map['note'] as String?,
       createdAt: map['created_at'] as String,

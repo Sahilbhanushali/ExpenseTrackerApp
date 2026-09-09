@@ -8,13 +8,16 @@ import '../../data/repositories/transaction_repository.dart';
 
 class GoalProgress {
   final Goal goal;
-  final double saved;
+
+  /// In paise.
+  final int saved;
   const GoalProgress({required this.goal, required this.saved});
 
-  double get remaining => (goal.target - saved).clamp(0, double.infinity);
+  /// In paise.
+  int get remaining => (goal.targetPaise - saved).clamp(0, goal.targetPaise);
   double get pct =>
-      goal.target > 0 ? (saved / goal.target).clamp(0.0, 1.0) : 0.0;
-  bool get isComplete => saved >= goal.target;
+      goal.targetPaise > 0 ? (saved / goal.targetPaise).clamp(0.0, 1.0) : 0.0;
+  bool get isComplete => saved >= goal.targetPaise;
 }
 
 /// Multiple savings goals — port of the reference ledger's goal tiles.
@@ -47,15 +50,15 @@ class GoalsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> add(String name, double target, {String? note}) async {
-    await _goalRepo.add(name, target, note: note);
+  Future<void> add(String name, int targetPaise, {String? note}) async {
+    await _goalRepo.add(name, targetPaise, note: note);
     await refresh();
   }
 
   /// Logs a contribution as an expense linked to this goal — reduces
   /// available balance the same way any other spend does, matching the
   /// reference app's "money set aside" semantics.
-  Future<void> contribute(int goalId, double amount) async {
+  Future<void> contribute(int goalId, int amountPaise) async {
     final account = await _accountRepo.defaultAccount();
     final now = DateTime.now();
     final date =
@@ -65,7 +68,7 @@ class GoalsController extends ChangeNotifier {
       Transaction(
         date: date,
         category: 'other',
-        amount: amount,
+        amountPaise: amountPaise,
         note: 'Goal: ${goal.name}',
         type: TxnType.expense,
         createdAt: now.toIso8601String(),
@@ -79,10 +82,15 @@ class GoalsController extends ChangeNotifier {
   Future<void> update(
     int id, {
     String? name,
-    double? target,
+    int? targetPaise,
     String? note,
   }) async {
-    await _goalRepo.update(id, name: name, target: target, note: note);
+    await _goalRepo.update(
+      id,
+      name: name,
+      targetPaise: targetPaise,
+      note: note,
+    );
     await refresh();
   }
 

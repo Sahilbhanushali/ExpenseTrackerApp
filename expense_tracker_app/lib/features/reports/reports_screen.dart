@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/constants/calendar.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money_formatter.dart';
@@ -13,21 +14,6 @@ import '../settings/settings_controller.dart';
 
 enum _RangePreset { thisMonth, lastMonth, last3Months, thisYear, custom }
 
-const _monthNames = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -39,7 +25,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   _RangePreset _preset = _RangePreset.thisMonth;
   late DateTimeRange _range;
   MonthTotal? _totals;
-  Map<String, double> _categoryTotals = {};
+  Map<String, int> _categoryTotals = {};
   bool _loading = true;
 
   @override
@@ -120,7 +106,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   String get _rangeLabel {
-    String fmt(DateTime d) => '${d.day} ${_monthNames[d.month - 1]} ${d.year}';
+    String fmt(DateTime d) =>
+        '${d.day} ${kMonthNamesShort[d.month - 1]} ${d.year}';
     return '${fmt(_range.start)} – ${fmt(_range.end)}';
   }
 
@@ -242,7 +229,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       for (final e in sortedCategories) ...[
                         _CategoryRow(
                           category: e.key,
-                          amount: e.value,
+                          amountPaise: e.value,
                           total: totals.expense,
                           currency: currency,
                           onTap: () => _openCategory(e.key),
@@ -263,7 +250,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
 class _SummaryStat extends StatelessWidget {
   final String label;
-  final double value;
+
+  /// In paise.
+  final int value;
   final String currency;
   final Color color;
 
@@ -293,14 +282,16 @@ class _SummaryStat extends StatelessWidget {
 
 class _CategoryRow extends StatelessWidget {
   final String category;
-  final double amount;
-  final double total;
+
+  /// Both in paise.
+  final int amountPaise;
+  final int total;
   final String currency;
   final VoidCallback onTap;
 
   const _CategoryRow({
     required this.category,
-    required this.amount,
+    required this.amountPaise,
     required this.total,
     required this.currency,
     required this.onTap,
@@ -308,7 +299,7 @@ class _CategoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final frac = total > 0 ? (amount / total).clamp(0.0, 1.0) : 0.0;
+    final frac = total > 0 ? (amountPaise / total).clamp(0.0, 1.0) : 0.0;
     final color = AppColors.categoryColor(category);
     return InkWell(
       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -327,7 +318,7 @@ class _CategoryRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  formatMoney(amount, currency),
+                  formatMoney(amountPaise, currency),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(width: 4),

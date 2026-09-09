@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:quick_actions/quick_actions.dart';
@@ -7,6 +8,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_lock_service.dart';
+import 'core/utils/error_reporting.dart';
 import 'core/utils/notification_service.dart';
 import 'core/widgets/aurora_background.dart';
 import 'features/accounts/accounts_controller.dart';
@@ -19,8 +21,10 @@ import 'features/loans/loans_controller.dart';
 import 'features/recurring/recurring_controller.dart';
 import 'features/reminders/reminders_controller.dart';
 import 'features/security/lock_screen.dart';
+import 'features/sms_import/sms_import_controller.dart';
 import 'features/settings/settings_controller.dart';
 import 'features/splash/splash_screen.dart';
+import 'features/splash/startup_failure_screen.dart';
 import 'features/wishlist/wishlist_controller.dart';
 
 /// Lets the app-icon long-press shortcut ("Add expense") reach the add-sheet
@@ -28,6 +32,8 @@ import 'features/wishlist/wishlist_controller.dart';
 final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  installErrorHandlers(navigatorKey);
   runApp(const ExpenseTrackerApp());
 }
 
@@ -47,6 +53,7 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => WishlistController()),
         ChangeNotifierProvider(create: (_) => GoalsController()),
         ChangeNotifierProvider(create: (_) => RemindersController()),
+        ChangeNotifierProvider(create: (_) => SmsImportController()),
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
@@ -136,16 +143,27 @@ class _AppBootstrapState extends State<_AppBootstrap>
 
   Future<void> _bootstrap() async {
     final minDuration = Future.delayed(_minSplashDuration);
-    await _loadAppState();
+    // One controller failing to load (a corrupt row, a migration that threw)
+    // used to leave `_ready` false forever — the splash just never ended.
+    // Surface it instead, with a way back.
+    Object? failure;
+    try {
+      await _loadAppState();
+    } catch (e, stack) {
+      failure = e;
+      if (kDebugMode) debugPrintStack(stackTrace: stack, label: '$e');
+    }
     await minDuration;
     if (mounted) {
       setState(() {
+        _startupError = failure;
         _ready = true;
         _locked = _pendingLocked;
       });
     }
   }
 
+  Object? _startupError;
   bool _pendingLocked = false;
 
   Future<void> _loadAppState() async {
@@ -160,6 +178,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
     final wishlist = context.read<WishlistController>();
     final goals = context.read<GoalsController>();
     final reminders = context.read<RemindersController>();
+    final smsImport = context.read<SmsImportController>();
 
     await settings.init();
     await Future.wait([
@@ -171,6 +190,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
       wishlist.init(),
       goals.init(),
       reminders.init(),
+      smsImport.init(),
     ]);
     await _checkDueBills();
     _initQuickActions();
@@ -232,6 +252,17 @@ class _AppBootstrapState extends State<_AppBootstrap>
   Widget build(BuildContext context) {
     if (!_ready) {
       return const SplashScreen();
+    }
+    if (_startupError != null) {
+      return StartupFailureScreen(
+        onRetry: () {
+          setState(() {
+            _ready = false;
+            _startupError = null;
+          });
+          _bootstrap();
+        },
+      );
     }
     // HomeShell stays mounted underneath even while locked, so its selected
     // tab, scroll positions, etc. survive a lock/unlock cycle instead of

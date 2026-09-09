@@ -27,21 +27,20 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setMonthlyBudget(double amount) =>
-      _persist(_config.copyWith(monthlyBudget: amount));
+  Future<void> setMonthlyBudget(int paise) =>
+      _persist(_config.copyWith(monthlyBudgetPaise: paise));
 
-  Future<void> setCategoryBudget(String category, double amount) {
-    final budgets = Map<String, double>.from(_config.budgets)
-      ..[category] = amount;
+  Future<void> setCategoryBudget(String category, int paise) {
+    final budgets = Map<String, int>.from(_config.budgets)..[category] = paise;
     return _persist(_config.copyWith(budgets: budgets));
   }
 
-  Future<void> setBudgets(Map<String, double> budgets) =>
+  Future<void> setBudgets(Map<String, int> budgets) =>
       _persist(_config.copyWith(budgets: budgets));
 
-  Future<void> setSavingsGoal(double amount, String label) => _persist(
+  Future<void> setSavingsGoal(int paise, String label) => _persist(
     _config.copyWith(
-      savingsGoal: SavingsGoal(amount: amount, label: label),
+      savingsGoal: SavingsGoal(amountPaise: paise, label: label),
     ),
   );
 
@@ -69,9 +68,12 @@ class SettingsController extends ChangeNotifier {
 
   /// Effective budget: capped at logged income once any is logged this
   /// month, same as bot.py's effective_budget().
-  double effectiveBudget(double income) {
-    return income > 0
-        ? (_config.monthlyBudget < income ? _config.monthlyBudget : income)
-        : _config.monthlyBudget;
+  /// [incomePaise] and the result are both in paise.
+  int effectiveBudget(int incomePaise) {
+    return incomePaise > 0
+        ? (_config.monthlyBudgetPaise < incomePaise
+              ? _config.monthlyBudgetPaise
+              : incomePaise)
+        : _config.monthlyBudgetPaise;
   }
 }

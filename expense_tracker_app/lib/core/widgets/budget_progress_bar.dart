@@ -5,8 +5,9 @@ import '../theme/app_spacing.dart';
 
 /// Visual port of bot.py's progress_bar() text bar.
 class BudgetProgressBar extends StatelessWidget {
-  final double spent;
-  final double budget;
+  /// Both in paise.
+  final int spent;
+  final int budget;
 
   const BudgetProgressBar({
     super.key,

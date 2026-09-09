@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/budget_progress_bar.dart';
@@ -50,7 +51,7 @@ class GoalsScreen extends StatelessWidget {
     );
     if (result == true && context.mounted) {
       final name = nameController.text.trim();
-      final target = double.tryParse(targetController.text.replaceAll(',', ''));
+      final target = parseRupeesToPaise(targetController.text);
       if (name.isEmpty || target == null || target <= 0) return;
       await context.read<GoalsController>().add(name, target);
     }
@@ -60,11 +61,11 @@ class GoalsScreen extends StatelessWidget {
     BuildContext context,
     int id,
     String name,
-    double target,
+    int targetPaise,
   ) async {
     final nameController = TextEditingController(text: name);
     final targetController = TextEditingController(
-      text: target.toStringAsFixed(0),
+      text: paiseToEditString(targetPaise),
     );
     final result = await showDialog<bool>(
       context: context,
@@ -99,14 +100,12 @@ class GoalsScreen extends StatelessWidget {
     );
     if (result != true || !context.mounted) return;
     final newName = nameController.text.trim();
-    final newTarget = double.tryParse(
-      targetController.text.replaceAll(',', ''),
-    );
+    final newTarget = parseRupeesToPaise(targetController.text);
     if (newName.isEmpty || newTarget == null || newTarget <= 0) return;
     await context.read<GoalsController>().update(
       id,
       name: newName,
-      target: newTarget,
+      targetPaise: newTarget,
     );
   }
 
@@ -139,7 +138,7 @@ class GoalsScreen extends StatelessWidget {
       ),
     );
     if (result == true && context.mounted) {
-      final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+      final amount = parseRupeesToPaise(amountController.text);
       if (amount == null || amount <= 0) return;
       await context.read<GoalsController>().contribute(goalId, amount);
       if (context.mounted) await context.read<AccountsController>().refresh();
@@ -217,7 +216,7 @@ class GoalsScreen extends StatelessWidget {
                             context,
                             g.goal.id!,
                             g.goal.name,
-                            g.goal.target,
+                            g.goal.targetPaise,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -233,7 +232,7 @@ class GoalsScreen extends StatelessWidget {
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               Text(
-                                'of ${formatMoney(g.goal.target, currency)}',
+                                'of ${formatMoney(g.goal.targetPaise, currency)}',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
@@ -245,7 +244,7 @@ class GoalsScreen extends StatelessWidget {
                             const SizedBox(height: AppSpacing.sm),
                             BudgetProgressBar(
                               spent: g.saved,
-                              budget: g.goal.target,
+                              budget: g.goal.targetPaise,
                             ),
                           ],
                         ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/categories.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../expenses/expenses_controller.dart';
@@ -23,8 +24,9 @@ class BudgetPlannerScreen extends StatefulWidget {
 }
 
 class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
-  late double _total;
-  late Map<String, double> _allocations;
+  /// Both in paise.
+  late int _total;
+  late Map<String, int> _allocations;
   bool _initialized = false;
 
   @override
@@ -39,7 +41,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
       _initialized = true;
     }
 
-    final allocatedSum = _allocations.values.fold(0.0, (s, v) => s + v);
+    final allocatedSum = _allocations.values.fold<int>(0, (s, v) => s + v);
 
     return Scaffold(
       appBar: AppBar(
@@ -115,10 +117,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
   /// Seeds every known category with its existing budget, or 0 if unset,
   /// then scales the whole set so it sums exactly to `total`. If nothing was
   /// ever set, seeds from the recommended split instead of all-zero.
-  Map<String, double> _seedAllocations(
-    Map<String, double> existing,
-    double total,
-  ) {
+  Map<String, int> _seedAllocations(Map<String, int> existing, int total) {
     final categories = [...kCategoryKeywords.keys];
     final hasAny = categories.any((c) => (existing[c] ?? 0) > 0);
     if (!hasAny) return _recommendedSplit(total);
@@ -127,18 +126,18 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
     return _scaleToTotal(raw, total);
   }
 
-  Map<String, double> _recommendedSplit(double total) {
+  Map<String, int> _recommendedSplit(int total) {
     return {
       for (final entry in kRecommendedAllocation.entries)
-        entry.key: total * entry.value.$2,
+        entry.key: (total * entry.value.$2).round(),
     };
   }
 
-  Map<String, double> _scaleToTotal(Map<String, double> raw, double total) {
-    final sum = raw.values.fold(0.0, (s, v) => s + v);
+  Map<String, int> _scaleToTotal(Map<String, int> raw, int total) {
+    final sum = raw.values.fold<int>(0, (s, v) => s + v);
     if (sum <= 0) return _recommendedSplit(total);
     final factor = total / sum;
-    return raw.map((k, v) => MapEntry(k, v * factor));
+    return raw.map((k, v) => MapEntry(k, (v * factor).round()));
   }
 
   void _applyRecommended() {
@@ -146,21 +145,24 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
     HapticFeedback.selectionClick();
   }
 
-  void _rebalance(String category, double newValue) {
+  void _rebalance(String category, int newValue) {
     newValue = newValue.clamp(0, _total);
     final oldValue = _allocations[category]!;
     final delta = newValue - oldValue;
     if (delta == 0) return;
 
     final others = _allocations.keys.where((k) => k != category).toList();
-    final othersSum = others.fold(0.0, (s, k) => s + _allocations[k]!);
+    final othersSum = others.fold<int>(0, (s, k) => s + _allocations[k]!);
 
     if (delta > 0) {
       final take = delta.clamp(0, othersSum);
       if (othersSum > 0) {
         for (final k in others) {
           final share = _allocations[k]! / othersSum;
-          _allocations[k] = (_allocations[k]! - take * share).clamp(0, _total);
+          _allocations[k] = (_allocations[k]! - take * share).round().clamp(
+            0,
+            _total,
+          );
         }
       }
       _allocations[category] = oldValue + take;
@@ -169,26 +171,31 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
       if (othersSum > 0) {
         for (final k in others) {
           final share = _allocations[k]! / othersSum;
-          _allocations[k] = _allocations[k]! + give * share;
+          _allocations[k] = _allocations[k]! + (give * share).round();
         }
       } else if (others.isNotEmpty) {
-        final each = give / others.length;
         for (final k in others) {
-          _allocations[k] = each;
+          _allocations[k] = give ~/ others.length;
         }
       }
       _allocations[category] = newValue;
     }
+    // Rounding can drift the sum off `_total`; park the remainder on the
+    // category the user is actually dragging.
+    final drift = _total - _allocations.values.fold<int>(0, (s, v) => s + v);
+    _allocations[category] = (_allocations[category]! + drift).clamp(0, _total);
   }
 }
 
 class _CategoryAllocator extends StatelessWidget {
   final String category;
-  final double value;
-  final double total;
+
+  /// Both in paise.
+  final int value;
+  final int total;
   final String currency;
   final Color color;
-  final ValueChanged<double> onChanged;
+  final ValueChanged<int> onChanged;
 
   const _CategoryAllocator({
     required this.category,
@@ -200,7 +207,7 @@ class _CategoryAllocator extends StatelessWidget {
   });
 
   Future<void> _editExact(BuildContext context) async {
-    final controller = TextEditingController(text: value.round().toString());
+    final controller = TextEditingController(text: paiseToEditString(value));
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -223,7 +230,7 @@ class _CategoryAllocator extends StatelessWidget {
       ),
     );
     if (result == true) {
-      final v = double.tryParse(controller.text.replaceAll(',', ''));
+      final v = parseRupeesToPaise(controller.text);
       if (v != null && v >= 0) onChanged(v);
     }
   }
@@ -284,10 +291,10 @@ class _CategoryAllocator extends StatelessWidget {
                 overlayColor: color.withValues(alpha: 0.15),
               ),
               child: Slider(
-                value: value.clamp(0, total),
+                value: value.clamp(0, total).toDouble(),
                 min: 0,
-                max: total,
-                onChanged: onChanged,
+                max: total.toDouble(),
+                onChanged: (v) => onChanged(v.round()),
               ),
             ),
           ],

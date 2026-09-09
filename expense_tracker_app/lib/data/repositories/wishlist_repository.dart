@@ -6,11 +6,11 @@ class WishlistRepository {
   final AppDatabase _db;
   WishlistRepository([AppDatabase? db]) : _db = db ?? AppDatabase.instance;
 
-  Future<int> add(String name, double price, {String? note}) async {
+  Future<int> add(String name, int pricePaise, {String? note}) async {
     final db = await _db.database;
     return db.insert('wishlist', {
       'name': name,
-      'price': price,
+      'price': pricePaise,
       'note': note,
       'purchased': 0,
       'created_at': DateTime.now().toIso8601String(),
@@ -48,13 +48,13 @@ class WishlistRepository {
   Future<bool> update(
     int id, {
     String? name,
-    double? price,
+    int? pricePaise,
     String? note,
   }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
     if (name != null) fields['name'] = name;
-    if (price != null) fields['price'] = price;
+    if (pricePaise != null) fields['price'] = pricePaise;
     if (note != null) fields['note'] = note;
     if (fields.isEmpty) return false;
     final count = await db.update(

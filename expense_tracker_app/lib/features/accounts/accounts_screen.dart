@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/press_scale.dart';
@@ -99,8 +100,7 @@ class AccountsScreen extends StatelessWidget {
     );
     if (result == true && context.mounted) {
       final name = nameController.text.trim();
-      final balance =
-          double.tryParse(balanceController.text.replaceAll(',', '')) ?? 0;
+      final balance = parseRupeesToPaise(balanceController.text) ?? 0;
       if (name.isEmpty) return;
       final controller = context.read<AccountsController>();
       if (controller.nameTaken(name)) {
@@ -112,13 +112,13 @@ class AccountsScreen extends StatelessWidget {
         return;
       }
       final currentValue = type == AccountType.investment
-          ? double.tryParse(currentValueController.text.replaceAll(',', ''))
+          ? parseRupeesToPaise(currentValueController.text)
           : null;
       await controller.add(
         name,
         balance,
         type: type,
-        currentValue: currentValue,
+        currentValuePaise: currentValue,
       );
     }
   }
@@ -126,10 +126,12 @@ class AccountsScreen extends StatelessWidget {
   Future<void> _showEditAccount(BuildContext context, AccountBalance a) async {
     final nameController = TextEditingController(text: a.account.name);
     final balanceController = TextEditingController(
-      text: a.account.openingBalance.toStringAsFixed(0),
+      text: paiseToEditString(a.account.openingBalancePaise),
     );
     final currentValueController = TextEditingController(
-      text: a.account.currentValue?.toStringAsFixed(0) ?? '',
+      text: a.account.currentValuePaise == null
+          ? ''
+          : paiseToEditString(a.account.currentValuePaise!),
     );
     AccountType type = a.account.type;
     final result = await showDialog<bool>(
@@ -198,7 +200,7 @@ class AccountsScreen extends StatelessWidget {
     );
     if (result != true || !context.mounted) return;
     final name = nameController.text.trim();
-    final balance = double.tryParse(balanceController.text.replaceAll(',', ''));
+    final balance = parseRupeesToPaise(balanceController.text);
     if (name.isEmpty || balance == null) return;
     final controller = context.read<AccountsController>();
     if (name != a.account.name &&
@@ -211,39 +213,117 @@ class AccountsScreen extends StatelessWidget {
       return;
     }
     final currentValue = type == AccountType.investment
-        ? double.tryParse(currentValueController.text.replaceAll(',', ''))
+        ? parseRupeesToPaise(currentValueController.text)
         : null;
     await controller.update(
       a.account.id!,
       name: name,
-      openingBalance: balance,
+      openingBalancePaise: balance,
       type: type,
       currentValue: currentValue,
     );
   }
 
   Future<void> _confirmDelete(BuildContext context, AccountBalance a) async {
+    final controller = context.read<AccountsController>();
+    final linked = await controller.linkedRecordCount(a.account.name);
+    if (!context.mounted) return;
+
+    // Nothing references it — a plain confirm is enough.
+    if (linked == 0) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete this account?'),
+          content: Text('"${a.account.name}" has no transactions.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) await controller.remove(a.account.id!);
+      return;
+    }
+
+    // Otherwise the history has to go somewhere, or those amounts would
+    // disappear from balances while still counting in reports.
+    final others = controller.accounts
+        .where((o) => o.account.id != a.account.id)
+        .map((o) => o.account.name)
+        .toList();
+
+    if (others.isEmpty) {
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Can\'t delete this account'),
+          content: Text(
+            '"${a.account.name}" has $linked linked '
+            '${linked == 1 ? 'record' : 'records'} and it\'s your only '
+            'account. Create another account first so they have somewhere '
+            'to go.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    var moveTo = others.first;
+    if (!context.mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete this account?'),
-        content: Text(
-          '"${a.account.name}" will be removed. Transactions already logged against it are kept but will no longer show a balance here.',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Delete this account?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '"${a.account.name}" has $linked linked '
+                '${linked == 1 ? 'record' : 'records'}. Move them to:',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<String>(
+                initialValue: moveTo,
+                decoration: const InputDecoration(labelText: 'Move history to'),
+                items: others
+                    .map((n) => DropdownMenuItem(value: n, child: Text(n)))
+                    .toList(),
+                onChanged: (v) => setState(() => moveTo = v ?? moveTo),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Move & delete'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
-    if (confirmed == true && context.mounted) {
-      await context.read<AccountsController>().remove(a.account.id!);
+
+    if (confirmed == true) {
+      await controller.remove(a.account.id!, reassignTo: moveTo);
     }
   }
 
@@ -304,7 +384,7 @@ class AccountsScreen extends StatelessWidget {
       ),
     );
     if (result == true && context.mounted) {
-      final amount = double.tryParse(amountController.text.replaceAll(',', ''));
+      final amount = parseRupeesToPaise(amountController.text);
       if (amount == null || amount <= 0 || from == to) return;
       await context.read<AccountsController>().transfer(from, to, amount, null);
     }
@@ -355,11 +435,9 @@ class AccountsScreen extends StatelessWidget {
             }
           }
 
-          final amount =
-              double.tryParse(amountController.text.replaceAll(',', '')) ?? 0;
-          final minKeep =
-              double.tryParse(minKeepController.text.replaceAll(',', '')) ?? 0;
-          final available = (amount - minKeep).clamp(0, double.infinity);
+          final amount = parseRupeesToPaise(amountController.text) ?? 0;
+          final minKeep = parseRupeesToPaise(minKeepController.text) ?? 0;
+          final available = (amount - minKeep).clamp(0, amount);
           final totalPct = pctControllers.values.fold<double>(
             0,
             (s, c) => s + (double.tryParse(c.text) ?? 0),
@@ -408,7 +486,7 @@ class AccountsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    'Available to split: ${formatMoney(available.toDouble(), currency)}',
+                    'Available to split: ${formatMoney(available, currency)}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: available <= 0 && amount > 0
                           ? AppColors.expense
@@ -450,12 +528,14 @@ class AccountsScreen extends StatelessWidget {
                           width: 90,
                           child: Text(
                             formatMoney(
-                              available *
-                                  (double.tryParse(
-                                        pctControllers[t.account.name]!.text,
-                                      ) ??
-                                      0) /
-                                  100,
+                              (available *
+                                      (double.tryParse(
+                                            pctControllers[t.account.name]!
+                                                .text,
+                                          ) ??
+                                          0) /
+                                      100)
+                                  .round(),
                               currency,
                             ),
                             textAlign: TextAlign.end,
@@ -492,12 +572,12 @@ class AccountsScreen extends StatelessWidget {
                                 pctControllers[t.account.name]!.text,
                               ) ??
                               0;
-                          final share = available * pct / 100;
+                          final share = (available * pct / 100).round();
                           if (share > 0) {
                             await controller.transfer(
                               source,
                               t.account.name,
-                              share.toDouble(),
+                              share,
                               'Income distribution',
                             );
                           }
@@ -588,9 +668,9 @@ class _AccountTypeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = accounts.fold<double>(
+    final total = accounts.fold<int>(
       0,
-      (s, a) => s + (a.account.currentValue ?? a.balance),
+      (s, a) => s + (a.account.currentValuePaise ?? a.balance),
     );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -651,15 +731,15 @@ class _AccountTypeSection extends StatelessWidget {
                         children: [
                           Text(
                             formatMoney(
-                              a.account.currentValue ?? a.balance,
+                              a.account.currentValuePaise ?? a.balance,
                               currency,
                             ),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
-                          if (a.account.currentValue != null)
+                          if (a.account.currentValuePaise != null)
                             _GainLossLabel(
                               invested: a.balance,
-                              current: a.account.currentValue!,
+                              current: a.account.currentValuePaise!,
                               currency: currency,
                             ),
                         ],
@@ -702,8 +782,9 @@ class _AccountTypeSection extends StatelessWidget {
 /// as a small colored delta under the balance instead of leaving the user
 /// to do that subtraction themselves.
 class _GainLossLabel extends StatelessWidget {
-  final double invested;
-  final double current;
+  /// Both in paise.
+  final int invested;
+  final int current;
   final String currency;
 
   const _GainLossLabel({

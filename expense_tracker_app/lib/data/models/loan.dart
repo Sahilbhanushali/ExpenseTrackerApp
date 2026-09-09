@@ -5,9 +5,11 @@
 class Loan {
   final int? id;
   final String name;
-  final double principal;
-  final double interestAmount;
-  final double emiAmount;
+
+  /// All in paise.
+  final int principalPaise;
+  final int interestPaise;
+  final int emiPaise;
   final int tenureMonths;
   final int installmentsPaid;
   final DateTime startDate;
@@ -18,9 +20,9 @@ class Loan {
   const Loan({
     this.id,
     required this.name,
-    required this.principal,
-    this.interestAmount = 0,
-    required this.emiAmount,
+    required this.principalPaise,
+    this.interestPaise = 0,
+    required this.emiPaise,
     required this.tenureMonths,
     this.installmentsPaid = 0,
     required this.startDate,
@@ -29,21 +31,25 @@ class Loan {
     this.active = true,
   });
 
-  double get totalPayable => principal + interestAmount;
+  int get totalPayablePaise => principalPaise + interestPaise;
 
-  double get outstanding =>
-      (totalPayable - emiAmount * installmentsPaid).clamp(0, totalPayable);
+  int get outstandingPaise => (totalPayablePaise - emiPaise * installmentsPaid)
+      .clamp(0, totalPayablePaise);
 
   int get installmentsRemaining =>
       (tenureMonths - installmentsPaid).clamp(0, tenureMonths);
 
   bool get isFullyPaid => installmentsPaid >= tenureMonths;
 
-  DateTime get endDate => _addMonths(startDate, tenureMonths);
+  /// The start date *is* the first installment's due date — a card EMI is
+  /// charged on the day the purchase is converted, not a month later. So
+  /// installment N (0-indexed) falls N months after the start, and the last
+  /// one at (tenure - 1) months.
+  DateTime get endDate => _addMonths(startDate, tenureMonths - 1);
 
   /// Null once fully paid off.
   DateTime? get nextDueDate =>
-      isFullyPaid ? null : _addMonths(startDate, installmentsPaid + 1);
+      isFullyPaid ? null : _addMonths(startDate, installmentsPaid);
 
   static DateTime _addMonths(DateTime date, int months) {
     final totalMonths = date.month - 1 + months;
@@ -56,9 +62,9 @@ class Loan {
   Loan copyWith({int? installmentsPaid, bool? active}) => Loan(
     id: id,
     name: name,
-    principal: principal,
-    interestAmount: interestAmount,
-    emiAmount: emiAmount,
+    principalPaise: principalPaise,
+    interestPaise: interestPaise,
+    emiPaise: emiPaise,
     tenureMonths: tenureMonths,
     installmentsPaid: installmentsPaid ?? this.installmentsPaid,
     startDate: startDate,
@@ -71,9 +77,9 @@ class Loan {
     return {
       'id': id,
       'name': name,
-      'principal': principal,
-      'interest_amount': interestAmount,
-      'emi_amount': emiAmount,
+      'principal': principalPaise,
+      'interest_amount': interestPaise,
+      'emi_amount': emiPaise,
       'tenure_months': tenureMonths,
       'installments_paid': installmentsPaid,
       'start_date': startDate.toIso8601String(),
@@ -87,9 +93,9 @@ class Loan {
     return Loan(
       id: map['id'] as int?,
       name: map['name'] as String,
-      principal: (map['principal'] as num).toDouble(),
-      interestAmount: (map['interest_amount'] as num?)?.toDouble() ?? 0,
-      emiAmount: (map['emi_amount'] as num).toDouble(),
+      principalPaise: (map['principal'] as num).round(),
+      interestPaise: (map['interest_amount'] as num?)?.round() ?? 0,
+      emiPaise: (map['emi_amount'] as num).round(),
       tenureMonths: map['tenure_months'] as int,
       installmentsPaid: map['installments_paid'] as int? ?? 0,
       startDate: DateTime.parse(map['start_date'] as String),

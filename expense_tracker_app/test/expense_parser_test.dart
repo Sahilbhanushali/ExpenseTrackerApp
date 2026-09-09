@@ -5,50 +5,50 @@ void main() {
   group('parseMessage — amounts', () {
     test('plain number with category keyword', () {
       final r = parseMessage('spent 500 on ola');
-      expect(r.amount, 500);
+      expect(r.amountPaise, 50000);
       expect(r.category, 'travel');
       expect(r.type, ParsedTxnType.expense);
     });
 
     test('k suffix', () {
       final r = parseMessage('1.5k myntra shirt');
-      expect(r.amount, 1500);
+      expect(r.amountPaise, 150000);
       expect(r.category, 'clothes');
     });
 
     test('l suffix (lakh) does not eat "lunch"', () {
       final r = parseMessage('450 lunch');
-      expect(r.amount, 450);
+      expect(r.amountPaise, 45000);
       expect(r.category, 'food');
     });
 
     test('lakh word', () {
       final r = parseMessage('2l invested in mutual fund');
-      expect(r.amount, 200000);
+      expect(r.amountPaise, 20000000);
       expect(r.category, 'investments');
     });
 
     test('rs prefix', () {
       final r = parseMessage('rs 200 chai');
-      expect(r.amount, 200);
+      expect(r.amountPaise, 20000);
       expect(r.category, 'food');
     });
 
     test('currency symbol with comma grouping', () {
       final r = parseMessage('₹1,250 blinkit groceries');
-      expect(r.amount, 1250);
+      expect(r.amountPaise, 125000);
       expect(r.category, 'groceries');
     });
 
     test('rs suffix', () {
       final r = parseMessage('500rs netflix');
-      expect(r.amount, 500);
+      expect(r.amountPaise, 50000);
       expect(r.category, 'luxuries');
     });
 
     test('no amount found', () {
       final r = parseMessage('what is my budget');
-      expect(r.amount, isNull);
+      expect(r.amountPaise, isNull);
     });
   });
 
@@ -62,7 +62,7 @@ void main() {
     test('freelance income keyword', () {
       final r = parseMessage('got 5000 from freelance work');
       expect(r.type, ParsedTxnType.income);
-      expect(r.amount, 5000);
+      expect(r.amountPaise, 500000);
     });
 
     test('lent keyword with counterparty', () {
@@ -97,7 +97,7 @@ void main() {
     test('emi payment keyword extracts item name', () {
       final r = parseMessage('given emi for fridge of rs 10000');
       expect(r.type, ParsedTxnType.emiPayment);
-      expect(r.amount, 10000);
+      expect(r.amountPaise, 1000000);
       expect(r.note, 'fridge');
     });
 
@@ -106,7 +106,7 @@ void main() {
         'bought fridge of 65000 on emi for 6 months every month i have to pay 10000',
       );
       expect(r.type, ParsedTxnType.emiCreate);
-      expect(r.amount, 10000);
+      expect(r.amountPaise, 1000000);
       expect(r.emiMonths, 6);
       expect(r.note, 'fridge');
     });
@@ -126,8 +126,8 @@ void main() {
           'i want to give money to henil for the project share 50000 5000 given pending 45000 which i will give month by month',
         );
         expect(r.type, ParsedTxnType.lent);
-        expect(r.amount, 5000);
-        expect(r.pendingAmount, 45000);
+        expect(r.amountPaise, 500000);
+        expect(r.pendingAmountPaise, 4500000);
         expect(r.counterparty, 'Henil');
       },
     );
@@ -162,14 +162,14 @@ void main() {
     test('splits "and" when both sides have an amount', () {
       final results = parseMulti('450 lunch and 200 auto');
       expect(results, hasLength(2));
-      expect(results[0].amount, 450);
-      expect(results[1].amount, 200);
+      expect(results[0].amountPaise, 45000);
+      expect(results[1].amountPaise, 20000);
     });
 
     test('falls back to a single entry when "and" is just part of a note', () {
       final results = parseMulti('coffee and snacks 300');
       expect(results, hasLength(1));
-      expect(results[0].amount, 300);
+      expect(results[0].amountPaise, 30000);
     });
   });
 

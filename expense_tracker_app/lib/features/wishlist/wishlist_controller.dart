@@ -23,8 +23,10 @@ class WishlistController extends ChangeNotifier {
   List<WishlistItem> _items = [];
   List<WishlistItem> get items => _items;
 
-  double _availableSavings = 0;
-  double get availableSavings => _availableSavings;
+  int _availableSavings = 0;
+
+  /// In paise.
+  int get availableSavings => _availableSavings;
 
   Future<void> init() => refresh();
 
@@ -34,8 +36,8 @@ class WishlistController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> add(String name, double price, {String? note}) async {
-    await _wishlistRepo.add(name, price, note: note);
+  Future<void> add(String name, int pricePaise, {String? note}) async {
+    await _wishlistRepo.add(name, pricePaise, note: note);
     await refresh();
   }
 
@@ -50,7 +52,7 @@ class WishlistController extends ChangeNotifier {
       Transaction(
         date: date,
         category: 'other',
-        amount: row.price,
+        amountPaise: row.pricePaise,
         note: row.name,
         type: TxnType.expense,
         createdAt: now.toIso8601String(),
@@ -63,10 +65,15 @@ class WishlistController extends ChangeNotifier {
   Future<void> update(
     int id, {
     String? name,
-    double? price,
+    int? pricePaise,
     String? note,
   }) async {
-    await _wishlistRepo.update(id, name: name, price: price, note: note);
+    await _wishlistRepo.update(
+      id,
+      name: name,
+      pricePaise: pricePaise,
+      note: note,
+    );
     await refresh();
   }
 

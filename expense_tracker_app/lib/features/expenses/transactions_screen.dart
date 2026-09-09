@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/utils/money.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/staggered_list.dart';
 import '../../core/widgets/transaction_tile.dart';
@@ -520,7 +521,7 @@ class _TransactionDetailSheet extends StatefulWidget {
 
 class _TransactionDetailSheetState extends State<_TransactionDetailSheet> {
   late final _amountController = TextEditingController(
-    text: widget.txn.amount.toStringAsFixed(2),
+    text: widget.txn.amountPaise.toStringAsFixed(2),
   );
   late final _noteController = TextEditingController(
     text: widget.txn.note ?? '',
@@ -564,14 +565,14 @@ class _TransactionDetailSheetState extends State<_TransactionDetailSheet> {
   }
 
   Future<void> _save() async {
-    final amount = double.tryParse(_amountController.text.replaceAll(',', ''));
+    final amount = parseRupeesToPaise(_amountController.text);
     if (amount == null || amount <= 0 || widget.txn.id == null) return;
     setState(() => _saving = true);
     final iso =
         '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
     await context.read<ExpensesController>().edit(
       widget.txn.id!,
-      amount: amount,
+      amountPaise: amount,
       category: _isLending ? null : _category,
       note: _noteController.text.trim(),
       date: iso,

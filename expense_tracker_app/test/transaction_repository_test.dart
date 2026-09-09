@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:expense_tracker_app/core/utils/money.dart';
 import 'package:expense_tracker_app/data/datasources/app_database.dart';
 import 'package:expense_tracker_app/data/models/transaction.dart';
 import 'package:expense_tracker_app/data/repositories/transaction_repository.dart';
@@ -24,7 +25,7 @@ void main() {
   }) => Transaction(
     date: date,
     category: category,
-    amount: amount,
+    amountPaise: rupeesToPaise(amount),
     type: type,
     createdAt: '${date}T00:00:00.000',
     settled: settled,
@@ -48,8 +49,8 @@ void main() {
         );
 
         final total = await repo.monthTotal('2026-08');
-        expect(total.expense, 150);
-        expect(total.income, 400);
+        expect(total.expense, rupeesToPaise(150));
+        expect(total.income, rupeesToPaise(400));
       },
     );
   });
@@ -90,7 +91,10 @@ void main() {
       );
 
       final totals = await repo.categoryTotals('2026-08');
-      expect(totals, {'food': 130, 'transport': 60});
+      expect(totals, {
+        'food': rupeesToPaise(130),
+        'transport': rupeesToPaise(60),
+      });
     });
   });
 
@@ -108,7 +112,7 @@ void main() {
       );
 
       // 1000 - 400 - 100 (borrowed money deliberately excluded)
-      expect(await repo.availableSavings(), 500);
+      expect(await repo.availableSavings(), rupeesToPaise(500));
     });
   });
 
@@ -120,12 +124,12 @@ void main() {
           txn(date: '2026-08-01', amount: 500, type: TxnType.lent, settled: 0),
         );
 
-        final result = await repo.repay(id, 200);
+        final result = await repo.repay(id, rupeesToPaise(200));
 
         expect(result, isNotNull);
-        expect(result!.applied, 200);
+        expect(result!.applied, rupeesToPaise(200));
         expect(result.overpaid, 0);
-        expect(result.row.amount, 300);
+        expect(result.row.amountPaise, rupeesToPaise(300));
         expect(result.row.isSettled, isFalse);
       },
     );
@@ -137,11 +141,11 @@ void main() {
           txn(date: '2026-08-01', amount: 500, type: TxnType.lent, settled: 0),
         );
 
-        final result = await repo.repay(id, 700);
+        final result = await repo.repay(id, rupeesToPaise(700));
 
-        expect(result!.applied, 500);
-        expect(result.overpaid, 200);
-        expect(result.row.amount, 0);
+        expect(result!.applied, rupeesToPaise(500));
+        expect(result.overpaid, rupeesToPaise(200));
+        expect(result.row.amountPaise, 0);
         expect(result.row.isSettled, isTrue);
       },
     );
@@ -151,21 +155,26 @@ void main() {
         txn(date: '2026-08-01', amount: 500, type: TxnType.lent, settled: 1),
       );
 
-      expect(await repo.repay(id, 100), isNull);
+      expect(await repo.repay(id, rupeesToPaise(100)), isNull);
     });
 
     test('each repayment is logged to payment history, newest first', () async {
       final id = await repo.add(
-        txn(date: '2026-08-01', amount: 500, type: TxnType.borrowed, settled: 0),
+        txn(
+          date: '2026-08-01',
+          amount: 500,
+          type: TxnType.borrowed,
+          settled: 0,
+        ),
       );
 
-      await repo.repay(id, 200);
-      await repo.repay(id, 150);
+      await repo.repay(id, rupeesToPaise(200));
+      await repo.repay(id, rupeesToPaise(150));
 
       final payments = await repo.paymentsFor(id);
       expect(payments, hasLength(2));
-      expect(payments[0].amount, 150);
-      expect(payments[1].amount, 200);
+      expect(payments[0].amountPaise, rupeesToPaise(150));
+      expect(payments[1].amountPaise, rupeesToPaise(200));
     });
   });
 }
