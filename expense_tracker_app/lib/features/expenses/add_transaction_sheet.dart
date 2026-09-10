@@ -14,6 +14,7 @@ import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/utils/notification_service.dart';
 import '../../core/utils/receipt_parser.dart';
+import '../../core/utils/sms_parser.dart';
 import '../../core/widgets/press_scale.dart';
 import '../../data/models/recurring_bill.dart';
 import '../../data/models/transaction.dart';
@@ -26,12 +27,16 @@ import 'expenses_controller.dart';
 Future<void> showAddTransactionSheet(
   BuildContext context, {
   String? initialText,
+  String? initialImagePath,
 }) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => AddTransactionSheet(initialText: initialText),
+    builder: (_) => AddTransactionSheet(
+      initialText: initialText,
+      initialImagePath: initialImagePath,
+    ),
   );
 }
 
@@ -41,7 +46,15 @@ class AddTransactionSheet extends StatefulWidget {
   /// preview is ready immediately, still pending the user's confirmation.
   final String? initialText;
 
-  const AddTransactionSheet({super.key, this.initialText});
+  /// A receipt image shared into the app. Scanned on open, exactly as if
+  /// the user had tapped "Scan receipt" and picked it.
+  final String? initialImagePath;
+
+  const AddTransactionSheet({
+    super.key,
+    this.initialText,
+    this.initialImagePath,
+  });
 
   @override
   State<AddTransactionSheet> createState() => _AddTransactionSheetState();
@@ -74,6 +87,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       _textController.text = shared;
       _onTextChanged(shared);
     }
+    final image = widget.initialImagePath;
+    if (image != null && image.isNotEmpty) {
+      // After the first frame: OCR needs a mounted context for settings.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scanFile(image));
+    }
   }
 
   @override
@@ -87,6 +105,42 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   String _isoDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  /// Payment confirmations shared in from GPay/PhonePe/a bank app are
+  /// structured boilerplate, not the free-form "spent 500 on ola" the
+  /// quick-add parser is built for, and read badly through it.
+  ///
+  /// Only takes over when the text carries a machine-generated marker — a
+  /// reference number, account digits, or a named payee — so ordinary
+  /// typing still goes to the free-form parser.
+  ParsedTransaction? _parsePaymentConfirmation(
+    String text,
+    Map<String, List<String>>? extraCategories,
+  ) {
+    final sms = parseTransactionSms(
+      text,
+      extraCategories: extraCategories,
+      // The user picked this text and is looking at the preview, so the
+      // unattended-scanning gate doesn't apply.
+      requireAccountIdentity: false,
+    );
+    if (sms == null) return null;
+    if (sms.referenceNo == null &&
+        sms.accountTail == null &&
+        sms.merchant == null) {
+      return null;
+    }
+    return ParsedTransaction(
+      amountPaise: sms.amountPaise,
+      category: sms.category,
+      note: sms.describe,
+      type: sms.direction == SmsDirection.credit
+          ? ParsedTxnType.income
+          : ParsedTxnType.expense,
+      counterparty: null,
+      date: _isoDate(sms.occurredAt),
+    );
+  }
+
   void _onTextChanged(String value) {
     final settings = context.read<SettingsController>();
     setState(() {
@@ -94,10 +148,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         _preview = null;
         return;
       }
-      final parsed = parseMessage(
-        value,
-        extraCategories: settings.config.customCategories,
-      );
+      final extra = settings.config.customCategories;
+      final parsed =
+          _parsePaymentConfirmation(value, extra) ??
+          parseMessage(value, extraCategories: extra);
       // A date the user explicitly picked wins over whatever the parser
       // found in the text — otherwise typing more after picking a date
       // would silently snap it back to "today".
@@ -147,12 +201,18 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     final picker = ImagePicker();
     final file = await picker.pickImage(source: source, imageQuality: 85);
     if (file == null || !mounted) return;
+    await _scanFile(file.path);
+  }
 
+  /// Runs receipt OCR over one image file, whether the user picked it or
+  /// shared it in from another app.
+  Future<void> _scanFile(String path) async {
+    if (!mounted) return;
     setState(() => _scanning = true);
     final recognizer = TextRecognizer(script: TextRecognitionScript.latin);
     try {
       final result = await recognizer.processImage(
-        InputImage.fromFilePath(file.path),
+        InputImage.fromFilePath(path),
       );
       if (!mounted) return;
       final settings = context.read<SettingsController>();

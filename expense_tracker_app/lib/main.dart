@@ -228,11 +228,18 @@ class _AppBootstrapState extends State<_AppBootstrap>
 
   void _handleSharedFiles(List<SharedMediaFile> files) {
     for (final file in files) {
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null) return;
+
+      // A shared receipt photo goes through the same OCR as "Scan receipt".
+      // Previously only text was handled, so sharing an image did nothing
+      // at all.
+      if (file.type == SharedMediaType.image && file.path.trim().isNotEmpty) {
+        showAddTransactionSheet(ctx, initialImagePath: file.path);
+        return;
+      }
       if (file.type == SharedMediaType.text && file.path.trim().isNotEmpty) {
-        final ctx = navigatorKey.currentContext;
-        if (ctx != null) {
-          showAddTransactionSheet(ctx, initialText: file.path);
-        }
+        showAddTransactionSheet(ctx, initialText: file.path);
         return;
       }
     }

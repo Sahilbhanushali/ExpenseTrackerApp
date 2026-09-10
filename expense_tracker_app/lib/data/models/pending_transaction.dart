@@ -68,7 +68,20 @@ class PendingTransaction {
   );
 
   /// What to show as the transaction's note once logged.
-  String get displayTitle => merchant ?? (sender ?? 'Bank transaction');
+  String get displayTitle {
+    final account = [
+      // Derived from the sender header rather than stored — no column, no
+      // migration, and it improves retroactively as codes are added.
+      ?bankFromSender(sender),
+      if (accountTail != null) '••$accountTail',
+    ].join(' ');
+    final parts = [
+      if (merchant != null && merchant!.trim().isNotEmpty) merchant!,
+      if (account.isNotEmpty) account,
+    ];
+    if (parts.isEmpty) return sender ?? 'Bank transaction';
+    return parts.join(' · ');
+  }
 
   Map<String, Object?> toMap() => {
     'id': id,

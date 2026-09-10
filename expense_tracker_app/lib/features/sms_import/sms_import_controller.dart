@@ -267,7 +267,7 @@ class SmsImportController extends ChangeNotifier {
         date: _isoDate(parsed.occurredAt),
         category: parsed.category,
         amountPaise: parsed.amountPaise,
-        note: parsed.merchant ?? 'Auto-detected',
+        note: parsed.describe,
         type: parsed.direction == SmsDirection.credit
             ? TxnType.income
             : TxnType.expense,

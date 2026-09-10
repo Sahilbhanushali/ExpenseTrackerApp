@@ -26,6 +26,10 @@ class ParsedSms {
   /// carries the same ref.
   final String? referenceNo;
 
+  /// Human name of the bank/wallet, resolved from the sender header
+  /// ("VM-HDFCBK" -> "HDFC Bank"). Null when the header isn't recognised.
+  final String? bank;
+
   final DateTime occurredAt;
   final String category;
 
@@ -42,7 +46,29 @@ class ParsedSms {
     this.merchant,
     this.accountTail,
     this.referenceNo,
+    this.bank,
   });
+
+  /// What the transaction should read as in the ledger: who was paid, which
+  /// bank it moved through, and which account. "Auto-detected" told the
+  /// user nothing about a row they didn't type themselves.
+  ///
+  /// e.g. "Swiggy · HDFC Bank ••1234", "HDFC Bank ••1234", "UPI payment".
+  String get describe {
+    final parts = <String>[];
+    if (merchant != null && merchant!.trim().isNotEmpty) parts.add(merchant!);
+    final account = [
+      ?bank,
+      if (accountTail != null) '••$accountTail',
+    ].join(' ');
+    if (account.isNotEmpty) parts.add(account);
+    if (parts.isEmpty) {
+      return direction == SmsDirection.credit
+          ? 'Money received'
+          : 'Card/UPI payment';
+    }
+    return parts.join(' · ');
+  }
 
   bool get isAutoLoggable => confidence >= kAutoLogThreshold;
 
@@ -95,6 +121,55 @@ bool looksLikeBankSender(String? sender) {
 }
 
 final RegExp _phoneSenderRe = RegExp(r'^\+?\d[\d\s\-()]{5,}$');
+
+/// Telco headers are "XX-BANKCD" or "XX-BANKCD-S"; the middle token
+/// identifies the sender. Only the common Indian ones are listed — an
+/// unknown bank simply goes unnamed rather than guessed at.
+const Map<String, String> _bankCodes = {
+  'HDFCBK': 'HDFC Bank',
+  'HDFCBN': 'HDFC Bank',
+  'ICICIB': 'ICICI Bank',
+  'ICICIT': 'ICICI Bank',
+  'SBIINB': 'SBI',
+  'SBIUPI': 'SBI',
+  'SBICRD': 'SBI Card',
+  'ATMSBI': 'SBI',
+  'AXISBK': 'Axis Bank',
+  'AXISB': 'Axis Bank',
+  'KOTAKB': 'Kotak',
+  'BOBSMS': 'Bank of Baroda',
+  'BOBTXN': 'Bank of Baroda',
+  'PNBSMS': 'PNB',
+  'CANBNK': 'Canara Bank',
+  'UNIONB': 'Union Bank',
+  'IDFCFB': 'IDFC FIRST',
+  'INDUSB': 'IndusInd',
+  'YESBNK': 'YES Bank',
+  'RBLBNK': 'RBL Bank',
+  'AUBANK': 'AU Bank',
+  'FEDBNK': 'Federal Bank',
+  'IOBCHN': 'Indian Overseas Bank',
+  'CBSSBI': 'SBI',
+  'PYTMPB': 'Paytm',
+  'PAYTMB': 'Paytm',
+  'PHONPE': 'PhonePe',
+  'GPAYIN': 'Google Pay',
+  'AMZNPA': 'Amazon Pay',
+  'SLICEIT': 'slice',
+  'CREDCL': 'CRED',
+  'JUPITR': 'Jupiter',
+  'FIMONEY': 'Fi',
+};
+
+/// "VM-HDFCBK-S" -> "HDFC Bank".
+String? bankFromSender(String? sender) {
+  if (sender == null) return null;
+  for (final token in sender.toUpperCase().split(RegExp(r'[-_\s]'))) {
+    final name = _bankCodes[token];
+    if (name != null) return name;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Rejection rules
@@ -228,7 +303,8 @@ final RegExp _refRe = RegExp(
 final RegExp _merchantRe = RegExp(
   r'\b(?:to|at|towards|favou?ring|trf to|vpa)\s+(?:vpa\s+)?'
   r'([A-Za-z0-9][A-Za-z0-9&@.\-_ ]{2,40}?)'
-  r'(?=\s+(?:on|ref|upi|txn|utr|rrn|dated|thru|through|a\/c|avl|bal|info|not you)\b|[.,;]|$)',
+  r'(?=\s+(?:on|ref|upi|txn|utr|rrn|dated|thru|through|via|using|from|'
+  r'a\/c|avl|bal|info|not you|is|has|was|with)\b|[.,;]|$)',
   caseSensitive: false,
 );
 
@@ -271,11 +347,13 @@ ParsedSms? parseTransactionSms(
   String? sender,
   DateTime? receivedAt,
   Map<String, List<String>>? extraCategories,
+  bool requireAccountIdentity = true,
 }) => _parse(
   body,
   sender: sender,
   receivedAt: receivedAt,
   extraCategories: extraCategories,
+  requireAccountIdentity: requireAccountIdentity,
 ).$1;
 
 /// Same as [parseTransactionSms], but also reports why a message was
@@ -285,11 +363,13 @@ ParsedSms? parseTransactionSms(
   String? sender,
   DateTime? receivedAt,
   Map<String, List<String>>? extraCategories,
+  bool requireAccountIdentity = true,
 }) => _parse(
   body,
   sender: sender,
   receivedAt: receivedAt,
   extraCategories: extraCategories,
+  requireAccountIdentity: requireAccountIdentity,
 );
 
 (ParsedSms?, SmsRejection?) _parse(
@@ -297,6 +377,7 @@ ParsedSms? parseTransactionSms(
   String? sender,
   DateTime? receivedAt,
   Map<String, List<String>>? extraCategories,
+  bool requireAccountIdentity = true,
 }) {
   if (body.trim().isEmpty) return (null, SmsRejection.empty);
 
@@ -348,10 +429,18 @@ ParsedSms? parseTransactionSms(
   // Gate 5: the account identity. A bank names the account the money left;
   // a shop never does. This is what separates "Rs.499 paid" the payment
   // alert from "Rs.499 paid" the order confirmation.
+  //
+  // Relaxed for text the user hands over deliberately (the share sheet, the
+  // quick-add box): the gate exists because inbox scanning is unattended
+  // and silent, and neither of those is true when someone has picked this
+  // message and is looking at a preview of it.
   final accountTail = _accountTailRe.firstMatch(body)?.group(1);
   final vpa = _vpaRe.firstMatch(body)?.group(0);
   final hasRail = _railRe.hasMatch(lower);
-  if (accountTail == null && vpa == null && !hasRail) {
+  if (requireAccountIdentity &&
+      accountTail == null &&
+      vpa == null &&
+      !hasRail) {
     return (null, SmsRejection.noAccountIdentity);
   }
 
@@ -376,6 +465,7 @@ ParsedSms? parseTransactionSms(
       merchant: merchant,
       accountTail: accountTail,
       referenceNo: referenceNo,
+      bank: bankFromSender(sender),
       occurredAt: occurredAt,
       category: category,
       confidence: _score(
