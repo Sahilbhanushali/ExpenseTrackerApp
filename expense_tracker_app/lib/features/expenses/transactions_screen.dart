@@ -450,7 +450,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
     return ListView(
       controller: _scrollController,
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      // The bottom nav is a floating pill drawn over the list, so the last
+      // row needs to be able to scroll clear of it.
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        112,
+      ),
       children: items,
     );
   }

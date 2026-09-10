@@ -36,10 +36,22 @@ class TransactionTile extends StatelessWidget {
         ? AppColors.warning
         : AppColors.categoryColor(txn.category);
 
+    final theme = Theme.of(context);
+    // Rows carry their own surface. Without one they sat straight on the
+    // aurora, which put moving colour behind every amount in the list.
     return PressScale(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: theme.cardTheme.color,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: theme.dividerColor),
+        ),
         child: Row(
           children: [
             Container(
@@ -77,6 +89,7 @@ class TransactionTile extends StatelessWidget {
                 ],
               ),
             ),
+            const SizedBox(width: AppSpacing.sm),
             Text(
               '$sign${formatMoney(txn.amountPaise, currency)}',
               style: TextStyle(
