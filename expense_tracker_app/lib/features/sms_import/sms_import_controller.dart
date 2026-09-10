@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../../core/utils/payment_notification_service.dart';
 import '../../core/utils/sms_parser.dart';
 import '../../core/utils/sms_service.dart';
 import '../../data/models/pending_transaction.dart';
@@ -77,6 +80,19 @@ class SmsImportController extends ChangeNotifier {
   bool _enabled = false;
   bool get isEnabled => _enabled;
 
+  /// Notification reading is a separate, broader permission than SMS, so it
+  /// is a separate switch — plenty of people will want one and not the
+  /// other. Its state lives with the OS (notification access is granted in
+  /// system settings and can be revoked there), so it is read back rather
+  /// than stored.
+  bool _notificationsEnabled = false;
+  bool get notificationsEnabled => _notificationsEnabled;
+  bool get notificationsSupported => _notifications.isSupported;
+
+  final PaymentNotificationService _notifications =
+      PaymentNotificationService.instance;
+  StreamSubscription<void>? _notificationSub;
+
   Future<void> init() async {
     _enabled = await _readEnabled();
     await refresh();
@@ -86,6 +102,50 @@ class SmsImportController extends ChangeNotifier {
       _sms.listenWhileOpen((msg) => ingest(msg.body, sender: msg.address));
       await scan();
     }
+    await refreshNotificationPermission();
+    if (_notificationsEnabled) _startNotificationListener();
+  }
+
+  /// Re-reads the OS permission, which the user can revoke at any time in
+  /// system settings without the app being told.
+  Future<void> refreshNotificationPermission() async {
+    final granted = await _notifications.isPermissionGranted();
+    if (granted == _notificationsEnabled) return;
+    _notificationsEnabled = granted;
+    if (!granted) {
+      await _notificationSub?.cancel();
+      _notificationSub = null;
+    }
+    notifyListeners();
+  }
+
+  /// Sends the user to the system "Notification access" screen.
+  Future<bool> enableNotifications() async {
+    final granted = await _notifications.requestPermission();
+    _notificationsEnabled = granted;
+    if (granted) _startNotificationListener();
+    notifyListeners();
+    return granted;
+  }
+
+  void _startNotificationListener() {
+    _notificationSub?.cancel();
+    _notificationSub = _notifications.listen((body, appName, postedAt) {
+      // The app name stands in for the SMS sender header, so the same
+      // parser, the same gates and the same dedupe key all apply.
+      ingest(
+        body,
+        sender: appName,
+        receivedAt: postedAt,
+        source: 'notification',
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _notificationSub?.cancel();
+    super.dispose();
   }
 
   Future<bool> _readEnabled() async {
@@ -201,6 +261,7 @@ class SmsImportController extends ChangeNotifier {
     String? sender,
     DateTime? receivedAt,
     bool notify = true,
+    String source = 'sms',
   }) async {
     if (body == null) return SmsIngestOutcome.skipped;
 
@@ -208,6 +269,10 @@ class SmsImportController extends ChangeNotifier {
       body,
       sender: sender,
       receivedAt: receivedAt,
+      // A payment app's own notification names the app, not an account, and
+      // often omits the digits a bank SMS carries. The allowlist of payment
+      // apps already does the job the account gate does for SMS.
+      requireAccountIdentity: source != 'notification',
     );
     if (parsed == null) return SmsIngestOutcome.skipped;
 
@@ -216,7 +281,7 @@ class SmsImportController extends ChangeNotifier {
     }
 
     if (parsed.isAutoLoggable) {
-      await _logParsed(parsed, source: 'sms');
+      await _logParsed(parsed, source: source);
       if (notify) await refresh();
       return SmsIngestOutcome.logged;
     }
@@ -224,7 +289,7 @@ class SmsImportController extends ChangeNotifier {
     await _pendingRepo.add(
       PendingTransaction.fromParsed(
         parsed,
-        source: 'sms',
+        source: source,
         rawBody: body,
         sender: sender,
       ),

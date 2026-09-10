@@ -162,13 +162,23 @@ const Map<String, String> _bankCodes = {
 };
 
 /// "VM-HDFCBK-S" -> "HDFC Bank".
+///
+/// Payment-app notifications pass their app name ("PhonePe") straight
+/// through as the sender, so a header that is already a readable name is
+/// returned as-is rather than looked up.
 String? bankFromSender(String? sender) {
-  if (sender == null) return null;
-  for (final token in sender.toUpperCase().split(RegExp(r'[-_\s]'))) {
+  if (sender == null || sender.trim().isEmpty) return null;
+  final trimmed = sender.trim();
+  // A person's number is never a bank name.
+  if (_phoneSenderRe.hasMatch(trimmed)) return null;
+  for (final token in trimmed.toUpperCase().split(RegExp(r'[-_\s]'))) {
     final name = _bankCodes[token];
     if (name != null) return name;
   }
-  return null;
+  // A telco header is all-caps with a dash; anything mixed-case is already
+  // a name we set ourselves.
+  final looksLikeHeader = RegExp(r'^[A-Z0-9]{2}-[A-Z0-9-]+$').hasMatch(trimmed);
+  return looksLikeHeader ? null : trimmed;
 }
 
 // ---------------------------------------------------------------------------

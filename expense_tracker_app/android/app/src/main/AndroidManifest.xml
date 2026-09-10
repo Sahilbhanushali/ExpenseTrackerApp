@@ -53,6 +53,19 @@
                 <data android:mimeType="image/*"/>
             </intent-filter>
         </activity>
+        <!-- Reads payment confirmations that UPI apps show only as a
+             notification and never text you about. Bound by the system;
+             Spendo filters to an allowlist of payment/banking apps before
+             looking at any content. -->
+        <service
+            android:label="Spendo payment notifications"
+            android:name="notification.listener.service.NotificationListener"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService"/>
+            </intent-filter>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

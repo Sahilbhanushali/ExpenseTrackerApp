@@ -120,6 +120,9 @@ class _AppBootstrapState extends State<_AppBootstrap>
     if (state == AppLifecycleState.resumed) {
       _checkDueBills();
       _maybeRelock();
+      // Notification access is granted (and revoked) in system settings,
+      // so the app only finds out by re-checking when it comes back.
+      context.read<SmsImportController>().refreshNotificationPermission();
     }
     if (state == AppLifecycleState.paused) {
       _pausedAt = DateTime.now();

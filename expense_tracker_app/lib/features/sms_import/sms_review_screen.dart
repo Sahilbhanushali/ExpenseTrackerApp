@@ -100,6 +100,26 @@ class SmsReviewScreen extends StatelessWidget {
     );
   }
 
+  /// Sends the user to the system "Notification access" screen. UPI apps
+  /// increasingly confirm a payment in-app without ever texting, so SMS
+  /// alone misses them.
+  Future<void> _enableNotifications(BuildContext context) async {
+    final sms = context.read<SmsImportController>();
+    final messenger = ScaffoldMessenger.of(context);
+    final granted = await sms.enableNotifications();
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          granted
+              ? 'Reading payment notifications now.'
+              : 'Not enabled. Find Spendo under Notification access in '
+                    'system settings to turn it on.',
+        ),
+      ),
+    );
+  }
+
   /// Stops importing and empties the review queue. Transactions already
   /// logged stay — removing those is what "Re-import" is for.
   Future<void> _disable(BuildContext context) async {
@@ -155,9 +175,20 @@ class SmsReviewScreen extends StatelessWidget {
               onSelected: (v) {
                 if (v == 'reimport') _reimport(context);
                 if (v == 'disable') _disable(context);
+                if (v == 'notifications') _enableNotifications(context);
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
+              itemBuilder: (context) => [
+                if (sms.notificationsSupported && !sms.notificationsEnabled)
+                  const PopupMenuItem(
+                    value: 'notifications',
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.notifications_none),
+                      title: Text('Read payment notifications'),
+                      subtitle: Text('For UPI apps that never text you'),
+                    ),
+                  ),
+                const PopupMenuItem(
                   value: 'reimport',
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -166,7 +197,7 @@ class SmsReviewScreen extends StatelessWidget {
                     subtitle: Text('Clears anything wrongly imported'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'disable',
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -191,11 +222,28 @@ class SmsReviewScreen extends StatelessWidget {
           : !sms.isEnabled
           ? _SetupPanel(onEnable: () => _enable(context))
           : sms.pending.isEmpty
-          ? const EmptyState(
-              icon: Icons.mark_email_read_outlined,
-              message:
-                  'Nothing waiting for review. Confident bank messages are '
-                  'logged automatically.',
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                96,
+              ),
+              children: [
+                const EmptyState(
+                  icon: Icons.mark_email_read_outlined,
+                  message:
+                      'Nothing waiting for review. Confident bank messages '
+                      'are logged automatically.',
+                ),
+                if (sms.notificationsSupported) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _NotificationPanel(
+                    enabled: sms.notificationsEnabled,
+                    onEnable: () => _enableNotifications(context),
+                  ),
+                ],
+              ],
             )
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(
@@ -219,6 +267,66 @@ class SmsReviewScreen extends StatelessWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// The second, broader switch: reading payment-app notifications.
+class _NotificationPanel extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onEnable;
+
+  const _NotificationPanel({required this.enabled, required this.onEnable});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                enabled
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_off_outlined,
+                color: enabled ? AppColors.income : AppColors.primary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  enabled
+                      ? 'Reading payment notifications'
+                      : 'Also read payment notifications',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            enabled
+                ? 'Payments confirmed only inside GPay, PhonePe, Paytm and '
+                      'banking apps are picked up too.'
+                : 'UPI apps often confirm a payment in the app without '
+                      'texting you, so those spends never reach Spendo. '
+                      'Only notifications from payment and banking apps are '
+                      'read — nothing else is looked at.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (!enabled) ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onEnable,
+                icon: const Icon(Icons.notifications_none),
+                label: const Text('Turn on notification access'),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
