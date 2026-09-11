@@ -586,7 +586,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
     if (isExpense && isCurrentMonth) {
       final config = settings.config;
-      final budget = settings.effectiveBudget(expenses.monthTotal.income);
+      final budget = settings.config.monthlyBudgetPaise;
       final catCap = config.budgets[category] ?? 0;
       final warnings = buildThresholdWarnings(
         beforeSpent: beforeSpent,

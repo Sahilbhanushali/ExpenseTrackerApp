@@ -66,14 +66,4 @@ class SettingsController extends ChangeNotifier {
     return _persist(_config.copyWith(customCategories: custom));
   }
 
-  /// Effective budget: capped at logged income once any is logged this
-  /// month, same as bot.py's effective_budget().
-  /// [incomePaise] and the result are both in paise.
-  int effectiveBudget(int incomePaise) {
-    return incomePaise > 0
-        ? (_config.monthlyBudgetPaise < incomePaise
-              ? _config.monthlyBudgetPaise
-              : incomePaise)
-        : _config.monthlyBudgetPaise;
-  }
 }

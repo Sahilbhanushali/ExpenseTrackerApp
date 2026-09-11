@@ -8,7 +8,6 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
-import '../expenses/expenses_controller.dart';
 import 'settings_controller.dart';
 
 /// Splits the monthly budget across categories, and keeps it always fully
@@ -27,18 +26,20 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
   /// Both in paise.
   late int _total;
   late Map<String, int> _allocations;
-  bool _initialized = false;
+  /// The budget the current allocations were seeded from. Re-seeding only
+  /// when it changes keeps the user's slider edits while still following a
+  /// budget changed in Settings.
+  int? _seededFor;
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>();
-    final expenses = context.watch<ExpensesController>();
     final config = settings.config;
 
-    if (!_initialized) {
-      _total = settings.effectiveBudget(expenses.monthTotal.income);
+    if (_seededFor != config.monthlyBudgetPaise) {
+      _total = config.monthlyBudgetPaise;
       _allocations = _seedAllocations(config.budgets, _total);
-      _initialized = true;
+      _seededFor = _total;
     }
 
     final allocatedSum = _allocations.values.fold<int>(0, (s, v) => s + v);

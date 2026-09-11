@@ -51,7 +51,7 @@ class MonthSummarySection extends StatelessWidget {
     final categoryTotals = isCurrentMonth
         ? expenses.categoryTotals
         : viewedCategoryTotals;
-    final budget = settings.effectiveBudget(totals.income);
+    final budget = settings.config.monthlyBudgetPaise;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

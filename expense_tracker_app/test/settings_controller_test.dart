@@ -16,33 +16,31 @@ class _FakeConfigRepository extends ConfigRepository {
 }
 
 void main() {
-  test(
-    'effectiveBudget falls back to the flat budget when no income logged yet',
-    () async {
-      final settings = SettingsController(_FakeConfigRepository());
-      await settings.setMonthlyBudget(20000);
+  test('the monthly budget you set is the budget', () async {
+    final settings = SettingsController(_FakeConfigRepository());
+    await settings.setMonthlyBudget(1700000);
 
-      expect(settings.effectiveBudget(0), 20000);
-    },
-  );
+    expect(settings.config.monthlyBudgetPaise, 1700000);
+  });
 
-  test(
-    'effectiveBudget is capped at income once income exceeds the budget',
-    () async {
-      final settings = SettingsController(_FakeConfigRepository());
-      await settings.setMonthlyBudget(20000);
+  test('logging income does not shrink the budget', () async {
+    // The budget used to be silently capped at whatever income had been
+    // logged so far this month. That made ₹500 of incidental income cut a
+    // ₹17,000 budget by 97%, and reported the month as wildly overspent.
+    final settings = SettingsController(_FakeConfigRepository());
+    await settings.setMonthlyBudget(1700000);
 
-      expect(settings.effectiveBudget(15000), 15000);
-    },
-  );
+    // Whatever income exists, the configured budget is what the UI uses.
+    expect(settings.config.monthlyBudgetPaise, 1700000);
 
-  test(
-    'effectiveBudget uses the flat budget when income is below it',
-    () async {
-      final settings = SettingsController(_FakeConfigRepository());
-      await settings.setMonthlyBudget(20000);
+    await settings.setMonthlyBudget(50000);
+    expect(settings.config.monthlyBudgetPaise, 50000);
+  });
 
-      expect(settings.effectiveBudget(50000), 20000);
-    },
-  );
+  test('category budgets are stored in paise', () async {
+    final settings = SettingsController(_FakeConfigRepository());
+    await settings.setCategoryBudget('food', 800000);
+
+    expect(settings.config.budgets['food'], 800000);
+  });
 }
