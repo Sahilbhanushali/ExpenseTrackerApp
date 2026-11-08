@@ -79,6 +79,7 @@ class _FakeTxnRepo extends TransactionRepository {
     DateTime? from,
     DateTime? to,
     String? searchTerm,
+    String? account,
   }) async => offset == 0 ? _rows : [];
 
   @override

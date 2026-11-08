@@ -73,6 +73,7 @@ class ExpensesController extends ChangeNotifier {
     DateTime? from,
     DateTime? to,
     String? searchTerm,
+    String? account,
   }) => _txnRepo.queryPage(
     limit: limit,
     offset: offset,
@@ -81,6 +82,7 @@ class ExpensesController extends ChangeNotifier {
     from: from,
     to: to,
     searchTerm: searchTerm,
+    account: account,
   );
   Future<List<String>> distinctCategories() => _txnRepo.distinctCategories();
   Future<MonthTotal> totalsRange(DateTime from, DateTime to) =>

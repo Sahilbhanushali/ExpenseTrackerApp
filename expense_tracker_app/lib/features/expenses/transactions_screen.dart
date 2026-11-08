@@ -42,7 +42,10 @@ class _TxnEntry extends _ListEntry {
 }
 
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key});
+  /// Opens pre-filtered to one account's history (pushed from Accounts).
+  final String? account;
+
+  const TransactionsScreen({super.key, this.account});
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -67,6 +70,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   TxnType? _typeFilter;
   String? _categoryFilter;
   DateTimeRange? _dateFilter;
+  late String? _accountFilter = widget.account;
 
   late final ExpensesController _expenses;
 
@@ -129,6 +133,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         from: _dateFilter?.start,
         to: _dateFilter?.end,
         searchTerm: _searchController.text,
+        account: _accountFilter,
       );
       if (!mounted) return;
       setState(() {
@@ -304,13 +309,34 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => _CategoryPickerSheet(
-        categories: _categories,
+      builder: (context) => _FilterPickerSheet(
+        title: 'Filter by category',
+        allLabel: 'All categories',
+        options: _categories,
         selected: _categoryFilter,
+        leading: (cat) => CategoryIcon(category: cat, size: 36),
       ),
     );
     if (picked == null) return;
     setState(() => _categoryFilter = picked.isEmpty ? null : picked);
+    _reload();
+  }
+
+  Future<void> _pickAccount(List<String> accounts) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _FilterPickerSheet(
+        title: 'Filter by account',
+        allLabel: 'All accounts',
+        options: accounts,
+        selected: _accountFilter,
+        leading: (_) => const Icon(Icons.account_balance_wallet_outlined),
+      ),
+    );
+    if (picked == null) return;
+    setState(() => _accountFilter = picked.isEmpty ? null : picked);
     _reload();
   }
 
@@ -329,15 +355,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       _typeFilter != null ||
       _categoryFilter != null ||
       _dateFilter != null ||
+      _accountFilter != null ||
       _searchController.text.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     final currency = context.watch<SettingsController>().config.currency;
+    final accounts = context.select<AccountsController, List<String>>(
+      (c) => [for (final a in c.accounts) a.account.name],
+    );
+    final pushed = widget.account != null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Transactions'),
+        title: Text(pushed ? widget.account! : 'Transactions'),
         actions: [
           IconButton(
             icon: const Icon(Icons.undo_rounded),
@@ -423,6 +454,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     onTap: _pickCategory,
                     onClear: () {
                       setState(() => _categoryFilter = null);
+                      _reload();
+                    },
+                  ),
+                if (accounts.isNotEmpty && !pushed)
+                  AppChoiceChip(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: _accountFilter ?? 'Any account',
+                    selected: _accountFilter != null,
+                    onTap: () => _pickAccount(accounts),
+                    onClear: () {
+                      setState(() => _accountFilter = null);
                       _reload();
                     },
                   ),
@@ -614,11 +656,21 @@ class _DayHeaderRow extends StatelessWidget {
   }
 }
 
-class _CategoryPickerSheet extends StatelessWidget {
-  final List<String> categories;
+class _FilterPickerSheet extends StatelessWidget {
+  final String title;
+  final String allLabel;
+  final List<String> options;
   final String? selected;
+  final Widget Function(String option) leading;
 
-  const _CategoryPickerSheet({required this.categories, this.selected});
+  /// Pops the chosen option, or '' for "all".
+  const _FilterPickerSheet({
+    required this.title,
+    required this.allLabel,
+    required this.options,
+    required this.leading,
+    this.selected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -638,10 +690,7 @@ class _CategoryPickerSheet extends StatelessWidget {
               AppSpacing.page,
               AppSpacing.sm,
             ),
-            child: Text(
-              'Filter by category',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
           ),
           Flexible(
             child: ListView.builder(
@@ -652,22 +701,21 @@ class _CategoryPickerSheet extends StatelessWidget {
                 AppSpacing.sm,
                 AppSpacing.lg,
               ),
-              itemCount: categories.length + 1,
+              itemCount: options.length + 1,
               itemBuilder: (context, i) {
-                final cat = i == 0 ? null : categories[i - 1];
-                final isSelected = cat == selected;
+                final option = i == 0 ? null : options[i - 1];
                 return ListTile(
-                  leading: cat == null
+                  leading: option == null
                       ? Icon(
                           Icons.all_inclusive_rounded,
                           color: p.textSecondary,
                         )
-                      : CategoryIcon(category: cat, size: 36),
-                  title: Text(cat ?? 'All categories'),
-                  trailing: isSelected
+                      : leading(option),
+                  title: Text(option ?? allLabel),
+                  trailing: option == selected
                       ? Icon(Icons.check_rounded, color: p.savings)
                       : null,
-                  onTap: () => Navigator.pop(context, cat ?? ''),
+                  onTap: () => Navigator.pop(context, option ?? ''),
                 );
               },
             ),

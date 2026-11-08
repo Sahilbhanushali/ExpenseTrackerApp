@@ -158,6 +158,7 @@ class TransactionRepository {
     DateTime? from,
     DateTime? to,
     String? searchTerm,
+    String? account,
   }) async {
     final db = await _db.database;
     final where = <String>[];
@@ -178,6 +179,12 @@ class TransactionRepository {
     if (to != null) {
       where.add('date <= ?');
       args.add(_isoDate(to));
+    }
+    if (account != null) {
+      // Same key AccountRepository balances use, so the list matches the
+      // balance shown for the account.
+      where.add('account = ?');
+      args.add(account);
     }
     if (searchTerm != null && searchTerm.trim().isNotEmpty) {
       where.add('(note LIKE ? OR category LIKE ?)');

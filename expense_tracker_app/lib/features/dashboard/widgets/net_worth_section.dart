@@ -11,10 +11,8 @@ import '../../../data/models/account.dart';
 import '../../../data/models/transaction.dart';
 import '../../accounts/accounts_controller.dart';
 import '../../accounts/accounts_screen.dart';
-import '../../expenses/add_transaction_sheet.dart';
 import '../../lending/lending_controller.dart';
 import '../../lending/lending_screen.dart';
-import '../../settings/budget_planner_screen.dart';
 import '../../settings/settings_controller.dart';
 
 /// Net worth headline, quick actions and the asset/debt breakdown. Owns its
@@ -88,31 +86,6 @@ class _NetWorthSectionState extends State<NetWorthSection> {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Row(
-          children: [
-            _QuickAction(
-              icon: Icons.add_rounded,
-              label: 'Add',
-              onTap: () => showAddTransactionSheet(context),
-            ),
-            _QuickAction(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'Accounts',
-              onTap: () => _open(const AccountsScreen()),
-            ),
-            _QuickAction(
-              icon: Icons.handshake_outlined,
-              label: 'Owed',
-              onTap: () => _open(const LendingScreen()),
-            ),
-            _QuickAction(
-              icon: Icons.pie_chart_outline_rounded,
-              label: 'Budget',
-              onTap: () => _open(const BudgetPlannerScreen()),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
         SizedBox(
           // Grows with the user's text size so labels never clip.
           height: MediaQuery.textScalerOf(context).scale(40) + 32,
@@ -159,59 +132,6 @@ class _NetWorthSectionState extends State<NetWorthSection> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Expanded(
-      child: Semantics(
-        button: true,
-        label: label,
-        excludeSemantics: true,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Column(
-              children: [
-                Container(
-                  height: 52,
-                  constraints: const BoxConstraints(maxWidth: 72),
-                  decoration: BoxDecoration(
-                    color: p.surface,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                    border: Border.all(color: p.border),
-                  ),
-                  child: Center(child: Icon(icon, color: p.textPrimary)),
-                ),
-                const SizedBox(height: AppSpacing.sm - 2),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium
-                      ?.copyWith(color: p.textPrimary),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

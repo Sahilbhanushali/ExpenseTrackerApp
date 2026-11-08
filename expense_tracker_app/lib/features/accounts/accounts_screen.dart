@@ -12,6 +12,7 @@ import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/responsive.dart';
 import '../../core/widgets/staggered_list.dart';
 import '../../data/models/account.dart';
+import '../expenses/transactions_screen.dart';
 import '../settings/settings_controller.dart';
 import 'accounts_controller.dart';
 
@@ -698,7 +699,13 @@ class AccountsScreen extends StatelessWidget {
                             .where((a) => a.account.type == type)
                             .toList(),
                         currency: currency,
-                        onTap: (a) => _showEditAccount(context, a),
+                        onTap: (a) => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                TransactionsScreen(account: a.account.name),
+                          ),
+                        ),
+                        onEdit: (a) => _showEditAccount(context, a),
                         onSetDefault: (a) => context
                             .read<AccountsController>()
                             .setDefault(a.account.name),
@@ -763,7 +770,10 @@ class _AccountTypeSection extends StatelessWidget {
   final AccountType type;
   final List<AccountBalance> accounts;
   final String currency;
+
+  /// Opens the account's transaction history.
   final ValueChanged<AccountBalance> onTap;
+  final ValueChanged<AccountBalance> onEdit;
   final ValueChanged<AccountBalance> onSetDefault;
   final ValueChanged<AccountBalance> onDelete;
 
@@ -772,6 +782,7 @@ class _AccountTypeSection extends StatelessWidget {
     required this.accounts,
     required this.currency,
     required this.onTap,
+    required this.onEdit,
     required this.onSetDefault,
     required this.onDelete,
   });
@@ -876,13 +887,19 @@ class _AccountTypeSection extends StatelessWidget {
                                 color: p.textTertiary,
                               ),
                               onSelected: (v) {
-                                if (v == 'default') {
+                                if (v == 'edit') {
+                                  onEdit(a);
+                                } else if (v == 'default') {
                                   onSetDefault(a);
                                 } else if (v == 'delete') {
                                   onDelete(a);
                                 }
                               },
                               itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
+                                ),
                                 if (!a.account.isDefault)
                                   const PopupMenuItem(
                                     value: 'default',

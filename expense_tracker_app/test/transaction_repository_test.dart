@@ -177,4 +177,22 @@ void main() {
       expect(payments[1].amountPaise, rupeesToPaise(200));
     });
   });
+
+  group('queryPage account filter', () {
+    test('returns only rows for that account', () async {
+      for (final account in ['HDFC', 'Cash', null]) {
+        await repo.add(
+          txn(
+            date: '2026-08-05',
+            amount: 10,
+            type: TxnType.expense,
+          ).copyWith(account: account),
+        );
+      }
+
+      final hdfc = await repo.queryPage(account: 'HDFC');
+      expect(hdfc.map((t) => t.account), ['HDFC']);
+      expect(await repo.queryPage(), hasLength(3));
+    });
+  });
 }

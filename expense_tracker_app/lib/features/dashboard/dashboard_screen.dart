@@ -4,11 +4,9 @@ import 'package:provider/provider.dart';
 import '../../core/constants/calendar.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/responsive.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../expenses/expenses_controller.dart';
-import '../settings/settings_screen.dart';
 import 'widgets/month_summary_section.dart';
 import 'widgets/net_worth_section.dart';
 
@@ -201,13 +199,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Text(_greeting(), style: text.titleLarge),
                     ],
                   ),
-                ),
-                IconButton.filledTonal(
-                  tooltip: 'Settings',
-                  onPressed: () =>
-                      Navigator.of(context)
-                          .push(FadeSlideRoute(page: const SettingsScreen())),
-                  icon: const Icon(Icons.settings_outlined),
                 ),
               ],
             ),
