@@ -326,7 +326,7 @@ class RecurringScreen extends StatelessWidget {
             onPressed: () => _showAddSalary(context),
             label: const Text('Salary'),
             icon: const Icon(Icons.savings_outlined),
-            backgroundColor: AppColors.income,
+            backgroundColor: context.palette.income,
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
@@ -355,11 +355,12 @@ class RecurringScreen extends StatelessWidget {
               message: 'No recurring bills or income set up yet.',
             )
           : ListView(
+              // Clears the stacked FABs.
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                140,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance + AppSpacing.xl,
               ),
               children: [
                 if (recurring.due.isNotEmpty) ...[
@@ -379,7 +380,7 @@ class RecurringScreen extends StatelessWidget {
                               isIncome
                                   ? Icons.savings_outlined
                                   : Icons.event_repeat_outlined,
-                              color: AppColors.warning,
+                              color: context.palette.warning,
                             ),
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
@@ -430,12 +431,12 @@ class RecurringScreen extends StatelessWidget {
                           icon: isIncome
                               ? Icons.savings_outlined
                               : Icons.event_repeat_outlined,
-                          iconColor: isIncome ? AppColors.income : null,
+                          iconColor: isIncome ? context.palette.income : null,
                           title:
                               '${isIncome ? r.note ?? 'Income' : r.category} · '
                               '${isIncome ? '+' : ''}${formatMoney(r.amountPaise, currency)}',
                           titleStyle: isIncome
-                              ? const TextStyle(color: AppColors.income)
+                              ? TextStyle(color: context.palette.income)
                               : null,
                           subtitle:
                               'Day ${r.dayOfMonth}${!isIncome && r.note?.isNotEmpty == true ? ' · ${r.note}' : ''}${remaining != null ? ' · $remaining left' : ''}',

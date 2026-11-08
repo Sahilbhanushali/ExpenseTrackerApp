@@ -326,6 +326,27 @@ class TransactionRepository {
     };
   }
 
+  /// Expense totals per day (`yyyy-MM-dd`) or per month (`yyyy-MM`) between
+  /// two dates, inclusive. Only buckets with spending are returned; callers
+  /// zero-fill the gaps.
+  Future<Map<String, int>> expenseSeries(
+    DateTime from,
+    DateTime to, {
+    bool monthly = false,
+  }) async {
+    final db = await _db.database;
+    final len = monthly ? 7 : 10;
+    final rows = await db.rawQuery(
+      "SELECT substr(date, 1, $len) as bucket, SUM(amount) as total FROM txns "
+      "WHERE date >= ? AND date <= ? AND type = 'expense' GROUP BY bucket",
+      [_isoDate(from), _isoDate(to)],
+    );
+    return {
+      for (final r in rows)
+        r['bucket'] as String: (r['total'] as num?)?.round() ?? 0,
+    };
+  }
+
   /// Heuristic: the same category+note expense logged in 3+ of the last 4
   /// months, with amounts within 15% of each other, looks like a recurring
   /// bill (subscription, rent, etc.) the user hasn't set up a reminder for.

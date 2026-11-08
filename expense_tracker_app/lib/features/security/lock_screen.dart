@@ -57,62 +57,73 @@ class _UnlockScreenState extends State<UnlockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // The app theme makes Scaffold backgrounds transparent (to let the
-    // aurora background show through the Navigator) — but this screen is
-    // stacked directly over HomeShell while locked, so it needs its own
-    // opaque ground or the dashboard underneath would show through it.
+    // Stacked directly over HomeShell while locked, so it must paint an
+    // opaque ground of its own.
+    final p = context.palette;
     return Scaffold(
-      backgroundColor: Theme.of(context).brightness == Brightness.dark
-          ? AppColors.backgroundDark
-          : AppColors.background,
+      backgroundColor: p.background,
       body: SafeArea(
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.lock_outline,
-                  size: 40,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  'Enter your PIN',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                TextField(
-                  controller: _pinController,
-                  autofocus: true,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  maxLength: 6,
-                  style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                  decoration: InputDecoration(
-                    counterText: '',
-                    errorText: _error,
-                    border: const OutlineInputBorder(),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: p.inkSurface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.lock_rounded,
+                      size: AppIconSize.xl,
+                      color: p.onInk,
+                    ),
                   ),
-                  onChanged: (_) => setState(() => _error = null),
-                  onSubmitted: (_) => _submitPin(),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                FilledButton(
-                  onPressed: _submitPin,
-                  child: const Text('Unlock'),
-                ),
-                if (_biometricAvailable) ...[
                   const SizedBox(height: AppSpacing.md),
-                  TextButton.icon(
-                    onPressed: _tryBiometric,
-                    icon: const Icon(Icons.fingerprint),
-                    label: const Text('Use biometrics'),
+                  Text(
+                    'Enter your PIN',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
+                  const SizedBox(height: AppSpacing.lg),
+                  TextField(
+                    controller: _pinController,
+                    autofocus: true,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    maxLength: 6,
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(letterSpacing: 8),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      errorText: _error,
+                    ),
+                    onChanged: (_) => setState(() => _error = null),
+                    onSubmitted: (_) => _submitPin(),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _submitPin,
+                      child: const Text('Unlock'),
+                    ),
+                  ),
+                  if (_biometricAvailable) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    TextButton.icon(
+                      onPressed: _tryBiometric,
+                      icon: const Icon(Icons.fingerprint),
+                      label: const Text('Use biometrics'),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -176,7 +187,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Set up app lock')),
       body: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -194,12 +205,9 @@ class _SetPinScreenState extends State<SetPinScreen> {
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 maxLength: 6,
-                style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                decoration: InputDecoration(
-                  counterText: '',
-                  errorText: _error,
-                  border: const OutlineInputBorder(),
-                ),
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(letterSpacing: 8),
+                decoration: InputDecoration(counterText: '', errorText: _error),
                 onSubmitted: (_) =>
                     confirming ? _submitConfirm() : _submitFirst(),
               ),

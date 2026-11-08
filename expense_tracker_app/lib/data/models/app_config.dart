@@ -27,6 +27,9 @@ class AppConfig {
   /// Per-category caps, in paise.
   final Map<String, int> budgets;
 
+  /// 'system' | 'light' | 'dark'.
+  final String themeMode;
+
   const AppConfig({
     this.currency = '₹',
     this.locale = 'en-IN',
@@ -34,6 +37,7 @@ class AppConfig {
     this.savingsGoal = const SavingsGoal(),
     this.customCategories = const {},
     this.budgets = const {},
+    this.themeMode = 'system',
   });
 
   AppConfig copyWith({
@@ -43,6 +47,7 @@ class AppConfig {
     SavingsGoal? savingsGoal,
     Map<String, List<String>>? customCategories,
     Map<String, int>? budgets,
+    String? themeMode,
   }) {
     return AppConfig(
       currency: currency ?? this.currency,
@@ -51,6 +56,7 @@ class AppConfig {
       savingsGoal: savingsGoal ?? this.savingsGoal,
       customCategories: customCategories ?? this.customCategories,
       budgets: budgets ?? this.budgets,
+      themeMode: themeMode ?? this.themeMode,
     );
   }
 
@@ -65,6 +71,7 @@ class AppConfig {
     'savingsGoal': savingsGoal.toJson(),
     'customCategories': customCategories,
     'budgets': budgets,
+    'themeMode': themeMode,
   };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -89,6 +96,11 @@ class AppConfig {
       budgets: budgetsRaw.map(
         (k, v) => MapEntry(k as String, ((v as num) * scale).round()),
       ),
+      themeMode: switch (json['themeMode']) {
+        'light' => 'light',
+        'dark' => 'dark',
+        _ => 'system',
+      },
     );
   }
 }

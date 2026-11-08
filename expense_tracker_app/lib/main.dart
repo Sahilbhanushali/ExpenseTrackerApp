@@ -10,7 +10,6 @@ import 'core/theme/app_theme.dart';
 import 'core/utils/app_lock_service.dart';
 import 'core/utils/error_reporting.dart';
 import 'core/utils/notification_service.dart';
-import 'core/widgets/aurora_background.dart';
 import 'features/accounts/accounts_controller.dart';
 import 'features/dashboard/home_shell.dart';
 import 'features/expenses/add_transaction_sheet.dart';
@@ -55,23 +54,36 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RemindersController()),
         ChangeNotifierProvider(create: (_) => SmsImportController()),
       ],
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        title: 'Spendo',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        // A single AuroraBackground behind the whole Navigator, so it never
-        // rebuilds or restarts its animation as screens push/pop — every
-        // Scaffold is transparent (see AppTheme) and lets it show through.
-        builder: (context, child) => Stack(
-          children: [
-            const Positioned.fill(child: AuroraBackground()),
-            ?child,
-          ],
-        ),
-        home: const _AppBootstrap(),
-      ),
+      child: const _ThemedApp(),
+    );
+  }
+}
+
+/// Rebuilds MaterialApp only when the theme preference changes, not on every
+/// settings write.
+class _ThemedApp extends StatelessWidget {
+  const _ThemedApp();
+
+  static final _light = AppTheme.light();
+  static final _dark = AppTheme.dark();
+
+  @override
+  Widget build(BuildContext context) {
+    final mode = context.select<SettingsController, String>(
+      (s) => s.config.themeMode,
+    );
+    return MaterialApp(
+      navigatorKey: navigatorKey,
+      title: 'Spendo',
+      debugShowCheckedModeBanner: false,
+      theme: _light,
+      darkTheme: _dark,
+      themeMode: switch (mode) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      },
+      home: const _AppBootstrap(),
     );
   }
 }

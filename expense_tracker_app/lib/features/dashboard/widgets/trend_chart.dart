@@ -8,60 +8,84 @@ import '../../../core/utils/money_formatter.dart';
 import '../../../data/repositories/transaction_repository.dart';
 
 /// Income vs. expense per month, oldest to newest — answers "am I trending
-/// up or down" at a glance instead of only showing the current month.
+/// up or down" at a glance. Tap a month for exact figures.
 class TrendChart extends StatelessWidget {
   final List<MonthPoint> points;
   final String currency;
+  final double height;
 
-  const TrendChart({super.key, required this.points, required this.currency});
+  const TrendChart({
+    super.key,
+    required this.points,
+    required this.currency,
+    this.height = 180,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final maxVal = points.fold<double>(
-      0,
-      (m, p) => [
-        m,
-        p.income.toDouble(),
-        p.expense.toDouble(),
-      ].reduce((a, b) => a > b ? a : b),
-    );
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final maxVal = points.fold<int>(0, (m, e) {
+      final hi = e.income > e.expense ? e.income : e.expense;
+      return hi > m ? hi : m;
+    });
     final ceiling = maxVal <= 0 ? 1.0 : maxVal * 1.15;
+
+    String label(int i) {
+      final parts = points[i].month.split('-');
+      return kMonthNamesShort[int.parse(parts[1]) - 1];
+    }
 
     return Column(
       children: [
+        Row(
+          children: [
+            ChartLegendDot(color: p.income, label: 'Income'),
+            const SizedBox(width: AppSpacing.md),
+            ChartLegendDot(color: p.expense, label: 'Expenses'),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
         SizedBox(
-          height: 160,
+          height: height,
           child: BarChart(
+            duration: AppDurations.of(context, AppDurations.chart),
             BarChartData(
               maxY: ceiling,
               alignment: BarChartAlignment.spaceAround,
-              gridData: const FlGridData(show: false),
+              gridData: FlGridData(
+                drawVerticalLine: false,
+                horizontalInterval: ceiling / 4,
+                getDrawingHorizontalLine: (_) =>
+                    FlLine(color: p.border, strokeWidth: 1, dashArray: [4, 4]),
+              ),
               borderData: FlBorderData(show: false),
               titlesData: FlTitlesData(
-                leftTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 44,
+                    interval: ceiling / 4,
+                    getTitlesWidget: (v, meta) {
+                      if (v == 0 || v >= ceiling) return const SizedBox();
+                      return Text(
+                        formatMoneyCompact(v.round(), currency),
+                        style: text.labelSmall,
+                      );
+                    },
+                  ),
                 ),
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
+                rightTitles: const AxisTitles(),
+                topTitles: const AxisTitles(),
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
                     getTitlesWidget: (value, meta) {
                       final i = value.toInt();
                       if (i < 0 || i >= points.length) return const SizedBox();
-                      final parts = points[i].month.split('-');
-                      final label = kMonthNamesShort[int.parse(parts[1]) - 1]
-                          .substring(0, 3);
                       return Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          label,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                        padding: const EdgeInsets.only(top: AppSpacing.sm - 2),
+                        child: Text(label(i), style: text.labelSmall),
                       );
                     },
                   ),
@@ -69,33 +93,41 @@ class TrendChart extends StatelessWidget {
               ),
               barTouchData: BarTouchData(
                 touchTooltipData: BarTouchTooltipData(
+                  getTooltipColor: (_) => p.inkSurface,
+                  tooltipRoundedRadius: AppRadius.xs,
                   getTooltipItem: (group, groupIndex, rod, rodIndex) =>
                       BarTooltipItem(
-                        formatMoney(rod.toY.round(), currency),
-                        const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                        '${label(group.x)} · ${rodIndex == 0 ? 'Income' : 'Spent'}\n',
+                        text.labelSmall!.copyWith(
+                          color: p.onInk.withValues(alpha: 0.7),
                         ),
+                        children: [
+                          TextSpan(
+                            text: formatMoney(rod.toY.round(), currency),
+                            style: text.labelMedium?.copyWith(color: p.onInk),
+                          ),
+                        ],
                       ),
                 ),
               ),
               barGroups: List.generate(points.length, (i) {
-                final p = points[i];
+                final pt = points[i];
+                const radius = BorderRadius.vertical(top: Radius.circular(4));
                 return BarChartGroupData(
                   x: i,
+                  barsSpace: 4,
                   barRods: [
                     BarChartRodData(
-                      toY: p.income.toDouble(),
-                      color: AppColors.income,
-                      width: 8,
-                      borderRadius: BorderRadius.circular(3),
+                      toY: pt.income.toDouble(),
+                      color: p.income,
+                      width: 10,
+                      borderRadius: radius,
                     ),
                     BarChartRodData(
-                      toY: p.expense.toDouble(),
-                      color: AppColors.expense,
-                      width: 8,
-                      borderRadius: BorderRadius.circular(3),
+                      toY: pt.expense.toDouble(),
+                      color: p.expense,
+                      width: 10,
+                      borderRadius: radius,
                     ),
                   ],
                 );
@@ -103,24 +135,15 @@ class TrendChart extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _LegendDot(color: AppColors.income, label: 'Income'),
-            const SizedBox(width: AppSpacing.md),
-            _LegendDot(color: AppColors.expense, label: 'Expense'),
-          ],
-        ),
       ],
     );
   }
 }
 
-class _LegendDot extends StatelessWidget {
+class ChartLegendDot extends StatelessWidget {
   final Color color;
   final String label;
-  const _LegendDot({required this.color, required this.label});
+  const ChartLegendDot({super.key, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -128,12 +151,15 @@ class _LegendDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(width: AppSpacing.sm - 2),
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
       ],
     );
   }

@@ -26,6 +26,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
   /// Both in paise.
   late int _total;
   late Map<String, int> _allocations;
+
   /// The budget the current allocations were seeded from. Re-seeding only
   /// when it changes keeps the user's slider edits while still following a
   /// budget changed in Settings.
@@ -58,10 +59,10 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
           ? const _NoBudgetState()
           : ListView(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.md,
-                AppSpacing.lg,
-                96,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
               children: [
                 AppCard(

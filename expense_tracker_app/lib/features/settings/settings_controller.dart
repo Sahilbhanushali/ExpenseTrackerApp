@@ -44,6 +44,9 @@ class SettingsController extends ChangeNotifier {
     ),
   );
 
+  Future<void> setThemeMode(String mode) =>
+      _persist(_config.copyWith(themeMode: mode));
+
   Future<void> setCurrency(String currency) =>
       _persist(_config.copyWith(currency: currency));
 
@@ -65,5 +68,4 @@ class SettingsController extends ChangeNotifier {
       ..remove(name);
     return _persist(_config.copyWith(customCategories: custom));
   }
-
 }

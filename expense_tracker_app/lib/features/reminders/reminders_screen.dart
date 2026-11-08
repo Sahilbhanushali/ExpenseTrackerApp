@@ -198,10 +198,10 @@ class RemindersScreen extends StatelessWidget {
             )
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                96,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
               itemCount: reminders.reminders.length,
               separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
@@ -212,7 +212,7 @@ class RemindersScreen extends StatelessWidget {
                   child: AppCard(
                     child: ListRow(
                       icon: Icons.notifications_outlined,
-                      iconColor: r.active ? AppColors.primary : null,
+                      iconColor: r.active ? context.palette.savings : null,
                       title: r.title,
                       subtitle:
                           '${_formatWhen(r.dateTime)} · ${_repeatLabel(r.repeat)}'

@@ -2,15 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/calendar.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/widgets/press_scale.dart';
+import '../../core/widgets/page_transitions.dart';
+import '../../core/widgets/responsive.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../expenses/expenses_controller.dart';
+import '../settings/settings_screen.dart';
 import 'widgets/month_summary_section.dart';
 import 'widgets/net_worth_section.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final VoidCallback onSeeAllTransactions;
+  final VoidCallback onOpenReports;
+
+  const DashboardScreen({
+    super.key,
+    required this.onSeeAllTransactions,
+    required this.onOpenReports,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -21,18 +31,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   MonthTotal? _viewedTotals;
   Map<String, int> _viewedCategoryTotals = {};
   List<MonthPoint> _trend = [];
+  bool _trendLoaded = false;
+  late final ExpensesController _expenses;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _viewedMonth = DateTime(now.year, now.month);
+    _expenses = context.read<ExpensesController>();
+    // Keeps the 6-month chart in step with adds/edits made anywhere.
+    _expenses.addListener(_loadTrend);
     _loadTrend();
   }
 
+  @override
+  void dispose() {
+    _expenses.removeListener(_loadTrend);
+    super.dispose();
+  }
+
   Future<void> _loadTrend() async {
-    final trend = await context.read<ExpensesController>().monthlyTrend(6);
-    if (mounted) setState(() => _trend = trend);
+    final trend = await _expenses.monthlyTrend(6);
+    if (mounted) {
+      setState(() {
+        _trend = trend;
+        _trendLoaded = true;
+      });
+    }
   }
 
   bool get _isCurrentMonth {
@@ -51,14 +77,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       return;
     }
-    final expenses = context.read<ExpensesController>();
-    final totals = await expenses.monthTotalFor(_monthKey);
-    final cats = await expenses.categoryTotalsFor(_monthKey);
+    final totals = await _expenses.monthTotalFor(_monthKey);
+    final cats = await _expenses.categoryTotalsFor(_monthKey);
     if (!mounted) return;
     setState(() {
       _viewedTotals = totals;
       _viewedCategoryTotals = cats;
     });
+  }
+
+  void _shiftMonth(int delta) {
+    final next = DateTime(_viewedMonth.year, _viewedMonth.month + delta);
+    final now = DateTime.now();
+    if (next.isAfter(DateTime(now.year, now.month))) return;
+    setState(() => _viewedMonth = next);
+    _loadViewedMonth();
   }
 
   Future<void> _pickMonth() async {
@@ -77,12 +110,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_left),
+                    tooltip: 'Previous year',
+                    icon: const Icon(Icons.chevron_left_rounded),
                     onPressed: () => setDialogState(() => year -= 1),
                   ),
                   Text('$year', style: Theme.of(context).textTheme.titleLarge),
                   IconButton(
-                    icon: const Icon(Icons.chevron_right),
+                    tooltip: 'Next year',
+                    icon: const Icon(Icons.chevron_right_rounded),
                     onPressed: () => setDialogState(() => year += 1),
                   ),
                 ],
@@ -94,10 +129,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 alignment: WrapAlignment.center,
                 children: List.generate(12, (i) {
                   final m = i + 1;
-                  final selected = m == month;
                   return ChoiceChip(
-                    label: Text(kMonthNames[i].substring(0, 3)),
-                    selected: selected,
+                    label: Text(kMonthNamesShort[i]),
+                    selected: m == month,
                     onSelected: (_) => setDialogState(() => month = m),
                   );
                 }),
@@ -111,10 +145,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Navigator.pop(context, DateTime(now.year, now.month));
               },
               child: const Text('This month'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, DateTime(year, month)),
@@ -139,86 +169,141 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
     final now = DateTime.now();
     final todayLabel =
-        '${kWeekdayNames[now.weekday - 1]}, ${now.day} '
-        '${kMonthNames[now.month - 1]} ${now.year}';
+        '${kWeekdayNames[now.weekday - 1]}, ${now.day} ${kMonthNames[now.month - 1]}';
 
-    // Deliberately watches nothing: each section below subscribes to just
-    // the controllers it reads, so one write doesn't repaint the whole page.
-    return RefreshIndicator(
-      onRefresh: () async {
-        await context.read<ExpensesController>().refresh();
-        await _loadViewedMonth();
-        await _loadTrend();
-      },
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          MediaQuery.of(context).padding.top + AppSpacing.md,
-          AppSpacing.lg,
-          // Clears the floating "+" button — AppSpacing.xxl (48) left the
-          // last list row (Budget vs actual) sitting right under the FAB.
-          120,
+    // Watches nothing itself: each section subscribes only to the
+    // controllers it reads, so one write doesn't repaint the whole page.
+    return ResponsivePage(
+      builder: (context, gutter) => RefreshIndicator(
+        onRefresh: () async {
+          await _expenses.refresh();
+          await _loadViewedMonth();
+        },
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            gutter,
+            MediaQuery.paddingOf(context).top + AppSpacing.md,
+            gutter,
+            AppSpacing.navClearance,
+          ),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(todayLabel, style: text.bodySmall),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(_greeting(), style: text.titleLarge),
+                    ],
+                  ),
+                ),
+                IconButton.filledTonal(
+                  tooltip: 'Settings',
+                  onPressed: () =>
+                      Navigator.of(context)
+                          .push(FadeSlideRoute(page: const SettingsScreen())),
+                  icon: const Icon(Icons.settings_outlined),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            const NetWorthSection(),
+            const SizedBox(height: AppSpacing.lg),
+            _MonthSwitcher(
+              month: _viewedMonth,
+              canGoForward: !_isCurrentMonth,
+              onPrev: () => _shiftMonth(-1),
+              onNext: () => _shiftMonth(1),
+              onPick: _pickMonth,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            MonthSummarySection(
+              viewedTotals: _viewedTotals,
+              viewedCategoryTotals: _viewedCategoryTotals,
+              trend: _trend,
+              trendLoaded: _trendLoaded,
+              isCurrentMonth: _isCurrentMonth,
+              viewedMonth: _viewedMonth,
+              onSeeAllTransactions: widget.onSeeAllTransactions,
+              onOpenReports: widget.onOpenReports,
+            ),
+          ],
         ),
-        children: [
-          Text(_greeting(), style: Theme.of(context).textTheme.bodyMedium),
-          Text('Spendo', style: Theme.of(context).textTheme.headlineSmall),
-          Text(todayLabel, style: Theme.of(context).textTheme.bodySmall),
-          const SizedBox(height: AppSpacing.lg),
-          const NetWorthSection(),
-          const SizedBox(height: AppSpacing.lg),
-          Center(
-            child: _MonthPill(month: _viewedMonth, onTap: _pickMonth),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          MonthSummarySection(
-            viewedTotals: _viewedTotals,
-            viewedCategoryTotals: _viewedCategoryTotals,
-            trend: _trend,
-            isCurrentMonth: _isCurrentMonth,
-          ),
-        ],
       ),
     );
   }
 }
 
-/// The tappable "September 2026" chip that opens the month picker.
-class _MonthPill extends StatelessWidget {
+/// "‹  September 2026  ›" — arrows step a month, the label opens a picker.
+class _MonthSwitcher extends StatelessWidget {
   final DateTime month;
-  final VoidCallback onTap;
+  final bool canGoForward;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onPick;
 
-  const _MonthPill({required this.month, required this.onTap});
+  const _MonthSwitcher({
+    required this.month,
+    required this.canGoForward,
+    required this.onPrev,
+    required this.onNext,
+    required this.onPick,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return PressScale(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardTheme.color,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: Theme.of(context).dividerColor),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.calendar_month_outlined, size: 18),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              '${kMonthNames[month.month - 1]} ${month.year}',
-              style: Theme.of(context).textTheme.titleMedium,
+    final p = context.palette;
+    return Row(
+      children: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              onTap: onPick,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: AppSpacing.sm,
+                  horizontal: AppSpacing.xs,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '${kMonthNames[month.month - 1]} ${month.year}',
+                        style: Theme.of(context).textTheme.titleMedium,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: AppIconSize.md,
+                      color: p.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(width: AppSpacing.xs),
-            const Icon(Icons.expand_more, size: 18),
-          ],
+          ),
         ),
-      ),
+        IconButton(
+          tooltip: 'Previous month',
+          onPressed: onPrev,
+          icon: const Icon(Icons.arrow_back_rounded),
+        ),
+        IconButton(
+          tooltip: 'Next month',
+          onPressed: canGoForward ? onNext : null,
+          icon: const Icon(Icons.arrow_forward_rounded),
+        ),
+      ],
     );
   }
 }

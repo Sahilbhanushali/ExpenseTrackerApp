@@ -6,7 +6,10 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
-import '../../core/widgets/press_scale.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/animated_money_text.dart';
+import '../../core/widgets/category_icon.dart';
+import '../../core/widgets/responsive.dart';
 import '../../core/widgets/staggered_list.dart';
 import '../../data/models/account.dart';
 import '../settings/settings_controller.dart';
@@ -489,7 +492,7 @@ class AccountsScreen extends StatelessWidget {
                     'Available to split: ${formatMoney(available, currency)}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: available <= 0 && amount > 0
-                          ? AppColors.expense
+                          ? context.palette.expense
                           : null,
                     ),
                   ),
@@ -500,7 +503,7 @@ class AccountsScreen extends StatelessWidget {
                           ? '${formatMoney(minKeep - amount, currency)} short of the $source minimum — nothing to split yet.'
                           : 'This entire amount stays in $source to meet the minimum — nothing left to split.',
                       style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: AppColors.expense),
+                          ?.copyWith(color: context.palette.expense),
                     ),
                   ],
                   const SizedBox(height: AppSpacing.md),
@@ -550,7 +553,7 @@ class AccountsScreen extends StatelessWidget {
                     'Total: ${totalPct.toStringAsFixed(0)}%'
                     '${totalPct > 100 ? ' — over 100%' : ''}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: totalPct > 100 ? AppColors.expense : null,
+                      color: totalPct > 100 ? context.palette.expense : null,
                     ),
                   ),
                 ],
@@ -599,55 +602,162 @@ class AccountsScreen extends StatelessWidget {
     final currency = context.watch<SettingsController>().config.currency;
     final names = accounts.accounts.map((a) => a.account.name).toList();
 
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final total = accounts.accounts.fold<int>(
+      0,
+      (s, a) => s + (a.account.currentValuePaise ?? a.balance),
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Accounts'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.call_split),
-            tooltip: 'Distribute income',
-            onPressed: () =>
-                _showDistribute(context, accounts.accounts, currency),
-          ),
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Transfer',
-            onPressed: () => _showTransfer(context, names),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
+      appBar: AppBar(title: const Text('Accounts')),
+      floatingActionButton: FloatingActionButton.extended(
         heroTag: 'accounts_add',
         onPressed: () => _showAddAccount(context),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Add account'),
       ),
       body: accounts.accounts.isEmpty
-          ? const EmptyState(
+          ? EmptyState(
               icon: Icons.account_balance_wallet_outlined,
-              message: 'No accounts yet. Add one to track balances.',
+              title: 'No accounts yet',
+              message:
+                  'Add a bank account, wallet or investment to track balances.',
+              action: 'Add account',
+              onAction: () => _showAddAccount(context),
             )
-          : ListView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              children: [
-                for (final type in AccountType.values)
-                  if (accounts.accounts.any((a) => a.account.type == type))
-                    _AccountTypeSection(
-                      type: type,
-                      accounts: accounts.accounts
-                          .where((a) => a.account.type == type)
-                          .toList(),
-                      currency: currency,
-                      onTap: (a) => _showEditAccount(context, a),
-                      onSetDefault: (a) => context
-                          .read<AccountsController>()
-                          .setDefault(a.account.name),
-                      onDelete: (a) => _confirmDelete(context, a),
+          : ResponsivePage(
+              builder: (context, gutter) => ListView(
+                padding: EdgeInsets.fromLTRB(
+                  gutter,
+                  AppSpacing.sm,
+                  gutter,
+                  AppSpacing.navClearance,
+                ),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg - 4),
+                    decoration: BoxDecoration(
+                      color: p.inkSurface,
+                      borderRadius: BorderRadius.circular(AppRadius.xl),
                     ),
-              ],
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total balance',
+                          style: text.labelMedium?.copyWith(
+                            color: p.onInk.withValues(alpha: 0.7),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: AnimatedMoneyText(
+                            amountPaise: total,
+                            currency: currency,
+                            style: text.headlineMedium?.copyWith(
+                              color: p.onInk,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _InkButton(
+                                icon: Icons.swap_horiz_rounded,
+                                label: 'Transfer',
+                                onTap: () => _showTransfer(context, names),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: _InkButton(
+                                icon: Icons.call_split_rounded,
+                                label: 'Distribute',
+                                onTap: () => _showDistribute(
+                                  context,
+                                  accounts.accounts,
+                                  currency,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  for (final type in AccountType.values)
+                    if (accounts.accounts.any((a) => a.account.type == type))
+                      _AccountTypeSection(
+                        type: type,
+                        accounts: accounts.accounts
+                            .where((a) => a.account.type == type)
+                            .toList(),
+                        currency: currency,
+                        onTap: (a) => _showEditAccount(context, a),
+                        onSetDefault: (a) => context
+                            .read<AccountsController>()
+                            .setDefault(a.account.name),
+                        onDelete: (a) => _confirmDelete(context, a),
+                      ),
+                ],
+              ),
             ),
     );
   }
 }
+
+class _InkButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _InkButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Material(
+      color: p.onInk.withValues(alpha: 0.12),
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: AppSizes.minTouch - 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: AppIconSize.md, color: p.onInk),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge
+                      ?.copyWith(color: p.onInk),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Color _typeColor(AccountType t, AppPalette p) => switch (t) {
+  AccountType.cash => p.savings,
+  AccountType.investment => p.debt,
+  AccountType.emergencyFund => p.income,
+};
 
 class _AccountTypeSection extends StatelessWidget {
   final AccountType type;
@@ -668,110 +778,131 @@ class _AccountTypeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
     final total = accounts.fold<int>(
       0,
       (s, a) => s + (a.account.currentValuePaise ?? a.balance),
     );
+    final color = _typeColor(type, p);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(_typeIcon(type), size: 18),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    _typeLabel(type),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-              ),
-              Text(
-                formatMoney(total, currency),
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(_typeLabel(type), style: text.titleMedium),
+                ),
+                Text(formatMoney(total, currency), style: text.labelMedium),
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          for (final (i, a) in accounts.indexed) ...[
-            StaggeredListItem(
-              index: i,
-              child: AppCard(
-                child: PressScale(
-                  onTap: () => onTap(a),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: Column(
+              children: [
+                for (final (i, a) in accounts.indexed) ...[
+                  if (i > 0)
+                    Divider(
+                      indent: AppSpacing.md + AppSizes.iconBadge + 12,
+                      endIndent: AppSpacing.md,
+                    ),
+                  StaggeredListItem(
+                    index: i,
+                    child: InkWell(
+                      onTap: () => onTap(a),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(
+                          AppSpacing.md,
+                          AppSpacing.sm,
+                          AppSpacing.xs,
+                          AppSpacing.sm,
+                        ),
                         child: Row(
                           children: [
-                            Flexible(
-                              child: Text(
-                                a.account.name,
-                                style: Theme.of(context).textTheme.titleMedium,
-                                overflow: TextOverflow.ellipsis,
+                            CategoryIcon(
+                              category: type.name,
+                              icon: _typeIcon(type),
+                              color: color,
+                            ),
+                            const SizedBox(width: AppSpacing.md - 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    a.account.name,
+                                    style: text.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (a.account.isDefault)
+                                    Text(
+                                      'Default account',
+                                      style: text.labelSmall?.copyWith(
+                                        color: p.savings,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            if (a.account.isDefault) ...[
-                              const SizedBox(width: AppSpacing.sm),
-                              const Chip(
-                                label: Text('default'),
-                                visualDensity: VisualDensity.compact,
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  formatMoney(
+                                    a.account.currentValuePaise ?? a.balance,
+                                    currency,
+                                  ),
+                                  style: text.moneyStyle(15),
+                                ),
+                                if (a.account.currentValuePaise != null)
+                                  _GainLossLabel(
+                                    invested: a.balance,
+                                    current: a.account.currentValuePaise!,
+                                    currency: currency,
+                                  ),
+                              ],
+                            ),
+                            PopupMenuButton<String>(
+                              tooltip: 'Account options',
+                              icon: Icon(
+                                Icons.more_vert_rounded,
+                                color: p.textTertiary,
                               ),
-                            ],
+                              onSelected: (v) {
+                                if (v == 'default') {
+                                  onSetDefault(a);
+                                } else if (v == 'delete') {
+                                  onDelete(a);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                if (!a.account.isDefault)
+                                  const PopupMenuItem(
+                                    value: 'default',
+                                    child: Text('Set as default'),
+                                  ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Delete'),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            formatMoney(
-                              a.account.currentValuePaise ?? a.balance,
-                              currency,
-                            ),
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          if (a.account.currentValuePaise != null)
-                            _GainLossLabel(
-                              invested: a.balance,
-                              current: a.account.currentValuePaise!,
-                              currency: currency,
-                            ),
-                        ],
-                      ),
-                      PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert),
-                        onSelected: (v) {
-                          if (v == 'default') {
-                            onSetDefault(a);
-                          } else if (v == 'delete') {
-                            onDelete(a);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          if (!a.account.isDefault)
-                            const PopupMenuItem(
-                              value: 'default',
-                              child: Text('Set as default'),
-                            ),
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Text('Delete'),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                ],
+              ],
             ),
-            if (a != accounts.last) const SizedBox(height: AppSpacing.sm),
-          ],
+          ),
         ],
       ),
     );
@@ -779,8 +910,7 @@ class _AccountTypeSection extends StatelessWidget {
 }
 
 /// The gain or loss on an investment — invested vs. current value — shown
-/// as a small colored delta under the balance instead of leaving the user
-/// to do that subtraction themselves.
+/// as a small coloured delta under the balance.
 class _GainLossLabel extends StatelessWidget {
   /// Both in paise.
   final int invested;
@@ -800,11 +930,9 @@ class _GainLossLabel extends StatelessWidget {
     final pct = invested != 0 ? (delta / invested * 100).abs() : 0;
     final up = delta > 0;
     return Text(
-      '${up ? '+' : '-'}${formatMoney(delta.abs(), currency)} (${pct.toStringAsFixed(1)}%)',
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: up ? AppColors.income : AppColors.expense,
+      '${up ? '▲' : '▼'} ${formatMoney(delta.abs(), currency)} (${pct.toStringAsFixed(1)}%)',
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: up ? context.palette.income : context.palette.expense,
       ),
     );
   }

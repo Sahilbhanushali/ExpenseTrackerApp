@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,72 +15,105 @@ class AppNavItem {
   });
 }
 
-const double _navBarHeight = 62;
-
-/// Floating frosted-glass pill nav bar — a single BackdropFilter instance
-/// (cheap, since there's only ever one on screen) instead of per-card blur.
+/// Floating ink pill: tab icons either side of a prominent centre "add"
+/// button, so the primary action is one tap from every tab.
 class AppBottomNav extends StatelessWidget {
   final List<AppNavItem> items;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final VoidCallback onAdd;
 
   const AppBottomNav({
     super.key,
     required this.items,
     required this.selectedIndex,
     required this.onSelected,
+    required this.onAdd,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = context.palette;
+    final half = items.length ~/ 2;
+
+    Widget tab(int i) => Expanded(
+      child: _NavButton(
+        item: items[i],
+        selected: i == selectedIndex,
+        onTap: () {
+          if (i != selectedIndex) {
+            HapticFeedback.selectionClick();
+            onSelected(i);
+          }
+        },
+      ),
+    );
+
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          0,
-          AppSpacing.lg,
-          AppSpacing.sm,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: Center(
+        heightFactor: 1,
+        // Caps the pill's width on tablets/landscape so it stays a compact
+        // control instead of stretching edge to edge.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.page,
+              0,
+              AppSpacing.page,
+              AppSpacing.sm,
+            ),
             child: Container(
-              height: _navBarHeight,
+              height: AppSizes.navBarHeight,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
               decoration: BoxDecoration(
-                color: isDark ? AppColors.glassDark : AppColors.glassLight,
+                color: p.inkSurface,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(
-                  color: isDark
-                      ? AppColors.glassBorderDark
-                      : AppColors.glassBorderLight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.16),
-                    blurRadius: 28,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
+                boxShadow: AppShadows.floating,
               ),
               child: Row(
-                children: List.generate(items.length, (i) {
-                  final selected = i == selectedIndex;
-                  return Expanded(
-                    child: _NavButton(
-                      item: items[i],
-                      selected: selected,
-                      onTap: () {
-                        if (!selected) {
-                          HapticFeedback.selectionClick();
-                          onSelected(i);
-                        }
-                      },
-                    ),
-                  );
-                }),
+                children: [
+                  for (var i = 0; i < half; i++) tab(i),
+                  _AddButton(onTap: onAdd),
+                  for (var i = half; i < items.length; i++) tab(i),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      child: Tooltip(
+        message: 'Add transaction',
+        child: Semantics(
+          button: true,
+          label: 'Add transaction',
+          child: Material(
+            color: p.onInk,
+            shape: const StadiumBorder(),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: () {
+                HapticFeedback.lightImpact();
+                onTap();
+              },
+              child: SizedBox(
+                width: 64,
+                height: 48,
+                child: Icon(Icons.add_rounded, size: 28, color: p.inkSurface),
               ),
             ),
           ),
@@ -105,36 +136,47 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected
-        ? AppColors.primary
-        : Theme.of(context).colorScheme.outline;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedScale(
-            scale: selected ? 1.15 : 1.0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            child: Icon(
-              selected ? item.selectedIcon : item.icon,
-              color: color,
-              size: 22,
+    final p = context.palette;
+    final fg = selected ? p.onInk : p.onInk.withValues(alpha: 0.55);
+    final duration = AppDurations.of(context, AppDurations.fast);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: item.label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: item.label,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 28,
+          child: SizedBox(
+            height: AppSizes.navBarHeight,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedSwitcher(
+                  duration: duration,
+                  child: Icon(
+                    selected ? item.selectedIcon : item.icon,
+                    key: ValueKey(selected),
+                    color: fg,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                AnimatedContainer(
+                  duration: duration,
+                  width: selected ? 16 : 0,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: fg,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 3),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: color,
-            ),
-            child: Text(item.label),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -174,9 +174,9 @@ class WishlistScreen extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
+              AppSpacing.page,
+              AppSpacing.sm,
+              AppSpacing.page,
               0,
             ),
             child: AppCard(
@@ -191,7 +191,7 @@ class WishlistScreen extends StatelessWidget {
                     amountPaise: wishlist.availableSavings,
                     currency: currency,
                     style: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(color: AppColors.primary),
+                        ?.copyWith(color: context.palette.savings),
                   ),
                 ],
               ),
@@ -205,10 +205,10 @@ class WishlistScreen extends StatelessWidget {
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.md,
-                      AppSpacing.lg,
-                      96,
+                      AppSpacing.page,
+                      AppSpacing.sm,
+                      AppSpacing.page,
+                      AppSpacing.navClearance,
                     ),
                     itemCount: wishlist.items.length,
                     separatorBuilder: (_, _) =>

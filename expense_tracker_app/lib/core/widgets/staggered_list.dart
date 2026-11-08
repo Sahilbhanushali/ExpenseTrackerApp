@@ -34,6 +34,19 @@ class _StaggeredListItemState extends State<StaggeredListItem>
       begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+  }
+
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.maybeDisableAnimationsOf(context) == true) {
+      _controller.value = 1;
+      return;
+    }
     final delay = Duration(milliseconds: 25 * widget.index.clamp(0, 12));
     Future.delayed(delay, () {
       if (mounted) _controller.forward();

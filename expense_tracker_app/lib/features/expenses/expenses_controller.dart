@@ -87,6 +87,11 @@ class ExpensesController extends ChangeNotifier {
       _txnRepo.totalsRange(from, to);
   Future<Map<String, int>> categoryTotalsRange(DateTime from, DateTime to) =>
       _txnRepo.categoryTotalsRange(from, to);
+  Future<Map<String, int>> expenseSeries(
+    DateTime from,
+    DateTime to, {
+    bool monthly = false,
+  }) => _txnRepo.expenseSeries(from, to, monthly: monthly);
   Future<RecurringCandidate?> detectRecurring(String category, String? note) =>
       _txnRepo.detectRecurring(category, note);
 

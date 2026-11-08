@@ -1,90 +1,44 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import 'press_scale.dart';
 
-/// A translucent "glass" panel — solid enough to read text on top of the
-/// aurora background, with a soft shadow instead of Material elevation.
+export 'state_views.dart';
+
+/// The app's one card surface: solid fill, hairline border, a whisper of
+/// shadow in light mode. Pass [onTap] for press feedback.
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+  final Color? color;
+  final double radius;
 
   const AppCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(AppSpacing.md),
+    this.onTap,
+    this.color,
+    this.radius = AppRadius.lg,
   });
 
   @override
   Widget build(BuildContext context) {
-    final cardTheme = Theme.of(context).cardTheme;
-    return Container(
+    final p = context.palette;
+    final card = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: cardTheme.color,
-        border: cardTheme.shape is RoundedRectangleBorder
-            ? Border.fromBorderSide(
-                (cardTheme.shape as RoundedRectangleBorder).side,
-              )
-            : null,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.07),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: color ?? p.surface,
+        border: Border.all(color: p.border),
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: AppShadows.card(Theme.of(context).brightness),
       ),
       child: child,
     );
-  }
-}
-
-class EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String message;
-  final String? action;
-  final VoidCallback? onAction;
-
-  const EmptyState({
-    super.key,
-    required this.icon,
-    required this.message,
-    this.action,
-    this.onAction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xl),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.7, end: 1.0),
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutBack,
-            builder: (context, scale, child) =>
-                Transform.scale(scale: scale, child: child),
-            child: Icon(
-              icon,
-              size: 40,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          if (action != null && onAction != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            TextButton(onPressed: onAction, child: Text(action!)),
-          ],
-        ],
-      ),
-    );
+    return onTap == null
+        ? card
+        : PressScale(onTap: onTap, scaleTo: 0.98, child: card);
   }
 }

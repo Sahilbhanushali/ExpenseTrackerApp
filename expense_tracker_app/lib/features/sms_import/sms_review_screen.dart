@@ -224,10 +224,10 @@ class SmsReviewScreen extends StatelessWidget {
           : sms.pending.isEmpty
           ? ListView(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                96,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
               children: [
                 const EmptyState(
@@ -247,10 +247,10 @@ class SmsReviewScreen extends StatelessWidget {
             )
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                96,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
               itemCount: sms.pending.length,
               separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
@@ -290,7 +290,9 @@ class _NotificationPanel extends StatelessWidget {
                 enabled
                     ? Icons.notifications_active_outlined
                     : Icons.notifications_off_outlined,
-                color: enabled ? AppColors.income : AppColors.primary,
+                color: enabled
+                    ? context.palette.income
+                    : context.palette.savings,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -338,7 +340,12 @@ class _SetupPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.page,
+        AppSpacing.sm,
+        AppSpacing.page,
+        AppSpacing.navClearance,
+      ),
       children: [
         AppCard(
           child: Column(
@@ -346,7 +353,7 @@ class _SetupPanel extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.sms_outlined, color: AppColors.primary),
+                  Icon(Icons.sms_outlined, color: context.palette.savings),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
                     'Log spending automatically',
@@ -402,7 +409,7 @@ class _PendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCredit = pending.direction == SmsDirection.credit;
-    final color = isCredit ? AppColors.income : AppColors.expense;
+    final color = isCredit ? context.palette.income : context.palette.expense;
     final d = pending.occurredAt;
     final dateLabel =
         '${d.day.toString().padLeft(2, '0')}/'

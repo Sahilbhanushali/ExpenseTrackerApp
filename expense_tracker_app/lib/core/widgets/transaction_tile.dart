@@ -1,21 +1,30 @@
 import 'package:flutter/material.dart';
 
 import '../../data/models/transaction.dart';
+import '../constants/calendar.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme.dart';
 import '../utils/money_formatter.dart';
-import 'press_scale.dart';
+import 'category_icon.dart';
 
+/// Compact transaction row: category badge, title + subtitle, signed amount.
+/// Draws no surface of its own — place rows inside an [AppCard] (see
+/// [TransactionGroup]) so a day's rows read as one block.
 class TransactionTile extends StatelessWidget {
   final Transaction txn;
   final String currency;
   final VoidCallback? onTap;
+
+  /// Shows the date in the subtitle (for lists not grouped by day).
+  final bool showDate;
 
   const TransactionTile({
     super.key,
     required this.txn,
     required this.currency,
     this.onTap,
+    this.showDate = false,
   });
 
   bool get _isCredit =>
@@ -23,117 +32,126 @@ class TransactionTile extends StatelessWidget {
   bool get _isLending =>
       txn.type == TxnType.lent || txn.type == TxnType.borrowed;
 
+  String get _subtitle {
+    final base = _isLending
+        ? (txn.type == TxnType.lent
+              ? '${txn.counterparty ?? 'They'} owe${txn.counterparty == null ? '' : 's'} you'
+              : 'You owe ${txn.counterparty ?? 'them'}')
+        : _capitalize(txn.category);
+    if (!showDate) return base;
+    final d = DateTime.tryParse(txn.date);
+    if (d == null) return base;
+    return '$base · ${d.day} ${kMonthNamesShort[d.month - 1]}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Lending entries move cash in/out but aren't real income/expense — a
-    // borrowed amount is a debt you still owe, not money you've earned, so
-    // it gets its own colour instead of looking identical to income.
-    final color = _isLending
-        ? AppColors.warning
-        : (_isCredit ? AppColors.income : AppColors.expense);
-    final sign = _isCredit ? '+' : '-';
-    final catColor = _isLending
-        ? AppColors.warning
-        : AppColors.categoryColor(txn.category);
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    // Lending moves cash but isn't income/expense — a borrowed amount is a
+    // debt, not earnings — so it gets its own colour.
+    final amountColor = _isLending
+        ? p.warning
+        : (_isCredit ? p.income : p.textPrimary);
+    final sign = _isCredit ? '+' : '−';
+    final title = txn.note?.isNotEmpty == true
+        ? txn.note!
+        : _capitalize(txn.category);
+    final amount = '$sign${formatMoney(txn.amountPaise, currency)}';
+    final kind = switch (txn.type) {
+      TxnType.expense => 'Expense',
+      TxnType.income => 'Income',
+      TxnType.lent => 'Lent',
+      TxnType.borrowed => 'Borrowed',
+    };
 
-    final theme = Theme.of(context);
-    // Rows carry their own surface. Without one they sat straight on the
-    // aurora, which put moving colour behind every amount in the list.
-    return PressScale(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: theme.cardTheme.color,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: theme.dividerColor),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: catColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(AppRadius.md),
+    return Semantics(
+      button: onTap != null,
+      label: '$kind, $title, $_subtitle, $amount',
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm + 2,
+          ),
+          child: Row(
+            children: [
+              CategoryIcon(
+                category: _isLending ? 'lending' : txn.category,
+                icon: txn.type == TxnType.income
+                    ? CategoryStyle.of('income').icon
+                    : null,
+                color: txn.type == TxnType.income ? p.income : null,
               ),
-              child: Icon(_iconFor(txn.category), color: catColor, size: 20),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    txn.note?.isNotEmpty == true ? txn.note! : txn.category,
-                    style: Theme.of(context).textTheme.bodyLarge
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _isLending
-                        ? (txn.type == TxnType.lent
-                              ? '${txn.counterparty ?? 'They'} owe${txn.counterparty == null ? '' : 's'} you'
-                              : 'You owe ${txn.counterparty ?? 'them'}')
-                        : txn.category,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _isLending ? AppColors.warning : null,
+              const SizedBox(width: AppSpacing.md - 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: text.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(
+                      _subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodySmall?.copyWith(
+                        color: _isLending ? p.warning : null,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              '$sign${formatMoney(txn.amountPaise, currency)}',
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-              ),
-            ),
-          ],
+              const SizedBox(width: AppSpacing.sm),
+              Text(amount, style: text.moneyStyle(15, color: amountColor)),
+            ],
+          ),
         ),
       ),
     );
   }
+}
 
-  IconData _iconFor(String category) {
-    switch (category) {
-      case 'travel':
-        return Icons.directions_car_outlined;
-      case 'food':
-        return Icons.restaurant_outlined;
-      case 'groceries':
-        return Icons.shopping_basket_outlined;
-      case 'clothes':
-        return Icons.checkroom_outlined;
-      case 'rent':
-        return Icons.home_outlined;
-      case 'bills':
-        return Icons.receipt_long_outlined;
-      case 'luxuries':
-        return Icons.local_bar_outlined;
-      case 'fitness':
-        return Icons.fitness_center_outlined;
-      case 'investments':
-        return Icons.trending_up_outlined;
-      case 'health':
-        return Icons.local_hospital_outlined;
-      case 'education':
-        return Icons.school_outlined;
-      case 'lending':
-        return Icons.handshake_outlined;
-      case 'income':
-        return Icons.arrow_downward_outlined;
-      default:
-        return Icons.category_outlined;
-    }
+String _capitalize(String s) =>
+    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+/// Rows inside one card separated by inset hairlines.
+class TransactionGroup extends StatelessWidget {
+  final List<Widget> children;
+  const TransactionGroup({super.key, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: p.border),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              Divider(
+                indent: AppSpacing.md + AppSizes.iconBadge + 12,
+                endIndent: AppSpacing.md,
+                color: p.border,
+              ),
+            children[i],
+          ],
+        ],
+      ),
+    );
   }
 }

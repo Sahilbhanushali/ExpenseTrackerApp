@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_bottom_nav.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/list_row.dart';
 import '../../core/widgets/page_transitions.dart';
-import '../../core/widgets/staggered_list.dart';
+import '../../core/widgets/section_header.dart';
 import '../accounts/accounts_screen.dart';
 import '../expenses/add_transaction_sheet.dart';
 import '../expenses/transactions_screen.dart';
 import '../goals/goals_controller.dart';
 import '../goals/goals_screen.dart';
+import '../lending/lending_controller.dart';
 import '../lending/lending_screen.dart';
 import '../loans/loans_controller.dart';
 import '../loans/loans_screen.dart';
@@ -19,6 +21,7 @@ import '../recurring/recurring_screen.dart';
 import '../reminders/reminders_controller.dart';
 import '../reminders/reminders_screen.dart';
 import '../reports/reports_screen.dart';
+import '../settings/budget_planner_screen.dart';
 import '../settings/settings_screen.dart';
 import '../sms_import/sms_import_controller.dart';
 import '../sms_import/sms_review_screen.dart';
@@ -28,28 +31,23 @@ import 'dashboard_screen.dart';
 
 const _navItems = [
   AppNavItem(
-    icon: Icons.dashboard_outlined,
-    selectedIcon: Icons.dashboard,
-    label: 'Dashboard',
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home_rounded,
+    label: 'Home',
   ),
   AppNavItem(
     icon: Icons.receipt_long_outlined,
-    selectedIcon: Icons.receipt_long,
+    selectedIcon: Icons.receipt_long_rounded,
     label: 'Transactions',
   ),
   AppNavItem(
-    icon: Icons.account_balance_wallet_outlined,
-    selectedIcon: Icons.account_balance_wallet,
-    label: 'Accounts',
+    icon: Icons.insights_outlined,
+    selectedIcon: Icons.insights_rounded,
+    label: 'Reports',
   ),
   AppNavItem(
-    icon: Icons.handshake_outlined,
-    selectedIcon: Icons.handshake,
-    label: 'Owed',
-  ),
-  AppNavItem(
-    icon: Icons.more_horiz,
-    selectedIcon: Icons.more_horiz,
+    icon: Icons.grid_view_outlined,
+    selectedIcon: Icons.grid_view_rounded,
     label: 'More',
   ),
 ];
@@ -64,146 +62,210 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _screens = [
-    DashboardScreen(),
-    TransactionsScreen(),
-    AccountsScreen(),
-    LendingScreen(),
-    _MoreScreen(),
+  void _select(int i) => setState(() => _index = i);
+
+  late final List<Widget> _screens = [
+    DashboardScreen(
+      onSeeAllTransactions: () => _select(1),
+      onOpenReports: () => _select(2),
+    ),
+    const TransactionsScreen(),
+    const ReportsScreen(),
+    const _MoreScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // The nav pill floats over content; screens pad their scroll views by
+      // AppSpacing.navClearance so the last row can scroll clear of it.
+      extendBody: true,
       body: IndexedStack(index: _index, children: _screens),
-      // Explicit heroTag — every FAB in the app needs a unique one, since
-      // IndexedStack keeps every tab mounted at once, and any two
-      // FloatingActionButtons sharing the implicit default tag crash the
-      // hero animation the moment they're both in the tree simultaneously
-      // (e.g. this FAB plus a pushed screen's own FAB).
-      floatingActionButton: _index == 0
-          ? FloatingActionButton(
-              heroTag: 'home_add_transaction',
-              onPressed: () => showAddTransactionSheet(context),
-              child: const Icon(Icons.add),
-            )
-          : null,
       bottomNavigationBar: AppBottomNav(
         items: _navItems,
         selectedIndex: _index,
-        onSelected: (i) => setState(() => _index = i),
+        onSelected: _select,
+        onAdd: () => showAddTransactionSheet(context),
       ),
     );
   }
 }
+
+class _MoreItem {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String subtitle;
+  final void Function(BuildContext) open;
+  const _MoreItem(this.icon, this.color, this.label, this.subtitle, this.open);
+}
+
+void _push(BuildContext context, Widget page) =>
+    Navigator.of(context).push(FadeSlideRoute(page: page));
+
+final _moreSections = <(String, List<_MoreItem>)>[
+  (
+    'Money',
+    [
+      _MoreItem(
+        Icons.account_balance_wallet_rounded,
+        AppColors.categoryPalette[1],
+        'Accounts',
+        'Balances, transfers and pots',
+        (c) => _push(c, const AccountsScreen()),
+      ),
+      _MoreItem(
+        Icons.handshake_rounded,
+        AppColors.categoryPalette[6],
+        'Owed',
+        'Money lent and borrowed',
+        (c) {
+          c.read<LendingController>().refresh();
+          _push(c, const LendingScreen());
+        },
+      ),
+      _MoreItem(
+        Icons.account_balance_rounded,
+        AppColors.categoryPalette[0],
+        'Loans & EMI',
+        'Repayment schedules',
+        (c) {
+          c.read<LoansController>().refresh();
+          _push(c, const LoansScreen());
+        },
+      ),
+      _MoreItem(
+        Icons.event_repeat_rounded,
+        AppColors.categoryPalette[5],
+        'Recurring bills',
+        'Subscriptions and fixed costs',
+        (c) => _push(c, const RecurringScreen()),
+      ),
+    ],
+  ),
+  (
+    'Planning',
+    [
+      _MoreItem(
+        Icons.pie_chart_rounded,
+        AppColors.categoryPalette[2],
+        'Budget planner',
+        'Monthly and category budgets',
+        (c) => _push(c, const BudgetPlannerScreen()),
+      ),
+      _MoreItem(
+        Icons.flag_rounded,
+        AppColors.categoryPalette[7],
+        'Savings goals',
+        'Track progress toward targets',
+        (c) {
+          c.read<GoalsController>().refresh();
+          _push(c, const GoalsScreen());
+        },
+      ),
+      _MoreItem(
+        Icons.stars_rounded,
+        AppColors.categoryPalette[4],
+        'Wishlist',
+        'Things you are saving for',
+        (c) {
+          c.read<WishlistController>().refresh();
+          _push(c, const WishlistScreen());
+        },
+      ),
+      _MoreItem(
+        Icons.notifications_rounded,
+        AppColors.categoryPalette[3],
+        'Reminders',
+        'Custom nudges',
+        (c) {
+          c.read<RemindersController>().refresh();
+          _push(c, const RemindersScreen());
+        },
+      ),
+    ],
+  ),
+  (
+    'App',
+    [
+      _MoreItem(
+        Icons.sms_rounded,
+        AppColors.categoryPalette[9],
+        'SMS import',
+        'Review bank and UPI messages',
+        (c) {
+          c.read<SmsImportController>().refresh();
+          _push(c, const SmsReviewScreen());
+        },
+      ),
+      _MoreItem(
+        Icons.settings_rounded,
+        AppColors.categoryPalette[11],
+        'Settings',
+        'Currency, theme, security, data',
+        (c) => _push(c, const SettingsScreen()),
+      ),
+    ],
+  ),
+];
 
 class _MoreScreen extends StatelessWidget {
   const _MoreScreen();
 
   @override
   Widget build(BuildContext context) {
-    final tiles = [
-      _MoreTile(
-        icon: Icons.stars_outlined,
-        label: 'Wishlist',
-        onTap: () {
-          context.read<WishlistController>().refresh();
-          Navigator.of(context)
-              .push(FadeSlideRoute(page: const WishlistScreen()));
-        },
-      ),
-      _MoreTile(
-        icon: Icons.bar_chart_outlined,
-        label: 'Reports',
-        onTap: () =>
-            Navigator.of(context)
-                .push(FadeSlideRoute(page: const ReportsScreen())),
-      ),
-      _MoreTile(
-        icon: Icons.event_repeat_outlined,
-        label: 'Recurring bills',
-        onTap: () =>
-            Navigator.of(context)
-                .push(FadeSlideRoute(page: const RecurringScreen())),
-      ),
-      _MoreTile(
-        icon: Icons.account_balance_outlined,
-        label: 'Loans & EMI',
-        onTap: () {
-          context.read<LoansController>().refresh();
-          Navigator.of(context).push(FadeSlideRoute(page: const LoansScreen()));
-        },
-      ),
-      _MoreTile(
-        icon: Icons.flag_outlined,
-        label: 'Savings goals',
-        onTap: () {
-          context.read<GoalsController>().refresh();
-          Navigator.of(context).push(FadeSlideRoute(page: const GoalsScreen()));
-        },
-      ),
-      _MoreTile(
-        icon: Icons.notifications_outlined,
-        label: 'Reminders',
-        onTap: () {
-          context.read<RemindersController>().refresh();
-          Navigator.of(context)
-              .push(FadeSlideRoute(page: const RemindersScreen()));
-        },
-      ),
-      _MoreTile(
-        icon: Icons.sms_outlined,
-        label: 'SMS import',
-        onTap: () {
-          context.read<SmsImportController>().refresh();
-          Navigator.of(context)
-              .push(FadeSlideRoute(page: const SmsReviewScreen()));
-        },
-      ),
-      _MoreTile(
-        icon: Icons.settings_outlined,
-        label: 'Settings',
-        onTap: () =>
-            Navigator.of(context)
-                .push(FadeSlideRoute(page: const SettingsScreen())),
-      ),
-    ];
-
     return Scaffold(
       appBar: AppBar(title: const Text('More')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        itemCount: tiles.length,
-        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-        itemBuilder: (context, i) =>
-            StaggeredListItem(index: i, child: tiles[i]),
-      ),
-    );
-  }
-}
-
-class _MoreTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _MoreTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      child: ListRow(
-        icon: icon,
-        title: label,
-        onTap: onTap,
-        trailing: Icon(
-          Icons.chevron_right,
-          color: Theme.of(context).colorScheme.outline,
+      body: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.page,
+          AppSpacing.sm,
+          AppSpacing.page,
+          AppSpacing.navClearance,
         ),
+        itemCount: _moreSections.length,
+        itemBuilder: (context, i) {
+          final (title, items) = _moreSections[i];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SectionHeader(title),
+                AppCard(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Column(
+                    children: [
+                      for (var j = 0; j < items.length; j++) ...[
+                        if (j > 0)
+                          Divider(
+                            indent: AppSizes.iconBadge + AppSpacing.md + 4,
+                            color: context.palette.border,
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                          ),
+                          child: ListRow(
+                            icon: items[j].icon,
+                            iconColor: items[j].color,
+                            title: items[j].label,
+                            subtitle: items[j].subtitle,
+                            trailing: const RowChevron(),
+                            onTap: () => items[j].open(context),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

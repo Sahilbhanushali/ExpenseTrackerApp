@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +14,9 @@ import '../../core/utils/money_formatter.dart';
 import '../../core/utils/notification_service.dart';
 import '../../core/utils/receipt_parser.dart';
 import '../../core/utils/sms_parser.dart';
-import '../../core/widgets/press_scale.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/app_chip.dart';
+import '../../core/widgets/category_icon.dart';
 import '../../data/models/recurring_bill.dart';
 import '../../data/models/transaction.dart';
 import '../accounts/accounts_controller.dart';
@@ -78,6 +79,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   TxnType _type = TxnType.expense;
   String _category = kDefaultCategory;
   DateTime _date = DateTime.now();
+  String? _amountError;
 
   @override
   void initState() {
@@ -534,7 +536,15 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   Future<void> _submitDetailed() async {
     final amount = parseRupeesToPaise(_amountController.text);
-    if (amount == null || amount <= 0) return;
+    if (amount == null || amount <= 0) {
+      HapticFeedback.heavyImpact();
+      setState(
+        () => _amountError = _amountController.text.trim().isEmpty
+            ? 'Enter an amount'
+            : 'Enter a valid amount greater than zero',
+      );
+      return;
+    }
     final iso =
         '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
     final note = _noteController.text.trim().isEmpty
@@ -602,7 +612,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(warnings.join('\n')),
-            backgroundColor: AppColors.expense,
+            backgroundColor: context.palette.expense,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -660,49 +670,64 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   @override
   Widget build(BuildContext context) {
     final currency = context.watch<SettingsController>().config.currency;
+    final p = context.palette;
     return DraggableScrollableSheet(
-      initialChildSize: 0.64,
+      initialChildSize: 0.72,
       minChildSize: 0.4,
-      maxChildSize: 0.92,
+      maxChildSize: 0.94,
       expand: false,
       builder: (context, scrollController) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           decoration: BoxDecoration(
-            color: isDark ? AppColors.surfaceDark : AppColors.surface,
+            color: p.surface,
             borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppRadius.lg),
+              top: Radius.circular(AppRadius.xl),
             ),
           ),
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
           ),
           child: ListView(
             controller: scrollController,
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.page,
+              AppSpacing.sm + 2,
+              AppSpacing.page,
+              AppSpacing.lg,
+            ),
             children: [
               Center(
                 child: Container(
-                  width: 40,
+                  width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(2),
+                    color: p.border,
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Add transaction',
-                    style: Theme.of(context).textTheme.titleLarge,
+                  Expanded(
+                    child: Text(
+                      'New transaction',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                   SegmentedButton<bool>(
+                    showSelectedIcon: false,
                     segments: const [
-                      ButtonSegment(value: true, label: Text('Quick')),
-                      ButtonSegment(value: false, label: Text('Form')),
+                      ButtonSegment(
+                        value: true,
+                        icon: Icon(Icons.bolt_rounded, size: AppIconSize.sm),
+                        label: Text('Quick'),
+                      ),
+                      ButtonSegment(
+                        value: false,
+                        icon: Icon(Icons.tune_rounded, size: AppIconSize.sm),
+                        label: Text('Form'),
+                      ),
                     ],
                     selected: {_quickMode},
                     onSelectionChanged: (s) =>
@@ -712,8 +737,10 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
               ),
               const SizedBox(height: AppSpacing.lg),
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: _quickMode ? _buildQuick(currency) : _buildDetailed(),
+                duration: AppDurations.of(context, AppDurations.base),
+                child: _quickMode
+                    ? _buildQuick(currency)
+                    : _buildDetailed(currency),
               ),
             ],
           ),
@@ -723,72 +750,80 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   }
 
   Widget _buildQuick(String currency) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final dateLabel = _quickDateOverride != null
+        ? _isoDate(_quickDateOverride!)
+        : (_preview?.date ?? 'Today');
     return Column(
       key: const ValueKey('quick'),
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text(
+          'Type it like a message — amount, what for, and when.',
+          style: text.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm + 2),
         TextField(
           controller: _textController,
           autofocus: true,
           onChanged: _onTextChanged,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) {
+            if (_preview?.amountPaise != null) _submitQuick();
+          },
           decoration: InputDecoration(
             hintText: 'e.g. spent 500 on ola, or got salary 75000',
-            suffixIcon: PressScale(
-              onTap: _scanning ? null : _pickReceiptSource,
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: _scanning
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(
-                        Icons.document_scanner_outlined,
-                        color: AppColors.primary,
-                      ),
-              ),
-            ),
+            prefixIcon: const Icon(Icons.edit_note_rounded),
+            suffixIcon: _scanning
+                ? const Padding(
+                    padding: EdgeInsets.all(AppSpacing.md - 2),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: 'Scan receipt',
+                    onPressed: _pickReceiptSource,
+                    icon: Icon(
+                      Icons.document_scanner_outlined,
+                      color: p.savings,
+                    ),
+                  ),
           ),
         ),
-        const SizedBox(height: AppSpacing.sm),
-        PressScale(
-          onTap: _pickQuickDate,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.calendar_today_outlined,
-                size: 14,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                _quickDateOverride == null
-                    ? (_preview?.date != null
-                          ? 'Date: ${_preview!.date}'
-                          : 'Date: Today — tap to change')
-                    : 'Date: ${_isoDate(_quickDateOverride!)}',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: AppColors.primary),
-              ),
-            ],
+        const SizedBox(height: AppSpacing.sm + 2),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AppChoiceChip(
+            icon: Icons.calendar_today_rounded,
+            label: dateLabel,
+            selected: _quickDateOverride != null,
+            onTap: _pickQuickDate,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 220),
-          child: _preview != null
-              ? _buildPreview(currency, key: ValueKey(_preview.hashCode))
-              : const SizedBox.shrink(key: ValueKey('empty')),
+        AnimatedSize(
+          duration: AppDurations.of(context, AppDurations.base),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: AppDurations.of(context, AppDurations.base),
+            child: _preview != null
+                ? _buildPreview(currency, key: ValueKey(_preview.hashCode))
+                : const SizedBox(
+                    width: double.infinity,
+                    key: ValueKey('empty'),
+                  ),
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            onPressed: _preview?.amountPaise != null ? _submitQuick : null,
-            child: const Text('Log it'),
-          ),
+        FilledButton.icon(
+          onPressed: _preview?.amountPaise != null ? _submitQuick : null,
+          icon: const Icon(Icons.check_rounded),
+          label: const Text('Log it'),
         ),
       ],
     );
@@ -796,11 +831,28 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
 
   Widget _buildPreview(String currency, {Key? key}) {
     final p = _preview!;
+    final palette = context.palette;
+    final text = Theme.of(context).textTheme;
     if (p.amountPaise == null) {
-      return Text(
+      return Container(
         key: key,
-        "Couldn't find an amount — try e.g. \"500 ola\"",
-        style: Theme.of(context).textTheme.bodySmall,
+        padding: const EdgeInsets.all(AppSpacing.md - 4),
+        decoration: BoxDecoration(
+          color: palette.warning.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline_rounded, color: palette.warning),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                "Couldn't find an amount — try e.g. \"500 ola\"",
+                style: text.bodySmall?.copyWith(color: palette.textPrimary),
+              ),
+            ),
+          ],
+        ),
       );
     }
     final typeLabel = switch (p.type) {
@@ -815,197 +867,309 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
       ParsedTxnType.emiPayment => 'EMI payment',
       ParsedTxnType.emiCreate => 'Create EMI · ${p.emiMonths} months',
     };
-    return Wrap(
-      key: key,
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        _previewChip(
-          p.type == ParsedTxnType.emiCreate
-              ? '${formatMoney(p.amountPaise!, currency)}/mo'
-              : formatMoney(p.amountPaise!, currency),
-          highlight: true,
-        ),
-        _previewChip(p.category),
-        _previewChip(typeLabel),
-        _previewChip(p.date),
-        if (p.note.isNotEmpty) _previewChip(p.note),
-        if (p.pendingAmountPaise != null)
-          _previewChip(
-            '${formatMoney(p.pendingAmountPaise!, currency)} pending',
-          ),
-      ],
-    );
-  }
-
-  Widget _previewChip(String label, {bool highlight = false}) {
+    final isIncome = p.type == ParsedTxnType.income;
+    final amount = p.type == ParsedTxnType.emiCreate
+        ? '${formatMoney(p.amountPaise!, currency)}/mo'
+        : formatMoney(p.amountPaise!, currency);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      key: key,
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: highlight
-            ? AppColors.primary.withValues(alpha: 0.14)
-            : AppColors.categoryPalette.last.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
+        color: palette.surfaceAlt,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
-          color: highlight ? AppColors.primary : null,
-          fontSize: 13,
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CategoryIcon(
+                category: isIncome ? 'income' : p.category,
+                color: isIncome ? palette.income : null,
+              ),
+              const SizedBox(width: AppSpacing.md - 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      p.note.isNotEmpty ? p.note : p.category,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text('$typeLabel · ${p.category}', style: text.bodySmall),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '${isIncome ? '+' : ''}$amount',
+                style: text.moneyStyle(
+                  18,
+                  color: isIncome ? palette.income : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm + 2),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _previewChip(Icons.calendar_today_rounded, p.date),
+              if (p.pendingAmountPaise != null)
+                _previewChip(
+                  Icons.hourglass_bottom_rounded,
+                  '${formatMoney(p.pendingAmountPaise!, currency)} pending',
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildDetailed() {
+  Widget _previewChip(IconData icon, String label) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm + 2,
+        vertical: AppSpacing.xs + 2,
+      ),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: p.textSecondary),
+          const SizedBox(width: AppSpacing.xs + 2),
+          Text(label, style: Theme.of(context).textTheme.labelMedium),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailed(String currency) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
     final categories = [...kCategoryKeywords.keys, kDefaultCategory];
+    final isIncome = _type == TxnType.income;
+    final accent = isIncome ? p.income : p.expense;
     return Column(
       key: const ValueKey('detailed'),
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Center(
-          child: SegmentedButton<TxnType>(
-            segments: const [
-              ButtonSegment(value: TxnType.expense, label: Text('Expense')),
-              ButtonSegment(value: TxnType.income, label: Text('Income')),
-            ],
-            selected: {_type},
-            onSelectionChanged: (s) => setState(() => _type = s.first),
-          ),
+        SegmentedButton<TxnType>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: TxnType.expense,
+              icon: Icon(Icons.north_east_rounded, size: AppIconSize.sm),
+              label: Text('Expense'),
+            ),
+            ButtonSegment(
+              value: TxnType.income,
+              icon: Icon(Icons.south_west_rounded, size: AppIconSize.sm),
+              label: Text('Income'),
+            ),
+          ],
+          selected: {_type},
+          onSelectionChanged: (s) => setState(() => _type = s.first),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Center(
-          child: IntrinsicWidth(
-            child: TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -2,
-              ),
-              decoration: const InputDecoration(
-                hintText: '0',
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                filled: false,
-                contentPadding: EdgeInsets.zero,
+        Text('Amount', textAlign: TextAlign.center, style: text.labelMedium),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(currency, style: text.moneyStyle(32, color: p.textTertiary)),
+            const SizedBox(width: AppSpacing.xs),
+            Flexible(
+              child: IntrinsicWidth(
+                child: TextField(
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  textAlign: TextAlign.center,
+                  onChanged: (_) {
+                    if (_amountError != null) {
+                      setState(() => _amountError = null);
+                    }
+                  },
+                  style: text.moneyStyle(
+                    44,
+                    color: accent,
+                    weight: FontWeight.w800,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: '0',
+                    hintStyle: text.moneyStyle(44, color: p.border),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    filled: false,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
               ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.lg),
+        AnimatedSwitcher(
+          duration: AppDurations.of(context, AppDurations.fast),
+          child: _amountError == null
+              ? const SizedBox(height: AppSpacing.md)
+              : Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Text(
+                    _amountError!,
+                    textAlign: TextAlign.center,
+                    style: text.bodySmall?.copyWith(color: p.expense),
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.md),
         if (_type == TxnType.expense) ...[
-          Text('Category', style: Theme.of(context).textTheme.titleMedium),
+          Text('Category', style: text.titleSmall),
           const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            height: 100,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
-              itemBuilder: (context, index) {
-                final cat = categories[index];
-                final isSelected = _category == cat;
-                return PressScale(
-                  onTap: () => setState(() => _category = cat),
-                  child:
-                      AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.only(right: AppSpacing.md),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md,
-                              vertical: AppSpacing.sm,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? AppColors.categoryColor(cat)
-                                  : AppColors.categoryColor(cat)
-                                        .withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(AppRadius.lg),
-                              border: Border.all(
-                                color: isSelected
-                                    ? Colors.transparent
-                                    : AppColors.categoryColor(cat)
-                                          .withValues(alpha: 0.3),
-                                width: 2,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.category, // You can replace with custom icons
-                                  color: isSelected
-                                      ? Colors.white
-                                      : AppColors.categoryColor(cat),
-                                  size: 32,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  cat,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : AppColors.categoryColor(cat),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                          .animate(target: isSelected ? 1 : 0)
-                          .scale(
-                            begin: const Offset(1, 1),
-                            end: const Offset(1.05, 1.05),
-                            duration: 150.ms,
-                          ),
-                );
-              },
-            ),
+          LayoutBuilder(
+            builder: (context, c) {
+              final columns = (c.maxWidth / 84).floor().clamp(4, 8);
+              final w = (c.maxWidth - AppSpacing.sm * (columns - 1)) / columns;
+              return Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  for (final cat in categories)
+                    SizedBox(
+                      width: w,
+                      child: _CategoryOption(
+                        category: cat,
+                        selected: _category == cat,
+                        onTap: () => setState(() => _category = cat),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
         TextField(
           controller: _noteController,
-          decoration: const InputDecoration(labelText: 'Note (optional)'),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Date'),
-          subtitle: Text(
-            '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Note (optional)',
+            prefixIcon: Icon(Icons.notes_rounded),
           ),
-          trailing: const Icon(Icons.calendar_today_outlined),
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: _date,
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) setState(() => _date = picked);
-          },
         ),
-        const SizedBox(height: AppSpacing.lg),
-        SizedBox(
-          width: double.infinity,
-          height: 56, // Chunky button
-          child: ElevatedButton(
-            onPressed: _submitDetailed,
-            child: const Text(
-              'Log transaction',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        const SizedBox(height: AppSpacing.sm + 2),
+        Material(
+          color: p.surfaceAlt,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _date,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null) setState(() => _date = picked);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md - 4,
+                vertical: AppSpacing.md - 2,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today_rounded, color: p.textSecondary),
+                  const SizedBox(width: AppSpacing.md - 4),
+                  Expanded(child: Text(_isoDate(_date), style: text.bodyLarge)),
+                  Text(
+                    'Change',
+                    style: text.labelMedium?.copyWith(color: p.savings),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+        const SizedBox(height: AppSpacing.lg),
+        FilledButton.icon(
+          onPressed: _submitDetailed,
+          icon: const Icon(Icons.check_rounded),
+          label: Text(isIncome ? 'Log income' : 'Log expense'),
+        ),
       ],
+    );
+  }
+}
+
+class _CategoryOption extends StatelessWidget {
+  final String category;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CategoryOption({
+    required this.category,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final color = CategoryStyle.of(category).color;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: category,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: AnimatedContainer(
+          duration: AppDurations.of(context, AppDurations.fast),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm + 2),
+          decoration: BoxDecoration(
+            color: selected
+                ? color.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: selected ? color : p.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              CategoryIcon(category: category, size: 36, solid: selected),
+              const SizedBox(height: AppSpacing.xs + 2),
+              Text(
+                category,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: selected ? p.textPrimary : p.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

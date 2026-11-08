@@ -20,10 +20,10 @@ class StartupFailureScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
+              Icon(
                 Icons.cloud_off_outlined,
                 size: 48,
-                color: AppColors.expense,
+                color: context.palette.expense,
               ),
               const SizedBox(height: AppSpacing.lg),
               Text(

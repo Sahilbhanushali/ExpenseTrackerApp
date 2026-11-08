@@ -4,11 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/constants/calendar.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
+import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
-import '../../core/widgets/staggered_list.dart';
+import '../../core/widgets/app_chip.dart';
+import '../../core/widgets/category_icon.dart';
+import '../../core/widgets/responsive.dart';
 import '../../core/widgets/transaction_tile.dart';
 import '../../data/models/transaction.dart';
 import '../accounts/accounts_controller.dart';
@@ -16,6 +21,25 @@ import '../settings/settings_controller.dart';
 import 'expenses_controller.dart';
 
 const _pageSize = 50;
+
+/// One entry in the flattened, lazily built list: either a day header or a
+/// transaction row (with its position inside that day's card).
+sealed class _ListEntry {}
+
+class _DayHeader extends _ListEntry {
+  final String label;
+
+  /// Net of the day's loaded rows, in paise (income − expense).
+  final int net;
+  _DayHeader(this.label, this.net);
+}
+
+class _TxnEntry extends _ListEntry {
+  final Transaction txn;
+  final bool first;
+  bool last = true;
+  _TxnEntry(this.txn, {required this.first});
+}
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -30,11 +54,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Timer? _searchDebounce;
 
   List<Transaction> _rows = [];
+
+  /// Derived from [_rows] once per load, not on every build.
+  List<_ListEntry> _entries = [];
   List<String> _categories = [];
   bool _initialLoad = true;
   bool _loadingMore = false;
   bool _hasMore = true;
   int _offset = 0;
+  Object? _loadError;
 
   TxnType? _typeFilter;
   String? _categoryFilter;
@@ -49,8 +77,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     // IndexedStack keeps this screen mounted for the whole app lifetime, so
     // it never gets a fresh initState when the user switches back to this
     // tab — without this listener, a transaction added from the Dashboard
-    // (or anywhere else) would never show up here until some unrelated
-    // local action happened to trigger a reload.
+    // (or anywhere else) would never show up here.
     _expenses.addListener(_reload);
     _scrollController.addListener(_onScroll);
     _loadCategories();
@@ -81,9 +108,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Future<void> _reload() async {
     setState(() {
       _rows = [];
+      _entries = [];
       _offset = 0;
       _hasMore = true;
       _initialLoad = true;
+      _loadError = null;
     });
     await _loadMore();
   }
@@ -91,34 +120,79 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
-    final page = await _expenses.queryPage(
-      limit: _pageSize,
-      offset: _offset,
-      type: _typeFilter,
-      category: _categoryFilter,
-      from: _dateFilter?.start,
-      to: _dateFilter?.end,
-      searchTerm: _searchController.text,
-    );
-    if (!mounted) return;
-    setState(() {
-      _rows = [..._rows, ...page];
-      _offset += page.length;
-      _hasMore = page.length == _pageSize;
-      _loadingMore = false;
-      _initialLoad = false;
-    });
+    try {
+      final page = await _expenses.queryPage(
+        limit: _pageSize,
+        offset: _offset,
+        type: _typeFilter,
+        category: _categoryFilter,
+        from: _dateFilter?.start,
+        to: _dateFilter?.end,
+        searchTerm: _searchController.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rows = [..._rows, ...page];
+        _entries = _buildEntries(_rows);
+        _offset += page.length;
+        _hasMore = page.length == _pageSize;
+        _loadingMore = false;
+        _initialLoad = false;
+      });
+    } catch (e) {
+      debugPrint('Transactions load failed: ${e.runtimeType}');
+      if (!mounted) return;
+      setState(() {
+        _loadError = e;
+        _loadingMore = false;
+        _initialLoad = false;
+        _hasMore = false;
+      });
+    }
+  }
+
+  List<_ListEntry> _buildEntries(List<Transaction> rows) {
+    final entries = <_ListEntry>[];
+    String? lastDate;
+    var headerIndex = -1;
+    var net = 0;
+    _TxnEntry? prev;
+
+    void closeDay() {
+      if (headerIndex < 0) return;
+      final h = entries[headerIndex] as _DayHeader;
+      entries[headerIndex] = _DayHeader(h.label, net);
+    }
+
+    for (final txn in rows) {
+      if (txn.date != lastDate) {
+        closeDay();
+        headerIndex = entries.length;
+        entries.add(_DayHeader(_sectionLabel(txn.date), 0));
+        net = 0;
+        lastDate = txn.date;
+        prev = null;
+      }
+      if (txn.type == TxnType.income) net += txn.amountPaise;
+      if (txn.type == TxnType.expense) net -= txn.amountPaise;
+      prev?.last = false;
+      final entry = _TxnEntry(txn, first: prev == null);
+      entries.add(entry);
+      prev = entry;
+    }
+    closeDay();
+    return entries;
   }
 
   void _onSearchChanged(String term) {
+    setState(() {}); // toggles the clear button
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 300), _reload);
   }
 
   Future<void> _undo() async {
-    // No explicit _reload() here — deleting via ExpensesController already
-    // calls its own refresh(), which the listener registered in initState
-    // picks up automatically.
+    // Deleting via ExpensesController already calls its own refresh(),
+    // which the listener registered in initState picks up.
     final row = await _expenses.undoLast();
     if (!mounted) return;
     await context.read<AccountsController>().refresh();
@@ -141,7 +215,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
-          FilledButton.tonal(
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: context.palette.expense,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
           ),
@@ -162,6 +240,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (context) => TransactionDetailSheet(
         txn: txn,
         currency: currency,
@@ -177,14 +256,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   String _sectionLabel(String isoDate) {
     final today = DateTime.now();
-    final todayIso =
-        '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    final yesterday = today.subtract(const Duration(days: 1));
-    final yesterdayIso =
-        '${yesterday.year.toString().padLeft(4, '0')}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}';
-    if (isoDate == todayIso) return 'Today';
-    if (isoDate == yesterdayIso) return 'Yesterday';
-    return isoDate;
+    String iso(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    if (isoDate == iso(today)) return 'Today';
+    if (isoDate == iso(today.subtract(const Duration(days: 1)))) {
+      return 'Yesterday';
+    }
+    final d = DateTime.tryParse(isoDate);
+    if (d == null) return isoDate;
+    final weekday = kWeekdayNames[d.weekday - 1].substring(0, 3);
+    final year = d.year == today.year ? '' : ' ${d.year}';
+    return '$weekday, ${d.day} ${kMonthNamesShort[d.month - 1]}$year';
   }
 
   Future<void> _pickDateRange() async {
@@ -217,13 +299,37 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
-  String _dateFilterLabel() {
-    if (_dateFilter == null) return 'Date';
-    final s = _dateFilter!.start;
-    final e = _dateFilter!.end;
-    String fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
-    return '${fmt(s)} – ${fmt(e)}';
+  Future<void> _pickCategory() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _CategoryPickerSheet(
+        categories: _categories,
+        selected: _categoryFilter,
+      ),
+    );
+    if (picked == null) return;
+    setState(() => _categoryFilter = picked.isEmpty ? null : picked);
+    _reload();
   }
+
+  String _dateFilterLabel() {
+    if (_dateFilter == null) return 'Any date';
+    String fmt(DateTime d) => '${d.day} ${kMonthNamesShort[d.month - 1]}';
+    return '${fmt(_dateFilter!.start)} – ${fmt(_dateFilter!.end)}';
+  }
+
+  void _setType(TxnType? type) {
+    setState(() => _typeFilter = type);
+    _reload();
+  }
+
+  bool get _anyFilter =>
+      _typeFilter != null ||
+      _categoryFilter != null ||
+      _dateFilter != null ||
+      _searchController.text.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -234,280 +340,346 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         title: const Text('Transactions'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.undo),
-            tooltip: 'Undo last',
+            icon: const Icon(Icons.undo_rounded),
+            tooltip: 'Undo last entry',
             onPressed: _undo,
           ),
+          const SizedBox(width: AppSpacing.sm),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              0,
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              decoration: const InputDecoration(
-                hintText: 'Search notes or category',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              0,
-            ),
-            child: SizedBox(
-              height: 36,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _FilterChip(
-                    label: 'All',
-                    selected: _typeFilter == null,
-                    onTap: () {
-                      setState(() => _typeFilter = null);
-                      _reload();
-                    },
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _FilterChip(
-                    label: 'Expense',
-                    selected: _typeFilter == TxnType.expense,
-                    onTap: () {
-                      setState(() => _typeFilter = TxnType.expense);
-                      _reload();
-                    },
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _FilterChip(
-                    label: 'Income',
-                    selected: _typeFilter == TxnType.income,
-                    onTap: () {
-                      setState(() => _typeFilter = TxnType.income);
-                      _reload();
-                    },
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _FilterChip(
-                    label: 'Lent',
-                    selected: _typeFilter == TxnType.lent,
-                    onTap: () {
-                      setState(() => _typeFilter = TxnType.lent);
-                      _reload();
-                    },
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _FilterChip(
-                    label: 'Borrowed',
-                    selected: _typeFilter == TxnType.borrowed,
-                    onTap: () {
-                      setState(() => _typeFilter = TxnType.borrowed);
-                      _reload();
-                    },
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Container(width: 1, color: Theme.of(context).dividerColor),
-                  const SizedBox(width: AppSpacing.xs),
-                  InputChip(
-                    avatar: const Icon(Icons.date_range_outlined, size: 16),
-                    label: Text(_dateFilterLabel()),
-                    selected: _dateFilter != null,
-                    onPressed: _pickDateRange,
-                    onDeleted: _dateFilter == null
-                        ? null
-                        : () {
-                            setState(() => _dateFilter = null);
-                            _reload();
+      body: ResponsivePage(
+        builder: (context, gutter) => Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(gutter, AppSpacing.xs, gutter, 0),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search notes or category',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _searchController.clear();
+                            _onSearchChanged('');
                           },
-                  ),
-                  if (_categories.isNotEmpty) ...[
-                    const SizedBox(width: AppSpacing.md),
-                    Container(width: 1, color: Theme.of(context).dividerColor),
-                    const SizedBox(width: AppSpacing.md),
-                    for (final c in _categories) ...[
-                      _FilterChip(
-                        label: c,
-                        selected: _categoryFilter == c,
-                        onTap: () {
-                          setState(
-                            () => _categoryFilter = _categoryFilter == c
-                                ? null
-                                : c,
-                          );
-                          _reload();
-                        },
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                    ],
-                  ],
-                ],
+                        ),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: _initialLoad
-                ? const Center(child: CircularProgressIndicator())
-                : _rows.isEmpty
-                ? EmptyState(
-                    icon: Icons.receipt_long_outlined,
-                    message:
-                        (_typeFilter == null &&
-                            _categoryFilter == null &&
-                            _dateFilter == null &&
-                            _searchController.text.isEmpty)
-                        ? 'Nothing logged yet.'
-                        : 'No transactions match these filters.',
-                  )
-                : RefreshIndicator(
-                    onRefresh: () async {
-                      await _loadCategories();
-                      await _reload();
+            const SizedBox(height: AppSpacing.md - 4),
+            ChipRow(
+              children: [
+                AppChoiceChip(
+                  label: 'All',
+                  selected: _typeFilter == null,
+                  onTap: () => _setType(null),
+                ),
+                AppChoiceChip(
+                  label: 'Expenses',
+                  selected: _typeFilter == TxnType.expense,
+                  onTap: () => _setType(TxnType.expense),
+                ),
+                AppChoiceChip(
+                  label: 'Income',
+                  selected: _typeFilter == TxnType.income,
+                  onTap: () => _setType(TxnType.income),
+                ),
+                AppChoiceChip(
+                  label: 'Lent',
+                  selected: _typeFilter == TxnType.lent,
+                  onTap: () => _setType(TxnType.lent),
+                ),
+                AppChoiceChip(
+                  label: 'Borrowed',
+                  selected: _typeFilter == TxnType.borrowed,
+                  onTap: () => _setType(TxnType.borrowed),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            ChipRow(
+              children: [
+                AppChoiceChip(
+                  icon: Icons.date_range_rounded,
+                  label: _dateFilterLabel(),
+                  selected: _dateFilter != null,
+                  onTap: _pickDateRange,
+                  onClear: () {
+                    setState(() => _dateFilter = null);
+                    _reload();
+                  },
+                ),
+                if (_categories.isNotEmpty)
+                  AppChoiceChip(
+                    icon: Icons.category_outlined,
+                    label: _categoryFilter ?? 'Any category',
+                    selected: _categoryFilter != null,
+                    onTap: _pickCategory,
+                    onClear: () {
+                      setState(() => _categoryFilter = null);
+                      _reload();
                     },
-                    child: _buildGroupedList(_rows, currency),
                   ),
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: AppDurations.of(context, AppDurations.base),
+                child: _buildBody(currency, gutter),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildGroupedList(List<Transaction> rows, String currency) {
-    final items = <Widget>[];
-    String? lastSection;
-    var index = 0;
-
-    for (final txn in rows) {
-      final section = _sectionLabel(txn.date);
-      if (section != lastSection) {
-        items.add(
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              0,
-              items.isEmpty ? 0 : AppSpacing.md,
-              0,
-              AppSpacing.xs,
-            ),
-            child: Text(
-              section,
-              style: Theme.of(context).textTheme.labelMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-          ),
-        );
-        lastSection = section;
-      }
-
-      items.add(
-        StaggeredListItem(
-          index: index++,
-          child: Dismissible(
-            key: ValueKey(txn.id),
-            direction: DismissDirection.endToStart,
-            confirmDismiss: (_) => _confirmDelete(txn),
-            onDismissed: (_) => _deleteTxn(txn),
-            background: Container(
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              decoration: BoxDecoration(
-                color: AppColors.expense.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.md),
+  Widget _buildBody(String currency, double gutter) {
+    if (_initialLoad) {
+      return Padding(
+        key: const ValueKey('loading'),
+        padding: EdgeInsets.symmetric(horizontal: gutter),
+        child: const SkeletonList(),
+      );
+    }
+    if (_loadError != null) {
+      return ErrorState(
+        key: const ValueKey('error'),
+        message: "Couldn't load your transactions.",
+        onRetry: _reload,
+      );
+    }
+    if (_rows.isEmpty) {
+      return EmptyState(
+        key: const ValueKey('empty'),
+        icon: _anyFilter
+            ? Icons.filter_alt_off_outlined
+            : Icons.receipt_long_outlined,
+        title: _anyFilter ? 'No matches' : 'Nothing logged yet',
+        message: _anyFilter
+            ? 'No transactions match these filters.'
+            : 'Tap + to add your first transaction.',
+      );
+    }
+    return RefreshIndicator(
+      key: const ValueKey('list'),
+      onRefresh: () async {
+        await _loadCategories();
+        await _reload();
+      },
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: EdgeInsets.fromLTRB(
+          gutter,
+          AppSpacing.sm,
+          gutter,
+          AppSpacing.navClearance,
+        ),
+        itemCount: _entries.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == _entries.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
               ),
-              child: const Icon(Icons.delete_outline, color: AppColors.expense),
+            );
+          }
+          return switch (_entries[i]) {
+            _DayHeader h => _DayHeaderRow(
+              header: h,
+              currency: currency,
+              first: i == 0,
             ),
-            child: TransactionTile(
+            _TxnEntry e => _buildRow(e, currency),
+          };
+        },
+      ),
+    );
+  }
+
+  Widget _buildRow(_TxnEntry e, String currency) {
+    final p = context.palette;
+    final txn = e.txn;
+    final radius = BorderRadius.vertical(
+      top: Radius.circular(e.first ? AppRadius.lg : 0),
+      bottom: Radius.circular(e.last ? AppRadius.lg : 0),
+    );
+    // Each row draws its slice of the day's card so the list stays lazy —
+    // rounded top on the first row, rounded bottom on the last.
+    return Dismissible(
+      key: ValueKey(txn.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => _confirmDelete(txn),
+      onDismissed: (_) => _deleteTxn(txn),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        decoration: BoxDecoration(color: p.expense, borderRadius: radius),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Colors.white),
+            SizedBox(width: AppSpacing.xs),
+            Text('Delete', style: TextStyle(color: Colors.white)),
+          ],
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: p.surface,
+          borderRadius: radius,
+          border: Border(
+            left: BorderSide(color: p.border),
+            right: BorderSide(color: p.border),
+            top: e.first ? BorderSide(color: p.border) : BorderSide.none,
+            bottom: e.last ? BorderSide(color: p.border) : BorderSide.none,
+          ),
+        ),
+        padding: EdgeInsets.only(
+          top: e.first ? AppSpacing.xs : 0,
+          bottom: e.last ? AppSpacing.xs : 0,
+        ),
+        child: Column(
+          children: [
+            if (!e.first)
+              Divider(
+                indent: AppSpacing.md + AppSizes.iconBadge + 12,
+                endIndent: AppSpacing.md,
+                color: p.border,
+              ),
+            TransactionTile(
               txn: txn,
               currency: currency,
               onTap: () => _editTxn(txn),
             ),
-          ),
+          ],
         ),
-      );
-    }
-
-    if (_hasMore) {
-      items.add(
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-          child: Center(
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return ListView(
-      controller: _scrollController,
-      // The bottom nav is a floating pill drawn over the list, so the last
-      // row needs to be able to scroll clear of it.
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.lg,
-        AppSpacing.lg,
-        112,
       ),
-      children: items,
     );
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+class _DayHeaderRow extends StatelessWidget {
+  final _DayHeader header;
+  final String currency;
+  final bool first;
 
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
+  const _DayHeaderRow({
+    required this.header,
+    required this.currency,
+    required this.first,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: 6,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : theme.cardTheme.color,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(
-            color: selected ? AppColors.primary : theme.dividerColor,
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.xs,
+        first ? AppSpacing.xs : AppSpacing.lg - 4,
+        AppSpacing.xs,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(header.label, style: text.labelMedium),
+            ),
           ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: selected ? Colors.white : null,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+          if (header.net != 0)
+            Text(
+              '${header.net > 0 ? '+' : '−'}${formatMoney(header.net.abs(), currency)}',
+              style: text.labelMedium?.copyWith(
+                color: header.net > 0 ? p.income : p.textSecondary,
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-/// Full detail view for one transaction — how much, what category, what
-/// note, and what date — all editable in place, instead of the amount+note
-/// only dialog this replaced.
+class _CategoryPickerSheet extends StatelessWidget {
+  final List<String> categories;
+  final String? selected;
+
+  const _CategoryPickerSheet({required this.categories, this.selected});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.page,
+              0,
+              AppSpacing.page,
+              AppSpacing.sm,
+            ),
+            child: Text(
+              'Filter by category',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                0,
+                AppSpacing.sm,
+                AppSpacing.lg,
+              ),
+              itemCount: categories.length + 1,
+              itemBuilder: (context, i) {
+                final cat = i == 0 ? null : categories[i - 1];
+                final isSelected = cat == selected;
+                return ListTile(
+                  leading: cat == null
+                      ? Icon(
+                          Icons.all_inclusive_rounded,
+                          color: p.textSecondary,
+                        )
+                      : CategoryIcon(category: cat, size: 36),
+                  title: Text(cat ?? 'All categories'),
+                  trailing: isSelected
+                      ? Icon(Icons.check_rounded, color: p.savings)
+                      : null,
+                  onTap: () => Navigator.pop(context, cat ?? ''),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full detail view for one transaction — amount, category, note and date,
+/// all editable in place.
 /// Public so the amount round-trip (paise in, rupees shown, paise back out)
 /// can be widget-tested — prefilling this field with raw paise multiplied
 /// every edited amount by 100.
@@ -541,6 +713,7 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
   late String _category = widget.txn.category;
   late DateTime _date = DateTime.parse(widget.txn.date);
   bool _saving = false;
+  String? _amountError;
 
   @override
   void dispose() {
@@ -559,11 +732,11 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
     TxnType.borrowed => 'Borrowed from ${widget.txn.counterparty ?? 'someone'}',
   };
 
-  Color get _typeColor => switch (widget.txn.type) {
-    TxnType.expense => AppColors.expense,
-    TxnType.income => AppColors.income,
-    TxnType.lent => AppColors.income,
-    TxnType.borrowed => AppColors.expense,
+  Color _typeColor(AppPalette p) => switch (widget.txn.type) {
+    TxnType.expense => p.expense,
+    TxnType.income => p.income,
+    TxnType.lent => p.income,
+    TxnType.borrowed => p.expense,
   };
 
   Future<void> _pickDate() async {
@@ -578,7 +751,11 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
 
   Future<void> _save() async {
     final amount = parseRupeesToPaise(_amountController.text);
-    if (amount == null || amount <= 0 || widget.txn.id == null) return;
+    if (amount == null || amount <= 0) {
+      setState(() => _amountError = 'Enter a valid amount greater than zero');
+      return;
+    }
+    if (widget.txn.id == null) return;
     setState(() => _saving = true);
     final iso =
         '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
@@ -594,96 +771,141 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final typeColor = _typeColor(p);
     final categories = {...widget.categories, _category}.toList()..sort();
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.page,
+            0,
+            AppSpacing.page,
+            AppSpacing.lg,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _typeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                    ),
-                    child: Text(
-                      _typeLabel,
-                      style: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(color: _typeColor),
+                  CategoryIcon(
+                    category: _isLending ? 'lending' : _category,
+                    size: 44,
+                  ),
+                  const SizedBox(width: AppSpacing.md - 4),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Edit transaction', style: text.titleLarge),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: typeColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.xs + 2),
+                            Flexible(
+                              child: Text(
+                                _typeLabel,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.labelMedium?.copyWith(
+                                  color: typeColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete transaction',
+                    icon: Icon(Icons.delete_outline_rounded, color: p.expense),
                     onPressed: widget.onDelete,
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.lg),
               TextField(
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: text.moneyStyle(28, weight: FontWeight.w800),
+                onChanged: (_) {
+                  if (_amountError != null) setState(() => _amountError = null);
+                },
                 decoration: InputDecoration(
-                  prefixText: widget.currency,
+                  prefixText: '${widget.currency} ',
+                  prefixStyle: text.moneyStyle(28, color: p.textTertiary),
                   labelText: 'Amount',
+                  errorText: _amountError,
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.md - 4),
               if (!_isLending) ...[
                 DropdownButtonFormField<String>(
                   initialValue: categories.contains(_category)
                       ? _category
                       : null,
                   decoration: const InputDecoration(labelText: 'Category'),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
                   items: categories
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .map(
+                        (c) => DropdownMenuItem(
+                          value: c,
+                          child: Row(
+                            children: [
+                              CategoryIcon(category: c, size: 28),
+                              const SizedBox(width: AppSpacing.sm + 2),
+                              Text(c),
+                            ],
+                          ),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) => setState(() => _category = v ?? _category),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.md - 4),
               ],
               InkWell(
                 borderRadius: BorderRadius.circular(AppRadius.md),
                 onTap: _pickDate,
                 child: InputDecorator(
-                  decoration: const InputDecoration(labelText: 'Date'),
+                  decoration: const InputDecoration(
+                    labelText: 'Date',
+                    suffixIcon: Icon(Icons.calendar_today_rounded),
+                  ),
                   child: Text(
-                    '${_date.year}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}',
+                    '${_date.day} ${kMonthNames[_date.month - 1]} ${_date.year}',
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.md - 4),
               TextField(
                 controller: _noteController,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(labelText: 'Note'),
               ),
               const SizedBox(height: AppSpacing.lg),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Save'),
-                ),
+              FilledButton(
+                onPressed: _saving ? null : _save,
+                child: _saving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Save changes'),
               ),
             ],
           ),

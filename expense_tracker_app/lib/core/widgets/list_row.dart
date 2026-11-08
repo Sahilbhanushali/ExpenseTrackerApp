@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
-import 'press_scale.dart';
 
-/// A themed replacement for stock `ListTile`/`SwitchListTile` — an icon in a
-/// soft circular backdrop, title/subtitle, and a flexible trailing widget,
-/// with tap feedback via [PressScale] when [onTap] is set.
+/// A themed replacement for stock `ListTile`/`SwitchListTile`: icon in a
+/// tinted rounded badge, title/subtitle, flexible trailing widget.
 class ListRow extends StatelessWidget {
   final IconData icon;
   final Color? iconColor;
@@ -28,41 +27,71 @@ class ListRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = iconColor ?? Theme.of(context).colorScheme.primary;
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final color = iconColor ?? p.textPrimary;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppSizes.minTouch),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Row(
+          children: [
+            Container(
+              width: AppSizes.iconBadge,
+              height: AppSizes.iconBadge,
+              decoration: BoxDecoration(
+                color: iconColor == null
+                    ? p.surfaceAlt
+                    : color.withValues(alpha: dark ? 0.22 : 0.12),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Icon(icon, size: AppIconSize.md, color: color),
             ),
-            child: Icon(icon, size: 20, color: color),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: titleStyle ?? Theme.of(context).textTheme.bodyLarge,
-                ),
-                if (subtitle != null)
-                  Text(subtitle!, style: Theme.of(context).textTheme.bodySmall),
-              ],
+            const SizedBox(width: AppSpacing.md - 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style:
+                        titleStyle ??
+                        text.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(subtitle!, style: text.bodySmall),
+                  ],
+                ],
+              ),
             ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: AppSpacing.sm),
-            trailing!,
+            if (trailing != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              trailing!,
+            ],
           ],
-        ],
+        ),
       ),
     );
-    return onTap == null ? row : PressScale(onTap: onTap, child: row);
+    if (onTap == null) return row;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: row,
+    );
   }
+}
+
+/// A trailing chevron for navigational rows.
+class RowChevron extends StatelessWidget {
+  const RowChevron({super.key});
+
+  @override
+  Widget build(BuildContext context) => Icon(
+    Icons.chevron_right_rounded,
+    color: context.palette.textTertiary,
+    size: AppIconSize.lg,
+  );
 }

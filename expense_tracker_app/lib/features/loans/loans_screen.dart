@@ -231,10 +231,10 @@ class LoansScreen extends StatelessWidget {
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                100,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
               itemCount: loans.length,
               itemBuilder: (context, index) => _LoanCard(
@@ -324,7 +324,7 @@ class _LoanCard extends StatelessWidget {
                   child: _Stat(
                     label: 'Outstanding',
                     value: formatMoney(loan.outstandingPaise, currency),
-                    color: AppColors.expense,
+                    color: context.palette.expense,
                     emphasize: true,
                   ),
                 ),
@@ -359,7 +359,9 @@ class _LoanCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 8,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.15),
+                backgroundColor: context.palette.savings.withValues(
+                  alpha: 0.15,
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -387,15 +389,15 @@ class _LoanCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: AppColors.warning.withValues(alpha: 0.12),
+                  color: context.palette.warning.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(AppRadius.md),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.event_outlined,
                       size: 18,
-                      color: AppColors.warning,
+                      color: context.palette.warning,
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(

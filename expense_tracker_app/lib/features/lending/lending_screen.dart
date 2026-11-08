@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
@@ -368,6 +369,12 @@ class LendingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final lending = context.watch<LendingController>();
     final currency = context.watch<SettingsController>().config.currency;
+    final owedToYou = lending.outstanding
+        .where((t) => t.type == TxnType.lent)
+        .fold<int>(0, (s, t) => s + t.amountPaise);
+    final youOwe = lending.outstanding
+        .where((t) => t.type == TxnType.borrowed)
+        .fold<int>(0, (s, t) => s + t.amountPaise);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Owed')),
@@ -392,18 +399,28 @@ class LendingScreen extends StatelessWidget {
       body: lending.outstanding.isEmpty
           ? const EmptyState(
               icon: Icons.handshake_outlined,
-              message: 'Nothing outstanding — all settled up!',
+              title: 'All settled up',
+              message: 'Use Lend or Borrow to track money between friends.',
             )
           : ListView.separated(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                96,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
-              itemCount: lending.outstanding.length,
-              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-              itemBuilder: (context, i) {
+              itemCount: lending.outstanding.length + 1,
+              separatorBuilder: (_, i) =>
+                  SizedBox(height: i == 0 ? AppSpacing.lg : AppSpacing.sm),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return _OwedSummary(
+                    owedToYou: owedToYou,
+                    youOwe: youOwe,
+                    currency: currency,
+                  );
+                }
+                final i = index - 1;
                 final r = lending.outstanding[i];
                 final owesYou = r.type == TxnType.lent;
                 return StaggeredListItem(
@@ -413,7 +430,9 @@ class LendingScreen extends StatelessWidget {
                       icon: owesYou
                           ? Icons.upload_outlined
                           : Icons.download_outlined,
-                      iconColor: owesYou ? AppColors.income : AppColors.expense,
+                      iconColor: owesYou
+                          ? context.palette.income
+                          : context.palette.expense,
                       title: r.counterparty ?? 'Someone',
                       subtitle: owesYou ? 'owes you' : 'you owe',
                       onTap: () => _showRepay(context, r),
@@ -422,15 +441,19 @@ class LendingScreen extends StatelessWidget {
                         children: [
                           Text(
                             formatMoney(r.amountPaise, currency),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
+                            style: Theme.of(context).textTheme.moneyStyle(
+                              15,
                               color: owesYou
-                                  ? AppColors.income
-                                  : AppColors.expense,
+                                  ? context.palette.income
+                                  : context.palette.expense,
                             ),
                           ),
                           PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert),
+                            tooltip: 'Options',
+                            icon: Icon(
+                              Icons.more_vert_rounded,
+                              color: context.palette.textTertiary,
+                            ),
                             onSelected: (v) {
                               if (v == 'history') {
                                 _showHistory(context, r);
@@ -487,6 +510,57 @@ class _PaymentRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _OwedSummary extends StatelessWidget {
+  final int owedToYou;
+  final int youOwe;
+  final String currency;
+
+  const _OwedSummary({
+    required this.owedToYou,
+    required this.youOwe,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    Widget tile(String label, int value, Color color, IconData icon) =>
+        Expanded(
+          child: AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: AppIconSize.sm, color: color),
+                    const SizedBox(width: AppSpacing.xs),
+                    Flexible(child: Text(label, style: text.bodySmall)),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formatMoney(value, currency),
+                    style: text.moneyStyle(20, color: color),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+    return Row(
+      children: [
+        tile('Owed to you', owedToYou, p.income, Icons.call_received_rounded),
+        const SizedBox(width: AppSpacing.sm),
+        tile('You owe', youOwe, p.expense, Icons.call_made_rounded),
+      ],
     );
   }
 }

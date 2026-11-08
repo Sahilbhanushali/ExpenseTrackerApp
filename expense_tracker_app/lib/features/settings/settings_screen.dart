@@ -6,13 +6,18 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart' as file_selector;
 
+import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_lock_service.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/list_row.dart';
+import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/page_transitions.dart';
+import '../../core/widgets/responsive.dart';
+import '../../core/widgets/section_header.dart';
 import '../../data/datasources/app_database.dart';
 import '../../data/models/app_config.dart';
 import '../../data/repositories/config_repository.dart';
@@ -318,153 +323,321 @@ class SettingsScreen extends StatelessWidget {
     messenger.showSnackBar(const SnackBar(content: Text('All data reset.')));
   }
 
+  Future<void> _pickCurrency(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
+    const options = ['₹', r'$', '€', '£', '¥', 'AED ', 'SGD '];
+    final current = settings.config.currency;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.page,
+                0,
+                AppSpacing.page,
+                AppSpacing.sm,
+              ),
+              child: Text(
+                'Currency symbol',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            for (final c in options)
+              ListTile(
+                title: Text(c.trim()),
+                trailing: c == current
+                    ? Icon(Icons.check_rounded, color: context.palette.savings)
+                    : null,
+                onTap: () => Navigator.pop(context, c),
+              ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && picked != current) await settings.setCurrency(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>();
     final config = settings.config;
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final allocated = config.budgets.values.fold<int>(0, (s, v) => s + v);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        children: [
-          Text('Budget', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            child: ListRow(
-              icon: Icons.account_balance_wallet_outlined,
-              title: 'Monthly budget',
-              trailing: Text(
-                formatMoney(config.monthlyBudgetPaise, config.currency),
-              ),
-              onTap: () => _editAmount(
-                context,
-                'Monthly budget',
-                config.monthlyBudgetPaise,
-                settings.setMonthlyBudget,
-              ),
-            ),
+      body: ResponsivePage(
+        builder: (context, gutter) => ListView(
+          padding: EdgeInsets.fromLTRB(
+            gutter,
+            AppSpacing.sm,
+            gutter,
+            AppSpacing.xl,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            child: ListRow(
-              icon: Icons.flag_outlined,
-              title: 'Savings goals',
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () =>
-                  Navigator.of(context)
-                      .push(FadeSlideRoute(page: const GoalsScreen())),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Category budgets',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SettingsGroup(
+              title: 'Appearance',
               children: [
-                Text(
-                  'Split your monthly budget across categories — adjusting one '
-                  'automatically rebalances the rest so the total always matches.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const ListRow(
+                        icon: Icons.palette_outlined,
+                        title: 'Theme',
+                        subtitle: 'Follow the system or pick one',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      SegmentedButton<String>(
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(
+                            value: 'system',
+                            icon: Icon(Icons.brightness_auto_outlined),
+                            label: Text('System'),
+                          ),
+                          ButtonSegment(
+                            value: 'light',
+                            icon: Icon(Icons.light_mode_outlined),
+                            label: Text('Light'),
+                          ),
+                          ButtonSegment(
+                            value: 'dark',
+                            icon: Icon(Icons.dark_mode_outlined),
+                            label: Text('Dark'),
+                          ),
+                        ],
+                        selected: {config.themeMode},
+                        onSelectionChanged: (s) =>
+                            settings.setThemeMode(s.first),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.md),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Allocated: ${formatMoney(config.budgets.values.fold<int>(0, (s, v) => s + v), config.currency)}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    FilledButton.tonal(
-                      onPressed: () => Navigator.of(
-                        context,
-                      ).push(FadeSlideRoute(page: const BudgetPlannerScreen())),
-                      child: const Text('Open planner'),
-                    ),
-                  ],
+                ListRow(
+                  icon: Icons.currency_exchange_rounded,
+                  title: 'Currency',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(config.currency.trim(), style: text.titleMedium),
+                      const RowChevron(),
+                    ],
+                  ),
+                  onTap: () => _pickCurrency(context, settings),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Categories', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            _SettingsGroup(
+              title: 'Budget',
+              children: [
+                ListRow(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Monthly budget',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatMoney(config.monthlyBudgetPaise, config.currency),
+                        style: text.moneyStyle(14),
+                      ),
+                      const RowChevron(),
+                    ],
+                  ),
+                  onTap: () => _editAmount(
+                    context,
+                    'Monthly budget',
+                    config.monthlyBudgetPaise,
+                    settings.setMonthlyBudget,
+                  ),
+                ),
+                ListRow(
+                  icon: Icons.pie_chart_outline_rounded,
+                  title: 'Category budgets',
+                  subtitle:
+                      'Allocated ${formatMoney(allocated, config.currency)} — split across categories',
+                  trailing: const RowChevron(),
+                  onTap: () => Navigator.of(context)
+                      .push(FadeSlideRoute(page: const BudgetPlannerScreen())),
+                ),
+                ListRow(
+                  icon: Icons.flag_outlined,
+                  title: 'Savings goals',
+                  trailing: const RowChevron(),
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(FadeSlideRoute(page: const GoalsScreen())),
+                ),
+              ],
+            ),
+            _SettingsGroup(
+              title: 'Custom categories',
               children: [
                 if (config.customCategories.isEmpty)
-                  const Text('No custom categories yet.')
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Text(
+                      'Add your own categories with keywords — quick-add will '
+                      'file matching entries under them automatically.',
+                      style: text.bodySmall,
+                    ),
+                  )
                 else
-                  ...config.customCategories.entries.map(
-                    (e) => InkWell(
+                  for (final e in config.customCategories.entries)
+                    InkWell(
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                       onTap: () =>
                           _editCategory(context, settings, e.key, e.value),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
                         child: Row(
                           children: [
+                            CategoryIcon(category: e.key),
+                            const SizedBox(width: AppSpacing.md - 4),
                             Expanded(
-                              child: Text('${e.key}: ${e.value.join(', ')}'),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    e.key,
+                                    style: text.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    e.value.join(', '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text.bodySmall,
+                                  ),
+                                ],
+                              ),
                             ),
-                            const Icon(Icons.chevron_right, size: 18),
+                            const RowChevron(),
                           ],
                         ),
                       ),
                     ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => _addCategory(context, settings),
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add category'),
                   ),
-                const SizedBox(height: AppSpacing.sm),
-                TextButton.icon(
-                  onPressed: () => _addCategory(context, settings),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add category'),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Security', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          const _SecuritySection(),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Data', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          AppCard(
-            child: Column(
+            const _SettingsGroup(
+              title: 'Security',
+              children: [_SecuritySection()],
+            ),
+            _SettingsGroup(
+              title: 'Data',
               children: [
                 ListRow(
                   icon: Icons.file_download_outlined,
                   title: 'Export transactions (CSV)',
+                  trailing: const RowChevron(),
                   onTap: () => _exportCsv(context),
                 ),
                 ListRow(
                   icon: Icons.backup_outlined,
                   title: 'Backup (database + config)',
+                  trailing: const RowChevron(),
                   onTap: () => _exportBackup(context),
                 ),
                 ListRow(
                   icon: Icons.file_upload_outlined,
                   title: 'Import transactions (CSV)',
+                  trailing: const RowChevron(),
                   onTap: () => _importCsv(context),
                 ),
                 ListRow(
-                  icon: Icons.settings_backup_restore,
+                  icon: Icons.settings_backup_restore_rounded,
                   title: 'Restore from backup',
                   subtitle: 'Replaces everything on this device',
+                  trailing: const RowChevron(),
                   onTap: () => _restoreBackup(context),
                 ),
+              ],
+            ),
+            _SettingsGroup(
+              title: 'Danger zone',
+              children: [
                 ListRow(
                   icon: Icons.delete_forever_outlined,
-                  iconColor: Colors.red,
+                  iconColor: p.expense,
                   title: 'Reset all data',
-                  titleStyle: const TextStyle(color: Colors.red),
+                  subtitle: 'Permanently deletes every entry',
+                  titleStyle: text.bodyLarge?.copyWith(
+                    color: p.expense,
+                    fontWeight: FontWeight.w600,
+                  ),
                   onTap: () => _resetAll(context),
                 ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Column(
+                children: [
+                  Text('Spendo', style: text.titleSmall),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    'Your data stays on this device.',
+                    style: text.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A titled card of settings rows separated by hairlines.
+class _SettingsGroup extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+  const _SettingsGroup({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SectionHeader(title),
+          AppCard(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md - 4,
+              vertical: AppSpacing.xs,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[
+                  if (i > 0) const Divider(),
+                  children[i],
+                ],
               ],
             ),
           ),
@@ -511,15 +684,13 @@ class _SecuritySectionState extends State<_SecuritySection> {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: ListRow(
-        icon: Icons.lock_outline,
-        title: 'App lock',
-        subtitle: 'Require a PIN or biometric to open the app',
-        trailing: Switch(
-          value: _enabled ?? false,
-          onChanged: _enabled == null ? null : _onToggle,
-        ),
+    return ListRow(
+      icon: Icons.lock_outline_rounded,
+      title: 'App lock',
+      subtitle: 'Require a PIN or biometric to open the app',
+      trailing: Switch(
+        value: _enabled ?? false,
+        onChanged: _enabled == null ? null : _onToggle,
       ),
     );
   }

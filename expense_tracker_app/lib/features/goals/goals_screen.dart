@@ -189,10 +189,10 @@ class GoalsScreen extends StatelessWidget {
             )
           : GridView.builder(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.lg,
-                AppSpacing.lg,
-                96,
+                AppSpacing.page,
+                AppSpacing.sm,
+                AppSpacing.page,
+                AppSpacing.navClearance,
               ),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
@@ -260,9 +260,9 @@ class GoalsScreen extends StatelessWidget {
                               ),
                             ),
                             if (g.isComplete)
-                              const Icon(
+                              Icon(
                                 Icons.check_circle,
-                                color: AppColors.income,
+                                color: context.palette.income,
                                 size: 20,
                               )
                             else
@@ -273,14 +273,15 @@ class GoalsScreen extends StatelessWidget {
                                   g.goal.name,
                                 ),
                                 style: FilledButton.styleFrom(
+                                  minimumSize: const Size(
+                                    64,
+                                    AppSizes.minTouch - 8,
+                                  ),
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
+                                    horizontal: AppSpacing.md,
                                   ),
                                 ),
-                                child: const Text(
-                                  'Add',
-                                  style: TextStyle(fontSize: 12),
-                                ),
+                                child: const Text('Add'),
                               ),
                           ],
                         ),
