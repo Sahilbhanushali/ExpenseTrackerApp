@@ -112,7 +112,18 @@ class TransactionTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(amount, style: text.moneyStyle(15, color: amountColor)),
+              // Long amounts at large text sizes shrink rather than push the
+              // row past the screen edge.
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    amount,
+                    style: text.moneyStyle(15, color: amountColor),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

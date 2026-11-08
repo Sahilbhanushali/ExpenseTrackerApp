@@ -38,12 +38,16 @@ class TrendChart extends StatelessWidget {
 
     return Column(
       children: [
-        Row(
-          children: [
-            ChartLegendDot(color: p.income, label: 'Income'),
-            const SizedBox(width: AppSpacing.md),
-            ChartLegendDot(color: p.expense, label: 'Expenses'),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.xs,
+            children: [
+              ChartLegendDot(color: p.income, label: 'Income'),
+              ChartLegendDot(color: p.expense, label: 'Expenses'),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         SizedBox(
