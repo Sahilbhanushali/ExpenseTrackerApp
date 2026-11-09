@@ -99,6 +99,20 @@ class NotificationService {
     }
   }
 
+  /// Asks for POST_NOTIFICATIONS (Android 13+). False if refused, so the
+  /// caller can send the user to system settings instead.
+  Future<bool> requestPermission() async {
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    try {
+      return await android?.requestNotificationsPermission() ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> cancel(int billId) async {
     if (!_initialized) return;
     await _plugin.cancel(billId);

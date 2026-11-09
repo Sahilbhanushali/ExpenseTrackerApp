@@ -13,7 +13,7 @@ abstract final class LoanPaymentOwner {
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const dbName = 'expenses.db';
-  static const _dbVersion = 11;
+  static const _dbVersion = 12;
 
   static const allTables = [
     'txns',
@@ -143,6 +143,22 @@ class AppDatabase {
     if (oldVersion < 11) {
       await _convertAmountsToPaise(db);
     }
+    if (oldVersion < 12) {
+      await _createAccountIndexes(db);
+    }
+  }
+
+  /// Balances and per-account history filter on these on every refresh.
+  static Future<void> _createAccountIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_txns_account ON txns(account)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(from_account)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_transfers_to ON transfers(to_account)',
+    );
   }
 
   /// Every money column moves from rupees-as-REAL to integer paise.
@@ -378,6 +394,7 @@ class AppDatabase {
     );
     await db.execute('CREATE INDEX idx_txns_loan_id ON txns(loan_id)');
     await db.execute('CREATE UNIQUE INDEX idx_accounts_name ON accounts(name)');
+    await _createAccountIndexes(db);
 
     await _createWishlistTable(db);
     await _createGoalsTable(db);

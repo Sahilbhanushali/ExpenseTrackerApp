@@ -12,12 +12,11 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_lock_service.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
-import '../../core/widgets/app_card.dart';
+import '../../core/widgets/settings_group.dart';
 import '../../core/widgets/list_row.dart';
 import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/responsive.dart';
-import '../../core/widgets/section_header.dart';
 import '../../data/datasources/app_database.dart';
 import '../../data/models/app_config.dart';
 import '../../data/repositories/config_repository.dart';
@@ -384,7 +383,7 @@ class SettingsScreen extends StatelessWidget {
             AppSpacing.xl,
           ),
           children: [
-            _SettingsGroup(
+            SettingsGroup(
               title: 'Appearance',
               children: [
                 Padding(
@@ -438,7 +437,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            _SettingsGroup(
+            SettingsGroup(
               title: 'Budget',
               children: [
                 ListRow(
@@ -480,7 +479,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            _SettingsGroup(
+            SettingsGroup(
               title: 'Custom categories',
               children: [
                 if (config.customCategories.isEmpty)
@@ -542,11 +541,11 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const _SettingsGroup(
+            const SettingsGroup(
               title: 'Security',
               children: [_SecuritySection()],
             ),
-            _SettingsGroup(
+            SettingsGroup(
               title: 'Data',
               children: [
                 ListRow(
@@ -576,7 +575,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            _SettingsGroup(
+            SettingsGroup(
               title: 'Danger zone',
               children: [
                 ListRow(
@@ -613,40 +612,6 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// A titled card of settings rows separated by hairlines.
-class _SettingsGroup extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-  const _SettingsGroup({required this.title, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SectionHeader(title),
-          AppCard(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md - 4,
-              vertical: AppSpacing.xs,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0) const Divider(),
-                  children[i],
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// PIN + biometric app lock toggle. State lives in secure storage, not
 /// AppConfig — it's device-local security, not synced/exported config — so
 /// it manages its own async load independent of SettingsController.

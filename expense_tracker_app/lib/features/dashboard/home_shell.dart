@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,6 +14,7 @@ import '../expenses/add_transaction_sheet.dart';
 import '../expenses/transactions_screen.dart';
 import '../goals/goals_controller.dart';
 import '../goals/goals_screen.dart';
+import '../guardian/guardian_screen.dart';
 import '../lending/lending_controller.dart';
 import '../lending/lending_screen.dart';
 import '../loans/loans_controller.dart';
@@ -153,6 +155,14 @@ final _moreSections = <(String, List<_MoreItem>)>[
         'Monthly and category budgets',
         (c) => _push(c, const BudgetPlannerScreen()),
       ),
+      if (defaultTargetPlatform == TargetPlatform.android)
+        _MoreItem(
+          Icons.shield_outlined,
+          AppColors.categoryPalette[8],
+          'Spending Guardian',
+          'Budget alerts when you open a UPI app',
+          (c) => _push(c, const GuardianScreen()),
+        ),
       _MoreItem(
         Icons.flag_rounded,
         AppColors.categoryPalette[7],

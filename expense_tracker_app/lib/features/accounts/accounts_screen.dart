@@ -9,6 +9,7 @@ import '../../core/widgets/app_card.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/animated_money_text.dart';
 import '../../core/widgets/category_icon.dart';
+import '../../core/widgets/list_row.dart';
 import '../../core/widgets/responsive.dart';
 import '../../core/widgets/staggered_list.dart';
 import '../../data/models/account.dart';
@@ -691,6 +692,31 @@ class AccountsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
+                  if (accounts.unassignedCount > 0) ...[
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      child: ListRow(
+                        icon: Icons.link_off_rounded,
+                        iconColor: p.warning,
+                        title:
+                            '${accounts.unassignedCount} '
+                            '${accounts.unassignedCount == 1 ? 'entry isn\'t' : 'entries aren\'t'}'
+                            ' in any account',
+                        subtitle: 'They count toward no balance. Tap to review and assign them.',
+                        trailing: const RowChevron(),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                const TransactionsScreen(unassigned: true),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
                   for (final type in AccountType.values)
                     if (accounts.accounts.any((a) => a.account.type == type))
                       _AccountTypeSection(

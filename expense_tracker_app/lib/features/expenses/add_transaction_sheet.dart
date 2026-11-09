@@ -23,6 +23,7 @@ import '../accounts/accounts_controller.dart';
 import '../lending/lending_controller.dart';
 import '../recurring/recurring_controller.dart';
 import '../settings/settings_controller.dart';
+import '../guardian/guardian_controller.dart';
 import 'expenses_controller.dart';
 
 Future<void> showAddTransactionSheet(
@@ -616,11 +617,16 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             duration: const Duration(seconds: 4),
           ),
         );
-        NotificationService.instance.showNow(
-          id: 'budget_${category.hashCode}'.hashCode,
-          title: 'Budget alert',
-          body: warnings.join(' '),
-        );
+        // On Android the Spending Guardian posts these from its own
+        // snapshot (covering imports too), so only one copy goes out.
+        if (context.read<GuardianController?>()?.handlesBudgetNotifications !=
+            true) {
+          NotificationService.instance.showNow(
+            id: 'budget_${category.hashCode}'.hashCode,
+            title: 'Budget alert',
+            body: warnings.join(' '),
+          );
+        }
       }
     }
 

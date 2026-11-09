@@ -20,6 +20,11 @@ class AccountsController extends ChangeNotifier {
   List<AccountBalance> _accounts = [];
   List<AccountBalance> get accounts => _accounts;
 
+  int _unassignedCount = 0;
+
+  /// Transactions not linked to any account, so missing from every balance.
+  int get unassignedCount => _unassignedCount;
+
   Future<void> init() => refresh();
 
   Future<void> refresh() async {
@@ -27,6 +32,7 @@ class AccountsController extends ChangeNotifier {
     // per account — this runs after every write in the app.
     final list = await _repo.list();
     final balances = await _repo.allBalances();
+    _unassignedCount = await _repo.unassignedTxnCount();
     _accounts = [
       for (final a in list)
         AccountBalance(

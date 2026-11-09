@@ -254,6 +254,44 @@ class AccountRepository {
     return balances;
   }
 
+  /// Transactions linked to no account — they count toward no balance.
+  Future<int> unassignedTxnCount() async {
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS n FROM txns WHERE account IS NULL',
+    );
+    return (rows.first['n'] as int?) ?? 0;
+  }
+
+  /// Transfers into or out of [name], newest first. Transfers are few
+  /// compared to transactions, so they're loaded in one query.
+  Future<List<Transfer>> transfersFor(
+    String name, {
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final db = await _db.database;
+    final where = ['(from_account = ? OR to_account = ?)'];
+    final args = <Object?>[name, name];
+    String iso(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    if (from != null) {
+      where.add('date >= ?');
+      args.add(iso(from));
+    }
+    if (to != null) {
+      where.add('date <= ?');
+      args.add(iso(to));
+    }
+    final rows = await db.query(
+      'transfers',
+      where: where.join(' AND '),
+      whereArgs: args,
+      orderBy: 'date DESC, id DESC',
+    );
+    return rows.map(Transfer.fromMap).toList();
+  }
+
   Future<int> addTransfer(Transfer transfer) async {
     final db = await _db.database;
     return db.insert('transfers', transfer.toMap()..remove('id'));

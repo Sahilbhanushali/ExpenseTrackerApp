@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/utils/expense_parser.dart';
+import '../../data/models/account.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
@@ -74,6 +75,7 @@ class ExpensesController extends ChangeNotifier {
     DateTime? to,
     String? searchTerm,
     String? account,
+    bool unassignedOnly = false,
   }) => _txnRepo.queryPage(
     limit: limit,
     offset: offset,
@@ -83,7 +85,13 @@ class ExpensesController extends ChangeNotifier {
     to: to,
     searchTerm: searchTerm,
     account: account,
+    unassignedOnly: unassignedOnly,
   );
+  Future<List<Transfer>> transfersFor(
+    String account, {
+    DateTime? from,
+    DateTime? to,
+  }) => _accountRepo.transfersFor(account, from: from, to: to);
   Future<List<String>> distinctCategories() => _txnRepo.distinctCategories();
   Future<MonthTotal> totalsRange(DateTime from, DateTime to) =>
       _txnRepo.totalsRange(from, to);
@@ -145,6 +153,7 @@ class ExpensesController extends ChangeNotifier {
     String? category,
     String? note,
     String? date,
+    String? account,
   }) async {
     final updated = await _txnRepo.update(
       id,
@@ -152,6 +161,7 @@ class ExpensesController extends ChangeNotifier {
       category: category,
       note: note,
       date: date,
+      account: account,
     );
     await refresh();
     return updated;

@@ -87,4 +87,48 @@ void main() {
     expect(await accounts.balance('New'), rupeesToPaise(50));
     expect(await accounts.balance('Old'), isNull);
   });
+
+  group('per-account history', () {
+    Transfer transfer(String from, String to, String date) => Transfer(
+      fromAccount: from,
+      toAccount: to,
+      amountPaise: 5000,
+      date: date,
+      createdAt: '${date}T00:00:00.000',
+    );
+
+    test('transfersFor returns both directions, newest first', () async {
+      await accounts.addTransfer(transfer('Cash', 'HDFC', '2026-08-01'));
+      await accounts.addTransfer(transfer('HDFC', 'Wallet', '2026-08-03'));
+      await accounts.addTransfer(transfer('Cash', 'Wallet', '2026-08-02'));
+
+      final hdfc = await accounts.transfersFor('HDFC');
+      expect(hdfc.map((t) => t.date), ['2026-08-03', '2026-08-01']);
+
+      final ranged = await accounts.transfersFor(
+        'HDFC',
+        from: DateTime(2026, 8, 2),
+        to: DateTime(2026, 8, 31),
+      );
+      expect(ranged, hasLength(1));
+    });
+
+    test('unassigned rows are counted and can be assigned', () async {
+      final id = await txns.add(
+        const Transaction(
+          date: '2026-08-01',
+          category: 'misc',
+          amountPaise: 1000,
+          type: TxnType.expense,
+          createdAt: '2026-08-01T00:00:00.000',
+        ),
+      );
+      expect(await accounts.unassignedTxnCount(), 1);
+      expect(await txns.queryPage(unassignedOnly: true), hasLength(1));
+
+      await txns.update(id, account: 'HDFC');
+      expect(await accounts.unassignedTxnCount(), 0);
+      expect(await txns.queryPage(account: 'HDFC'), hasLength(1));
+    });
+  });
 }

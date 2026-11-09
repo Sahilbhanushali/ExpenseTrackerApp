@@ -128,9 +128,11 @@ class TransactionRepository {
     String? note,
     String? counterparty,
     String? date,
+    String? account,
   }) async {
     final db = await _db.database;
     final fields = <String, Object?>{};
+    if (account != null) fields['account'] = account;
     if (amountPaise != null) fields['amount'] = amountPaise;
     if (category != null) fields['category'] = category;
     if (note != null) fields['note'] = note;
@@ -159,6 +161,7 @@ class TransactionRepository {
     DateTime? to,
     String? searchTerm,
     String? account,
+    bool unassignedOnly = false,
   }) async {
     final db = await _db.database;
     final where = <String>[];
@@ -180,7 +183,9 @@ class TransactionRepository {
       where.add('date <= ?');
       args.add(_isoDate(to));
     }
-    if (account != null) {
+    if (unassignedOnly) {
+      where.add('account IS NULL');
+    } else if (account != null) {
       // Same key AccountRepository balances use, so the list matches the
       // balance shown for the account.
       where.add('account = ?');

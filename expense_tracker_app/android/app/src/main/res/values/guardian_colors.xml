@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mirrors AppPalette.light in lib/core/theme/app_colors.dart. -->
+<resources>
+    <color name="guardian_surface">#FFFFFF</color>
+    <color name="guardian_surface_alt">#EDEFF4</color>
+    <color name="guardian_border">#E3E6EC</color>
+    <color name="guardian_text_primary">#0E1A33</color>
+    <color name="guardian_text_secondary">#586174</color>
+    <color name="guardian_text_tertiary">#6B7487</color>
+    <color name="guardian_ink">#0E1A33</color>
+    <color name="guardian_on_ink">#FFFFFF</color>
+    <color name="guardian_expense">#D63B41</color>
+    <color name="guardian_warning">#B45309</color>
+    <color name="guardian_track">#E3E6EC</color>
+    <color name="guardian_ok">#2F6BFF</color>
+</resources>

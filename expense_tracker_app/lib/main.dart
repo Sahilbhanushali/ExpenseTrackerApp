@@ -15,6 +15,7 @@ import 'features/dashboard/home_shell.dart';
 import 'features/expenses/add_transaction_sheet.dart';
 import 'features/expenses/expenses_controller.dart';
 import 'features/goals/goals_controller.dart';
+import 'features/guardian/guardian_controller.dart';
 import 'features/lending/lending_controller.dart';
 import 'features/loans/loans_controller.dart';
 import 'features/recurring/recurring_controller.dart';
@@ -53,6 +54,7 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GoalsController()),
         ChangeNotifierProvider(create: (_) => RemindersController()),
         ChangeNotifierProvider(create: (_) => SmsImportController()),
+        ChangeNotifierProvider(create: (_) => GuardianController()),
       ],
       child: const _ThemedApp(),
     );
@@ -208,6 +210,10 @@ class _AppBootstrapState extends State<_AppBootstrap>
       smsImport.init(),
     ]);
     await _checkDueBills();
+    if (!mounted) return;
+    // Keeps the native Spending Guardian's copy of the budget figures
+    // current; a no-op off Android.
+    unawaited(context.read<GuardianController>().attach(expenses, settings));
     _initQuickActions();
     _initShareIntent();
     _pendingLocked = await AppLockService.instance.isEnabled();

@@ -15,6 +15,7 @@ import '../../core/widgets/app_chip.dart';
 import '../../core/widgets/category_icon.dart';
 import '../../core/widgets/responsive.dart';
 import '../../core/widgets/transaction_tile.dart';
+import '../../data/models/account.dart';
 import '../../data/models/transaction.dart';
 import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
@@ -34,18 +35,34 @@ class _DayHeader extends _ListEntry {
   _DayHeader(this.label, this.net);
 }
 
-class _TxnEntry extends _ListEntry {
-  final Transaction txn;
+/// A row inside a day's card; [first]/[last] decide which corners round.
+sealed class _RowEntry extends _ListEntry {
   final bool first;
   bool last = true;
-  _TxnEntry(this.txn, {required this.first});
+  _RowEntry({required this.first});
 }
+
+class _TxnEntry extends _RowEntry {
+  final Transaction txn;
+  _TxnEntry(this.txn, {required super.first});
+}
+
+class _TransferEntry extends _RowEntry {
+  final Transfer transfer;
+  _TransferEntry(this.transfer, {required super.first});
+}
+
+/// Picker value for "entries with no account".
+const _unassignedKey = '\u0000unassigned';
 
 class TransactionsScreen extends StatefulWidget {
   /// Opens pre-filtered to one account's history (pushed from Accounts).
   final String? account;
 
-  const TransactionsScreen({super.key, this.account});
+  /// Opens pre-filtered to entries with no account (pushed from Accounts).
+  final bool unassigned;
+
+  const TransactionsScreen({super.key, this.account, this.unassigned = false});
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -70,7 +87,24 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   TxnType? _typeFilter;
   String? _categoryFilter;
   DateTimeRange? _dateFilter;
-  late String? _accountFilter = widget.account;
+
+  /// An account name, [_unassignedKey], or null for all.
+  late String? _accountFilter = widget.unassigned
+      ? _unassignedKey
+      : widget.account;
+
+  /// Transfers for the filtered account — few enough to load in one go.
+  List<Transfer> _transfers = [];
+
+  bool get _unassigned => _accountFilter == _unassignedKey;
+
+  /// Transfers only belong in an account's history, and have no type,
+  /// category or account-less form to match other filters against.
+  bool get _showTransfers =>
+      _accountFilter != null &&
+      !_unassigned &&
+      _typeFilter == null &&
+      _categoryFilter == null;
 
   late final ExpensesController _expenses;
 
@@ -112,6 +146,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Future<void> _reload() async {
     setState(() {
       _rows = [];
+      _transfers = [];
       _entries = [];
       _offset = 0;
       _hasMore = true;
@@ -125,6 +160,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     if (_loadingMore || !_hasMore) return;
     setState(() => _loadingMore = true);
     try {
+      if (_offset == 0 && _showTransfers) {
+        final term = _searchController.text.trim().toLowerCase();
+        final transfers = await _expenses.transfersFor(
+          _accountFilter!,
+          from: _dateFilter?.start,
+          to: _dateFilter?.end,
+        );
+        _transfers = term.isEmpty
+            ? transfers
+            : transfers
+                  .where((t) => (t.note ?? '').toLowerCase().contains(term))
+                  .toList();
+      }
       final page = await _expenses.queryPage(
         limit: _pageSize,
         offset: _offset,
@@ -133,14 +181,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         from: _dateFilter?.start,
         to: _dateFilter?.end,
         searchTerm: _searchController.text,
-        account: _accountFilter,
+        account: _unassigned ? null : _accountFilter,
+        unassignedOnly: _unassigned,
       );
       if (!mounted) return;
       setState(() {
         _rows = [..._rows, ...page];
-        _entries = _buildEntries(_rows);
         _offset += page.length;
         _hasMore = page.length == _pageSize;
+        _entries = _buildEntries(_rows);
         _loadingMore = false;
         _initialLoad = false;
       });
@@ -156,12 +205,32 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     }
   }
 
+  /// Merges loaded transactions with transfers (both newest-first) into
+  /// day groups. While more pages remain, transfers older than the last
+  /// loaded row wait for the page that reaches their date.
   List<_ListEntry> _buildEntries(List<Transaction> rows) {
+    final oldest = rows.isEmpty ? null : rows.last.date;
+    final transfers = _hasMore && oldest != null
+        ? _transfers.where((t) => t.date.compareTo(oldest) >= 0).toList()
+        : _transfers;
+    final merged = <(String, Object)>[];
+    var ti = 0;
+    for (final txn in rows) {
+      while (ti < transfers.length &&
+          transfers[ti].date.compareTo(txn.date) > 0) {
+        merged.add((transfers[ti].date, transfers[ti++]));
+      }
+      merged.add((txn.date, txn));
+    }
+    for (; ti < transfers.length; ti++) {
+      merged.add((transfers[ti].date, transfers[ti]));
+    }
+
     final entries = <_ListEntry>[];
     String? lastDate;
     var headerIndex = -1;
     var net = 0;
-    _TxnEntry? prev;
+    _RowEntry? prev;
 
     void closeDay() {
       if (headerIndex < 0) return;
@@ -169,19 +238,26 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       entries[headerIndex] = _DayHeader(h.label, net);
     }
 
-    for (final txn in rows) {
-      if (txn.date != lastDate) {
+    for (final (date, item) in merged) {
+      if (date != lastDate) {
         closeDay();
         headerIndex = entries.length;
-        entries.add(_DayHeader(_sectionLabel(txn.date), 0));
+        entries.add(_DayHeader(_sectionLabel(date), 0));
         net = 0;
-        lastDate = txn.date;
+        lastDate = date;
         prev = null;
       }
-      if (txn.type == TxnType.income) net += txn.amountPaise;
-      if (txn.type == TxnType.expense) net -= txn.amountPaise;
       prev?.last = false;
-      final entry = _TxnEntry(txn, first: prev == null);
+      final _RowEntry entry;
+      if (item is Transaction) {
+        // Transfers move money between your own accounts — they aren't
+        // income or spending, so they stay out of the day's net.
+        if (item.type == TxnType.income) net += item.amountPaise;
+        if (item.type == TxnType.expense) net -= item.amountPaise;
+        entry = _TxnEntry(item, first: prev == null);
+      } else {
+        entry = _TransferEntry(item as Transfer, first: prev == null);
+      }
       entries.add(entry);
       prev = entry;
     }
@@ -250,6 +326,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         txn: txn,
         currency: currency,
         categories: _categories,
+        accounts: [
+          for (final a in context.read<AccountsController>().accounts)
+            a.account.name,
+        ],
         onDelete: () async {
           Navigator.pop(context);
           if (await _confirmDelete(txn) && mounted) await _deleteTxn(txn);
@@ -330,15 +410,23 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       builder: (context) => _FilterPickerSheet(
         title: 'Filter by account',
         allLabel: 'All accounts',
-        options: accounts,
+        options: [...accounts, _unassignedKey],
         selected: _accountFilter,
-        leading: (_) => const Icon(Icons.account_balance_wallet_outlined),
+        labelOf: _accountLabel,
+        leading: (a) => Icon(
+          a == _unassignedKey
+              ? Icons.link_off_rounded
+              : Icons.account_balance_wallet_outlined,
+        ),
       ),
     );
     if (picked == null) return;
     setState(() => _accountFilter = picked.isEmpty ? null : picked);
     _reload();
   }
+
+  String _accountLabel(String key) =>
+      key == _unassignedKey ? 'No account' : key;
 
   String _dateFilterLabel() {
     if (_dateFilter == null) return 'Any date';
@@ -364,11 +452,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final accounts = context.select<AccountsController, List<String>>(
       (c) => [for (final a in c.accounts) a.account.name],
     );
-    final pushed = widget.account != null;
+    final pushed = widget.account != null || widget.unassigned;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(pushed ? widget.account! : 'Transactions'),
+        title: Text(
+          widget.unassigned
+              ? 'No account'
+              : pushed
+              ? widget.account!
+              : 'Transactions',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.undo_rounded),
@@ -460,7 +554,9 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 if (accounts.isNotEmpty && !pushed)
                   AppChoiceChip(
                     icon: Icons.account_balance_wallet_outlined,
-                    label: _accountFilter ?? 'Any account',
+                    label: _accountFilter == null
+                        ? 'Any account'
+                        : _accountLabel(_accountFilter!),
                     selected: _accountFilter != null,
                     onTap: () => _pickAccount(accounts),
                     onClear: () {
@@ -545,8 +641,54 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               first: i == 0,
             ),
             _TxnEntry e => _buildRow(e, currency),
+            _TransferEntry e => _cardSlice(
+              e,
+              _TransferTile(
+                transfer: e.transfer,
+                account: _accountFilter!,
+                currency: currency,
+              ),
+            ),
           };
         },
+      ),
+    );
+  }
+
+  BorderRadius _sliceRadius(_RowEntry e) => BorderRadius.vertical(
+    top: Radius.circular(e.first ? AppRadius.lg : 0),
+    bottom: Radius.circular(e.last ? AppRadius.lg : 0),
+  );
+
+  /// Each row draws its slice of the day's card so the list stays lazy —
+  /// rounded top on the first row, rounded bottom on the last.
+  Widget _cardSlice(_RowEntry e, Widget child) {
+    final p = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: _sliceRadius(e),
+        border: Border(
+          left: BorderSide(color: p.border),
+          right: BorderSide(color: p.border),
+          top: e.first ? BorderSide(color: p.border) : BorderSide.none,
+          bottom: e.last ? BorderSide(color: p.border) : BorderSide.none,
+        ),
+      ),
+      padding: EdgeInsets.only(
+        top: e.first ? AppSpacing.xs : 0,
+        bottom: e.last ? AppSpacing.xs : 0,
+      ),
+      child: Column(
+        children: [
+          if (!e.first)
+            Divider(
+              indent: AppSpacing.md + AppSizes.iconBadge + 12,
+              endIndent: AppSpacing.md,
+              color: p.border,
+            ),
+          child,
+        ],
       ),
     );
   }
@@ -554,12 +696,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Widget _buildRow(_TxnEntry e, String currency) {
     final p = context.palette;
     final txn = e.txn;
-    final radius = BorderRadius.vertical(
-      top: Radius.circular(e.first ? AppRadius.lg : 0),
-      bottom: Radius.circular(e.last ? AppRadius.lg : 0),
-    );
-    // Each row draws its slice of the day's card so the list stays lazy —
-    // rounded top on the first row, rounded bottom on the last.
     return Dismissible(
       key: ValueKey(txn.id),
       direction: DismissDirection.endToStart,
@@ -568,7 +704,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: BoxDecoration(color: p.expense, borderRadius: radius),
+        decoration: BoxDecoration(
+          color: p.expense,
+          borderRadius: _sliceRadius(e),
+        ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -578,33 +717,95 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           ],
         ),
       ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: p.surface,
-          borderRadius: radius,
-          border: Border(
-            left: BorderSide(color: p.border),
-            right: BorderSide(color: p.border),
-            top: e.first ? BorderSide(color: p.border) : BorderSide.none,
-            bottom: e.last ? BorderSide(color: p.border) : BorderSide.none,
-          ),
+      child: _cardSlice(
+        e,
+        TransactionTile(
+          txn: txn,
+          currency: currency,
+          onTap: () => _editTxn(txn),
         ),
-        padding: EdgeInsets.only(
-          top: e.first ? AppSpacing.xs : 0,
-          bottom: e.last ? AppSpacing.xs : 0,
+      ),
+    );
+  }
+}
+
+/// A transfer seen from one account: money in from, or out to, another
+/// of your accounts. Not editable here — it isn't income or spending.
+class _TransferTile extends StatelessWidget {
+  final Transfer transfer;
+  final String account;
+  final String currency;
+
+  const _TransferTile({
+    required this.transfer,
+    required this.account,
+    required this.currency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final text = Theme.of(context).textTheme;
+    final outgoing = transfer.fromAccount == account;
+    final title = outgoing
+        ? 'Transfer to ${transfer.toAccount}'
+        : 'Transfer from ${transfer.fromAccount}';
+    final note = transfer.note;
+    final subtitle = note != null && note.isNotEmpty ? note : 'Transfer';
+    final amount =
+        '${outgoing ? '−' : '+'}${formatMoney(transfer.amountPaise, currency)}';
+
+    return Semantics(
+      label: '$title, $subtitle, $amount',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm + 2,
         ),
-        child: Column(
+        child: Row(
           children: [
-            if (!e.first)
-              Divider(
-                indent: AppSpacing.md + AppSizes.iconBadge + 12,
-                endIndent: AppSpacing.md,
-                color: p.border,
+            CategoryIcon(
+              category: 'transfer',
+              icon: Icons.swap_horiz_rounded,
+              color: p.debt,
+            ),
+            const SizedBox(width: AppSpacing.md - 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: text.bodySmall,
+                  ),
+                ],
               ),
-            TransactionTile(
-              txn: txn,
-              currency: currency,
-              onTap: () => _editTxn(txn),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                  amount,
+                  style: text.moneyStyle(
+                    15,
+                    color: outgoing ? p.textPrimary : p.income,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -662,6 +863,7 @@ class _FilterPickerSheet extends StatelessWidget {
   final List<String> options;
   final String? selected;
   final Widget Function(String option) leading;
+  final String Function(String option)? labelOf;
 
   /// Pops the chosen option, or '' for "all".
   const _FilterPickerSheet({
@@ -670,6 +872,7 @@ class _FilterPickerSheet extends StatelessWidget {
     required this.options,
     required this.leading,
     this.selected,
+    this.labelOf,
   });
 
   @override
@@ -711,7 +914,11 @@ class _FilterPickerSheet extends StatelessWidget {
                           color: p.textSecondary,
                         )
                       : leading(option),
-                  title: Text(option ?? allLabel),
+                  title: Text(
+                    option == null
+                        ? allLabel
+                        : (labelOf?.call(option) ?? option),
+                  ),
                   trailing: option == selected
                       ? Icon(Icons.check_rounded, color: p.savings)
                       : null,
@@ -737,12 +944,16 @@ class TransactionDetailSheet extends StatefulWidget {
   final List<String> categories;
   final VoidCallback onDelete;
 
+  /// Account names the entry can be moved to. Empty hides the picker.
+  final List<String> accounts;
+
   const TransactionDetailSheet({
     super.key,
     required this.txn,
     required this.currency,
     required this.categories,
     required this.onDelete,
+    this.accounts = const [],
   });
 
   @override
@@ -759,6 +970,7 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
     text: widget.txn.note ?? '',
   );
   late String _category = widget.txn.category;
+  late String? _account = widget.txn.account;
   late DateTime _date = DateTime.parse(widget.txn.date);
   bool _saving = false;
   String? _amountError;
@@ -813,6 +1025,7 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
       category: _isLending ? null : _category,
       note: _noteController.text.trim(),
       date: iso,
+      account: _account != widget.txn.account ? _account : null,
     );
     if (mounted) Navigator.pop(context, true);
   }
@@ -922,6 +1135,27 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
                       )
                       .toList(),
                   onChanged: (v) => setState(() => _category = v ?? _category),
+                ),
+                const SizedBox(height: AppSpacing.md - 4),
+              ],
+              if (widget.accounts.isNotEmpty) ...[
+                DropdownButtonFormField<String>(
+                  initialValue: widget.accounts.contains(_account)
+                      ? _account
+                      : null,
+                  hint: const Text('Not linked to an account'),
+                  decoration: InputDecoration(
+                    labelText: 'Account',
+                    helperText: _account == null
+                        ? "Pick one so this counts toward that account's balance"
+                        : null,
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  items: [
+                    for (final a in widget.accounts)
+                      DropdownMenuItem(value: a, child: Text(a)),
+                  ],
+                  onChanged: (v) => setState(() => _account = v ?? _account),
                 ),
                 const SizedBox(height: AppSpacing.md - 4),
               ],
