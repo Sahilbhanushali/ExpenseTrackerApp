@@ -181,6 +181,18 @@ About closing:
 
 ---
 
+## 6a. The Home dashboard
+
+| Block | What it shows |
+|-------|---------------|
+| **Net worth** | Everything you own minus everything you owe. Tap the eye to hide amounts. |
+| **In bank & cash / Reserved / Available** | Actual balance of spending accounts · money approved for bills and plans · what's truly free (bank & cash − on hold − reserved). Tap to open Smart allocation. |
+| Chips | Savings, emergency fund, investments, owed to you, you owe, cards, loans. Each opens its screen. |
+| **Cycle plan** (cycle view) | Allocated so far · unallocated now · due before payday. If dues are more than allocated plus free money, it tells you. |
+| **Insights** | Up to 3 most urgent: overdue payments, shortfall before payday, budgets over or near the limit, spending vs the same point last month or cycle, biggest category jump, share of income kept, money moved to savings. Reports shows all of them for any range. |
+| **Debt** | Card outstanding with the next due and statement, loans with the next EMI, money you owe people, anything overdue. |
+| **Wealth** | Emergency fund progress and coverage, goals saved vs target, investments and planned monthly contribution, and the net worth trend (it builds month by month from now). |
+
 ## 7. Troubleshooting
 
 | Symptom | Fix |

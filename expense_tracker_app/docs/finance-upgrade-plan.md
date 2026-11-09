@@ -1,6 +1,6 @@
 # Personal Finance Upgrade — Audit & Roadmap
 
-Status: **Phases 1–10 complete. Next: Phase 11 (dashboard, reports and insights), awaiting review.**
+Status: **Phases 1–11 complete. Next: Phase 12 (full migration run and end-to-end scenario tests), awaiting review.**
 Living document: each phase updates its section (schema changes, decisions, test results).
 
 ---
@@ -566,3 +566,43 @@ totals; reminder ids/times; every event source from real repositories with uniqu
 overdue EMI first, one reminder per obligation, bills excluded, reminders off → none;
 calendar screen at 320 px / 1.5× in both themes. Full suite 324 passing, `flutter analyze`
 clean.
+
+### Phase 11 — Dashboard, reports and insights (done)
+
+Schema **v20** (`_createSnapshotTables`, re-runnable): `net_worth_snapshots` (month PK,
+assets, liabilities, net worth, updated_at). Debts can't be rebuilt for past months, so
+the trend starts when v20 is first used; the current month is upserted whenever net worth
+changes.
+
+- `lib/core/finance/dashboard.dart` (pure):
+  - Every account in exactly one group (investing > emergency > savings > spending).
+  - `FinancialPosition`: actual (active spending balances), on hold, reserved, available
+    (= the same figure Smart allocation uses), savings, emergency, investments at worth,
+    receivables, debt, net worth.
+  - `debtOverview`: card / loan / personal debt, next card due, statement, EMI, overdue
+    obligations. `dueBy`: outgoing dues to a date, overdue included.
+  - `comparablePeriod`: the same stretch of the previous month or cycle, clamped.
+  - `insightsFor`: overdue, shortfall before payday, late salary, over / near budget,
+    spending pace vs the same point last period (±15%, ≥ ₹500), biggest category jump,
+    overspent vs kept share of income, money moved to savings, emergency cover under a
+    month. Past periods only use their own figures. Every number comes from the ledger;
+    nothing is forecast.
+- `AccountRepository.transferredInto`: net completed transfers into set-aside accounts
+  (moves among them cancel out).
+- `DashboardController` follows accounts, lending, loans, cards, allocation and calendar;
+  derives position and debt once per change (never in build); records the month's
+  snapshot only when net worth changes; cycle plan (allocated, unallocated now, due before
+  payday); insights for any range.
+- Home: net worth with **In bank & cash / Reserved / Available** (spec: actual vs reserved
+  vs available), chips for savings, emergency, investments, owed, debt; cycle view gains
+  the cycle plan card; month and cycle views gain **Insights** (top 3), **Debt** and
+  **Wealth** (emergency progress, goals, investments and planned contributions, net worth
+  trend). Each block hides when it has nothing to show. Reports gains **Insights** for
+  the selected range, compared like for like.
+
+Tests (`phase11_test.dart`, 11): grouping and actual/reserved/available; debt overview
+and dues; comparable periods; insight rules, order and noise threshold; past-period
+insights; snapshots per month; v19 → v20; real-data dashboard (available equals
+allocation's, scenario 7 transfer counted as saved, planned transfer not counted,
+overdue EMI, snapshot upserted on change); dashboard blocks at 320 px / 1.5× in both
+themes. Full suite 335 passing, `flutter analyze` clean.
