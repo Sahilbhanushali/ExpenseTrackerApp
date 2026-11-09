@@ -298,6 +298,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     final what = switch (t.kind) {
       MovementKind.cardPayment => 'card payment',
       MovementKind.adjustment => 'adjustment',
+      MovementKind.lendingRepayment => 'repayment',
       _ => 'transfer',
     };
     final action = await showModalBottomSheet<String>(
@@ -835,6 +836,10 @@ class _TransferTile extends StatelessWidget {
       MovementKind.loanPrincipal => 'Loan repayment · ${transfer.toAccount}',
       MovementKind.loanOpen => 'Loan received · ${transfer.fromAccount}',
       MovementKind.adjustment => 'Balance adjustment',
+      MovementKind.lendingRepayment =>
+        outgoing
+            ? 'Paid back · ${transfer.toAccount}'
+            : 'Paid back by ${transfer.fromAccount}',
       _ =>
         outgoing
             ? 'Transfer to ${transfer.toAccount}'
@@ -865,6 +870,7 @@ class _TransferTile extends StatelessWidget {
                 MovementKind.cardPayment => Icons.credit_card_rounded,
                 MovementKind.loanPrincipal ||
                 MovementKind.loanOpen => Icons.account_balance_rounded,
+                MovementKind.lendingRepayment => Icons.handshake_outlined,
                 _ => Icons.swap_horiz_rounded,
               },
               color: p.debt,

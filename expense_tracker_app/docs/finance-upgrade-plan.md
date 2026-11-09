@@ -1,6 +1,6 @@
 # Personal Finance Upgrade — Audit & Roadmap
 
-Status: **Phases 1–11 complete. Next: Phase 12 (full migration run and end-to-end scenario tests), awaiting review.**
+Status: **Phases 1–12 complete.** All ten scenarios run end to end; every upgrade path from v12 is tested.
 Living document: each phase updates its section (schema changes, decisions, test results).
 
 ---
@@ -38,7 +38,7 @@ Severity: **H** = wrong numbers shown today, **M** = wrong under common use, **L
 | B3 | H | **Goal contributions are expenses.** Setting money aside inflates monthly spending, trips budget/Guardian alerts, and "saved" is derived from expenses (violates rule 5). | `goals_controller.contribute` |
 | B4 | M | **Two EMI systems** (`loans` and `recurring.installments_remaining`) can both track the same EMI → duplicate reminders and duplicate expenses. | loans + recurring |
 | B5 | M | **Loan outstanding assumes flat interest and on-time EMIs only**; no partial, extra or prepayment; interest never separated from principal. | `Loan.outstandingPaise` |
-| B6 | M | **Lending repayments rewrite history**: the original lent/borrowed row's amount is reduced in place, so reports for the original date change and the cash return is effectively back-dated (violates rule 15). | `TransactionRepository.repay` |
+| B6 | M | **(Fixed in Phase 12 for new records.)** **Lending repayments rewrite history**: the original lent/borrowed row's amount is reduced in place, so reports for the original date change and the cash return is effectively back-dated (violates rule 15). | `TransactionRepository.repay` |
 | B7 | M | **Refunds are classified as income** by the quick-add parser, inflating income instead of reducing the original expense (rule 9). | `kIncomeKeywords` ('refund', 'cashback') |
 | B8 | M | **Splitter moves money immediately and non-atomically**: approval = completed transfers, written one by one (a failure mid-way leaves a partial split); rounding remainders are dropped; the typed amount isn't tied to income actually received. | `accounts_screen._showDistribute` |
 | B9 | L | Transfers have no shared reference or status; no "planned vs completed". | `transfers` |
@@ -606,3 +606,40 @@ insights; snapshots per month; v19 → v20; real-data dashboard (available equal
 allocation's, scenario 7 transfer counted as saved, planned transfer not counted,
 overdue EMI, snapshot upserted on change); dashboard blocks at 320 px / 1.5× in both
 themes. Full suite 335 passing, `flutter analyze` clean.
+
+### Phase 12 — Full migration run and end-to-end scenarios (done)
+
+No schema change (stays **v20**). `loan_payments.movement_id` already existed from v16.
+
+- **B6 fixed for new records.** A lent/borrowed repayment is now its own movement
+  (`lendingRepayment`), dated when it happens: an `account` posting (+ for money coming
+  back, − for paying back) and a `person` posting on the entry. The original entry's
+  amount is never changed (rule 15). What's still owed = amount − completed repayment
+  movements; it settles when that reaches zero. Repayments from before this change had
+  already reduced the entry in place and have no movement, so they're never subtracted
+  twice, and the original amount is still reconstructed from them. Cancelling a
+  repayment from account history reopens the debt; deleting the entry removes its
+  repayments. The Owed screen, Home, add-sheet picker and recurring repayment plans use
+  the remaining amount. Account history shows "Paid back by … / Paid back · …".
+- **Full upgrade test from a genuine v12 file.** `test/fixtures/app_database_v12.dart` is
+  the v12 database code from git (commit e8c1866), frozen. A populated v12 file
+  (accounts of every type, salary, spending, a part-repaid loan to a person, a legacy
+  transfer, an EMI loan, a goal, a recurring bill) is upgraded through every step to v20.
+  The test checks that the upgraded schema matches a fresh install table for table and
+  column for column. It also checks that balances, roles, debts and history survive, that
+  the old repayment isn't counted twice, that a new repayment is dated and leaves the
+  entry alone, and that rerunning every step changes nothing. A mutation check
+  (removing the v20 step) makes the test fail, so the schema comparison works.
+- **All ten scenarios in one November story**, on real repositories with fixed dates:
+  (1) ₹19,000 salary on 10 Nov; (7) ₹3,000 to savings is neither income nor spending;
+  (3, 5) the 14 Nov statement carries the fridge EMI, and the fridge counts once (in
+  October) with only charges in November; (4) due 29 Nov, unpaid then overdue; (9, 10)
+  allocation shows a real ₹7,400 shortfall, investing and emergency are skipped, and
+  savings and emergency money isn't spendable; (2) ₹2,000 more on 20 Nov raises cycle
+  income and available cash; (6) the bill is paid from salary, debt down, spending
+  unchanged, and the card need is gone; (8) December's salary arrives, November's
+  leftover is carried forward and the cycle freezes. Final balances and month totals
+  are checked once each way.
+
+Tests: `phase12_test.dart` (3), repayment tests updated to the new rule. Full suite
+338 passing, `flutter analyze` clean.

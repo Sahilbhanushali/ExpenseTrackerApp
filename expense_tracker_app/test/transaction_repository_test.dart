@@ -118,7 +118,7 @@ void main() {
 
   group('repay', () {
     test(
-      'a partial repayment reduces outstanding but leaves it unsettled',
+      'a partial repayment reduces what is owed, not the original entry',
       () async {
         final id = await repo.add(
           txn(date: '2026-08-01', amount: 500, type: TxnType.lent, settled: 0),
@@ -129,7 +129,11 @@ void main() {
         expect(result, isNotNull);
         expect(result!.applied, rupeesToPaise(200));
         expect(result.overpaid, 0);
-        expect(result.row.amountPaise, rupeesToPaise(300));
+        // B6: the lent entry keeps its amount; the repayment is its own
+        // dated movement.
+        expect(result.row.amountPaise, rupeesToPaise(500));
+        expect(result.remaining, rupeesToPaise(300));
+        expect(await repo.personLoanRepaid(), {id: rupeesToPaise(200)});
         expect(result.row.isSettled, isFalse);
       },
     );
@@ -145,7 +149,8 @@ void main() {
 
         expect(result!.applied, rupeesToPaise(500));
         expect(result.overpaid, rupeesToPaise(200));
-        expect(result.row.amountPaise, 0);
+        expect(result.row.amountPaise, rupeesToPaise(500));
+        expect(result.remaining, 0);
         expect(result.row.isSettled, isTrue);
       },
     );

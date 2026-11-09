@@ -1,5 +1,7 @@
 import '../datasources/app_database.dart';
 import '../models/loan_payment.dart';
+import '../models/movement.dart';
+import 'account_repository.dart';
 import '../models/transaction.dart';
 import 'audit_log.dart';
 import 'loan_repository.dart';
@@ -40,10 +42,14 @@ class RepayResult {
   /// Both in paise.
   final int applied;
   final int overpaid;
+
+  /// Still owed after this repayment.
+  final int remaining;
   const RepayResult({
     required this.row,
     required this.applied,
     required this.overpaid,
+    this.remaining = 0,
   });
 }
 
@@ -119,6 +125,30 @@ class TransactionRepository {
           before: r,
           after: {'reason': 'expense $id deleted'},
         );
+      }
+
+      if (row.isLoan) {
+        // Its repayments go with it, or they'd keep changing a balance.
+        final pays = await txn.query(
+          'loan_payments',
+          where: 'owner_type = ? AND loan_id = ? AND movement_id IS NOT NULL',
+          whereArgs: [LoanPaymentOwner.personLoan, id],
+        );
+        for (final pay in pays) {
+          final m = pay['movement_id'];
+          await txn.delete(
+            'postings',
+            where: 'movement_id = ?',
+            whereArgs: [m],
+          );
+          await txn.delete('movements', where: 'id = ?', whereArgs: [m]);
+        }
+        await txn.delete(
+          'loan_payments',
+          where: 'owner_type = ? AND loan_id = ?',
+          whereArgs: [LoanPaymentOwner.personLoan, id],
+        );
+        return;
       }
 
       final loanId = row.loanId;
@@ -576,41 +606,125 @@ class TransactionRepository {
     return getById(id);
   }
 
-  Future<RepayResult?> repay(int id, int repayPaise) async {
+  static const _repaidSql =
+      'SELECT lp.loan_id AS id, SUM(lp.amount) AS t FROM loan_payments lp '
+      'JOIN movements m ON m.id = lp.movement_id '
+      "WHERE lp.owner_type = '${LoanPaymentOwner.personLoan}' "
+      "AND m.status = 'completed'";
+
+  /// Repaid so far per lent/borrowed entry, from repayments recorded as
+  /// movements. Older repayments (without a movement) had already reduced the
+  /// entry's amount, so they aren't counted again. Paise.
+  Future<Map<int, int>> personLoanRepaid() async {
     final db = await _db.database;
-    final rows = await db.query(
-      'txns',
-      where: "id = ? AND type IN ('lent', 'borrowed')",
-      whereArgs: [id],
-    );
-    if (rows.isEmpty) return null;
-    final row = Transaction.fromMap(rows.first);
-    if (row.isSettled) return null;
+    final rows = await db.rawQuery('$_repaidSql GROUP BY lp.loan_id');
+    return {
+      for (final r in rows) r['id'] as int: (r['t'] as num?)?.round() ?? 0,
+    };
+  }
 
-    final outstanding = row.amountPaise;
-    final applied = repayPaise < outstanding ? repayPaise : outstanding;
-    final overpaid = (repayPaise - outstanding) > 0
-        ? (repayPaise - outstanding)
-        : 0;
-    final newAmount = outstanding - applied;
-    final settled = newAmount <= 0 ? 1 : 0;
+  /// Records money coming back (lent) or paid back (borrowed) on [on]
+  /// (today by default) as its own movement: the account balance changes
+  /// on that date and the original entry stays as it was (B6, rule 15).
+  /// Settles the entry once nothing is left. All or nothing.
+  Future<RepayResult?> repay(int id, int repayPaise, {DateTime? on}) async {
+    if (repayPaise <= 0) return null;
+    final db = await _db.database;
+    return db.transaction((txn) async {
+      final rows = await txn.query(
+        'txns',
+        where: "id = ? AND type IN ('lent', 'borrowed')",
+        whereArgs: [id],
+      );
+      if (rows.isEmpty) return null;
+      final row = Transaction.fromMap(rows.first);
+      if (row.isSettled) return null;
+      final repaid = await txn.rawQuery('$_repaidSql AND lp.loan_id = ?', [id]);
+      final outstanding =
+          row.amountPaise - ((repaid.first['t'] as num?)?.round() ?? 0);
+      if (outstanding <= 0) return null;
+      final applied = repayPaise < outstanding ? repayPaise : outstanding;
+      final overpaid = repayPaise - applied;
+      final now = DateTime.now().toIso8601String();
+      final date = _isoDate(on ?? DateTime.now());
 
-    await db.update(
-      'txns',
-      {'amount': newAmount, 'settled': settled},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    await db.insert('loan_payments', {
-      'loan_id': id,
-      'owner_type': LoanPaymentOwner.personLoan,
-      'amount': applied,
-      'date': _isoDate(DateTime.now()),
-      'note': null,
-      'created_at': DateTime.now().toIso8601String(),
+      final movementId = await txn.insert('movements', {
+        'ref': AccountRepository.newRef('lending'),
+        'kind': MovementKind.lendingRepayment.name,
+        'date': date,
+        'amount': applied,
+        'status': MovementStatus.completed.name,
+        'note': row.counterparty,
+        'created_at': now,
+        'completed_at': now,
+        'link_type': 'person_loan',
+        'link_id': id,
+      });
+      // Lent: money arrives in the account. Borrowed: it leaves.
+      final intoAccount = row.type == TxnType.lent ? applied : -applied;
+      final acc = row.account == null
+          ? const <Map<String, Object?>>[]
+          : await txn.query(
+              'accounts',
+              columns: ['id'],
+              where: 'name = ?',
+              whereArgs: [row.account],
+            );
+      for (final p in [
+        if (acc.isNotEmpty)
+          Posting(
+            movementId: movementId,
+            ownerType: PostingOwner.account,
+            ownerId: acc.first['id'] as int,
+            amountPaise: intoAccount,
+          ),
+        Posting(
+          movementId: movementId,
+          ownerType: PostingOwner.person,
+          ownerId: id,
+          amountPaise: -intoAccount,
+        ),
+      ]) {
+        await txn.insert('postings', p.toMap());
+      }
+      await txn.insert('loan_payments', {
+        'loan_id': id,
+        'owner_type': LoanPaymentOwner.personLoan,
+        'amount': applied,
+        'date': date,
+        'note': null,
+        'created_at': now,
+        'movement_id': movementId,
+      });
+      final remaining = outstanding - applied;
+      if (remaining == 0) {
+        await txn.update(
+          'txns',
+          {'settled': 1},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+      }
+      await writeAudit(
+        txn,
+        entity: 'movement',
+        entityId: movementId,
+        action: 'create',
+        after: {
+          'kind': MovementKind.lendingRepayment.name,
+          'txn': id,
+          'amount': applied,
+          'date': date,
+        },
+      );
+      final updated = await txn.query('txns', where: 'id = ?', whereArgs: [id]);
+      return RepayResult(
+        row: Transaction.fromMap(updated.first),
+        applied: applied,
+        overpaid: overpaid,
+        remaining: remaining,
+      );
     });
-    final updated = await getById(id);
-    return RepayResult(row: updated!, applied: applied, overpaid: overpaid);
   }
 
   /// History of individual installments logged against a loan, newest first

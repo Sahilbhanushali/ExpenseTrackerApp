@@ -505,7 +505,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
             result.row.isSettled
                 ? '${target.counterparty} — fully settled!'
                 : 'Applied to ${target.counterparty}: outstanding now '
-                      '${formatMoney(result.row.amountPaise, '₹')}',
+                      '${formatMoney(result.remaining, '₹')}',
           ),
         ),
       );
@@ -526,7 +526,12 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
                   subtitle: Text(
                     t.type == TxnType.lent ? 'Owes you' : 'You owe',
                   ),
-                  trailing: Text(formatMoney(t.amountPaise, '₹')),
+                  trailing: Text(
+                    formatMoney(
+                      context.read<LendingController>().remaining(t),
+                      '₹',
+                    ),
+                  ),
                   onTap: () => Navigator.pop(context, t),
                 ),
               )

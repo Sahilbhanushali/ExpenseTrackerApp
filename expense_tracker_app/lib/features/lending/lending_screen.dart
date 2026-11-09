@@ -196,6 +196,7 @@ class LendingScreen extends StatelessWidget {
     final payments = await controller.paymentHistory(loan.id!);
     if (!context.mounted) return;
     final original = controller.originalAmount(loan, payments);
+    final left = controller.remaining(loan);
 
     await showModalBottomSheet(
       context: context,
@@ -218,13 +219,10 @@ class LendingScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: AppSpacing.md),
-              BudgetProgressBar(
-                spent: original - loan.amountPaise,
-                budget: original,
-              ),
+              BudgetProgressBar(spent: original - left, budget: original),
               const SizedBox(height: AppSpacing.xs),
               Text(
-                '${formatMoney(original - loan.amountPaise, currency)} paid of ${formatMoney(original, currency)} · ${formatMoney(loan.amountPaise, currency)} left',
+                '${formatMoney(original - left, currency)} paid of ${formatMoney(original, currency)} · ${formatMoney(left, currency)} left',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -341,12 +339,8 @@ class LendingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final lending = context.watch<LendingController>();
     final currency = context.watch<SettingsController>().config.currency;
-    final owedToYou = lending.outstanding
-        .where((t) => t.type == TxnType.lent)
-        .fold<int>(0, (s, t) => s + t.amountPaise);
-    final youOwe = lending.outstanding
-        .where((t) => t.type == TxnType.borrowed)
-        .fold<int>(0, (s, t) => s + t.amountPaise);
+    final owedToYou = lending.totalOutstanding(TxnType.lent);
+    final youOwe = lending.totalOutstanding(TxnType.borrowed);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Owed')),
@@ -412,7 +406,7 @@ class LendingScreen extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            formatMoney(r.amountPaise, currency),
+                            formatMoney(lending.remaining(r), currency),
                             style: Theme.of(context).textTheme.moneyStyle(
                               15,
                               color: owesYou

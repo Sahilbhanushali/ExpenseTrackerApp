@@ -116,9 +116,7 @@ class DashboardController extends ChangeNotifier {
     notifyListeners();
   }
 
-  int _sumLending(TxnType type) => _lending.outstanding
-      .where((t) => t.type == type)
-      .fold(0, (s, t) => s + t.amountPaise);
+  int _sumLending(TxnType type) => _lending.totalOutstanding(type);
 
   void _recompute() {
     if (!_attached) return;

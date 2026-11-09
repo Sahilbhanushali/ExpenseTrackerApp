@@ -17,6 +17,10 @@ enum MovementKind {
 
   /// Loan → bank: a disbursed loan's money arriving. Not income.
   loanOpen,
+
+  /// Money lent coming back, or money borrowed paid back — dated when it
+  /// happens; the original lent/borrowed entry is never changed (B6).
+  lendingRepayment,
 }
 
 /// Planned movements are intentions (an approved allocation not yet done
@@ -27,7 +31,8 @@ enum MovementStatus { planned, completed, cancelled }
 /// phases; `external` is money leaving or entering your books entirely.
 ///
 /// On a card or loan, a positive posting reduces what you owe.
-enum PostingOwner { account, external, card, loan }
+/// [person] is a lent/borrowed entry in `txns` (owner_id = its id).
+enum PostingOwner { account, external, card, loan, person }
 
 class Posting {
   final int? id;

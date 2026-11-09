@@ -419,8 +419,8 @@ class AccountRepository {
   /// loan repayments and disbursements — with the other side named.
   static const _transferSelect =
       "SELECT m.id, m.kind, m.date, m.amount, m.note, m.created_at, m.status, "
-      "COALESCE(fa.name, fc.name, fl.name) AS from_name, "
-      "COALESCE(ta.name, tc.name, tl.name) AS to_name, "
+      "COALESCE(fa.name, fc.name, fl.name, fx.counterparty) AS from_name, "
+      "COALESCE(ta.name, tc.name, tl.name, tx.counterparty) AS to_name, "
       "fa.id AS from_acc, ta.id AS to_acc "
       "FROM movements m "
       "JOIN postings fp ON fp.movement_id = m.id AND fp.amount < 0 "
@@ -431,6 +431,8 @@ class AccountRepository {
       "LEFT JOIN credit_cards tc ON tp.owner_type = 'card' AND tc.id = tp.owner_id "
       "LEFT JOIN loans fl ON fp.owner_type = 'loan' AND fl.id = fp.owner_id "
       "LEFT JOIN loans tl ON tp.owner_type = 'loan' AND tl.id = tp.owner_id "
+      "LEFT JOIN txns fx ON fp.owner_type = 'person' AND fx.id = fp.owner_id "
+      "LEFT JOIN txns tx ON tp.owner_type = 'person' AND tx.id = tp.owner_id "
       "WHERE 1 = 1";
 
   static Transfer _transferFrom(Map<String, Object?> r) => Transfer(
@@ -581,6 +583,17 @@ class AccountRepository {
       }
       if (rows.first['status'] == MovementStatus.cancelled.name) {
         throw StateError('A cancelled movement stays cancelled');
+      }
+      // A cancelled repayment no longer counts, so the debt is open again.
+      if (status == MovementStatus.cancelled &&
+          rows.first['kind'] == MovementKind.lendingRepayment.name &&
+          rows.first['link_id'] != null) {
+        await txn.update(
+          'txns',
+          {'settled': 0},
+          where: 'id = ?',
+          whereArgs: [rows.first['link_id']],
+        );
       }
       final fields = {
         'status': status.name,

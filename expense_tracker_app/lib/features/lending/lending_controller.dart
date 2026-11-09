@@ -29,10 +29,26 @@ class LendingController extends ChangeNotifier {
 
   Future<void> init() => refresh();
 
+  Map<int, int> _repaid = {};
+
   Future<void> refresh() async {
-    _outstanding = await _txnRepo.outstandingLoans();
+    final (rows, repaid) = await (
+      _txnRepo.outstandingLoans(),
+      _txnRepo.personLoanRepaid(),
+    ).wait;
+    _outstanding = rows;
+    _repaid = repaid;
     notifyListeners();
   }
+
+  /// What's still owed on a lent/borrowed entry. The entry keeps its
+  /// original amount; repayments are dated movements of their own. Paise.
+  int remaining(Transaction t) => t.amountPaise - (_repaid[t.id] ?? 0);
+
+  /// Total still owed to you ([TxnType.lent]) or by you. Paise.
+  int totalOutstanding(TxnType type) => _outstanding
+      .where((t) => t.type == type)
+      .fold(0, (s, t) => s + remaining(t));
 
   Future<void> lend(int amountPaise, String person, String? note) =>
       _record(TxnType.lent, amountPaise, person, note);
@@ -99,12 +115,13 @@ class LendingController extends ChangeNotifier {
   Future<List<LoanPayment>> paymentHistory(int loanId) =>
       _txnRepo.paymentsFor(loanId);
 
-  /// The loan's original amount, reconstructed from its current outstanding
-  /// balance plus everything logged against it so far — works retroactively
-  /// even for loans that predate payment history being tracked.
-  /// In paise.
-  int originalAmount(Transaction loan, List<LoanPayment> payments) =>
-      loan.amountPaise + payments.fold<int>(0, (s, p) => s + p.amountPaise);
+  /// The amount first lent or borrowed. Repayments without a movement (older ones) had
+  /// reduced the entry in place, so those are added back; newer ones never
+  /// touched it. In paise.
+  int originalAmount(Transaction loan, List<LoanPayment> payments) {
+    final all = payments.fold<int>(0, (s, p) => s + p.amountPaise);
+    return loan.amountPaise + all - (_repaid[loan.id] ?? 0);
+  }
 
   /// Schedules automatic monthly repayments against a loan — creates a
   /// recurring row with loan_id set, same as bot.py's repayplan_cmd.
