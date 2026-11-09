@@ -2,9 +2,9 @@
 /// the Guardian screen checks which are actually installed.
 const kGuardianApps = <({String package, String label})>[
   (package: 'com.google.android.apps.nbu.paisa.user', label: 'Google Pay'),
-  (package: 'com.phonepe.app', label: 'PhonePe'),
   (package: 'net.one97.paytm', label: 'Paytm'),
-  (package: 'in.org.npci.upiapp', label: 'BHIM'),
+  (package: 'com.dreamplug.androidapp', label: 'CRED'),
+  (package: 'indwin.c3.shareapp', label: 'slice'),
 ];
 
 /// Ordered by severity. Mirrors `Level` in GuardianRules.kt, which decides

@@ -13,7 +13,7 @@ abstract final class LoanPaymentOwner {
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const dbName = 'expenses.db';
-  static const _dbVersion = 12;
+  static const _dbVersion = 17;
 
   static const allTables = [
     'txns',
@@ -26,6 +26,21 @@ class AppDatabase {
     'loan_payments',
     'reminders',
     'pending_txns',
+    // Postings before the movements they reference.
+    'postings',
+    'movements',
+    'audit_log',
+    'income_cycles',
+    'salary_profile',
+    'expected_income',
+    'budgets',
+    'card_statement_emis',
+    'card_emis',
+    'card_statements',
+    'credit_cards',
+    'loan_installments',
+    'loan_events',
+    'reconciliations',
   ];
 
   AppDatabase._([this._pathOverride]);
@@ -145,6 +160,448 @@ class AppDatabase {
     }
     if (oldVersion < 12) {
       await _createAccountIndexes(db);
+    }
+    if (oldVersion < 13) {
+      await _upgradeToLedgerV13(db);
+    }
+    if (oldVersion < 14) {
+      await _createCycleTables(db);
+    }
+    if (oldVersion < 15) {
+      await _upgradeTxnsV15(db);
+      await _createIncomeAndBudgetTables(db);
+    }
+    if (oldVersion < 16) {
+      await _createDebtTables(db);
+    }
+    if (oldVersion < 17) {
+      await _createReconciliationTables(db);
+    }
+  }
+
+  /// Bank details and roles. Status 'closed' hides an account from pickers
+  /// without deleting its history.
+  static Future<void> _addAccountDetailColumns(Database db) async {
+    // Re-runnable: a half-finished upgrade must be able to resume.
+    final existing = {
+      for (final c in await db.rawQuery('PRAGMA table_info(accounts)'))
+        c['name'] as String,
+    };
+    const columns = {
+      'bank_name': 'TEXT',
+      'last4': 'TEXT',
+      'roles': "TEXT NOT NULL DEFAULT ''",
+      'status': "TEXT NOT NULL DEFAULT 'active'",
+    };
+    for (final MapEntry(key: name, value: type) in columns.entries) {
+      if (!existing.contains(name)) {
+        await db.execute('ALTER TABLE accounts ADD COLUMN $name $type');
+      }
+    }
+  }
+
+  /// Non-income, non-expense money: one `movements` row per event, one
+  /// `postings` row per side. Plus an audit trail for money records.
+  static Future<void> _createLedgerTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS movements (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        ref           TEXT NOT NULL UNIQUE,
+        kind          TEXT NOT NULL,
+        date          TEXT NOT NULL,
+        amount        INTEGER NOT NULL CHECK (amount > 0),
+        status        TEXT NOT NULL DEFAULT 'completed'
+                      CHECK (status IN ('planned', 'completed', 'cancelled')),
+        note          TEXT,
+        created_at    TEXT NOT NULL,
+        completed_at  TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_movements_date ON movements(date)',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS postings (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        movement_id  INTEGER NOT NULL REFERENCES movements(id),
+        owner_type   TEXT NOT NULL,
+        owner_id     INTEGER,
+        amount       INTEGER NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_postings_owner ON postings(owner_type, owner_id)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_postings_movement ON postings(movement_id)',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity      TEXT NOT NULL,
+        entity_id   INTEGER,
+        action      TEXT NOT NULL,
+        before_json TEXT,
+        after_json  TEXT,
+        at          TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity, entity_id)',
+    );
+  }
+
+  static String _txnsDdl(String table) =>
+      '''
+      CREATE TABLE $table (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        date             TEXT NOT NULL,
+        category         TEXT NOT NULL,
+        amount           INTEGER NOT NULL,
+        note             TEXT,
+        type             TEXT NOT NULL CHECK (type IN ('expense', 'income', 'lent', 'borrowed', 'refund')),
+        created_at       TEXT NOT NULL,
+        counterparty     TEXT,
+        settled          INTEGER,
+        account          TEXT,
+        goal_id          INTEGER,
+        loan_id          INTEGER,
+        source           TEXT NOT NULL DEFAULT 'manual',
+        external_ref     TEXT,
+        income_source    TEXT,
+        recurring_income INTEGER NOT NULL DEFAULT 0,
+        refund_of        INTEGER
+      )
+    ''';
+
+  static const _txnsV14Columns =
+      'id, date, category, amount, note, type, created_at, counterparty, '
+      'settled, account, goal_id, loan_id, source, external_ref';
+
+  /// v14 → v15: `txns.type` gains 'refund'. SQLite can't alter a CHECK
+  /// constraint, so the table is rebuilt: same rows, same ids, copied
+  /// column by column, then the indexes are recreated. Re-runnable — a
+  /// table that already allows refunds is left alone.
+  static Future<void> _upgradeTxnsV15(Database db) async {
+    final ddl = await db.rawQuery(
+      "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'txns'",
+    );
+    final current = (ddl.first['sql'] as String?) ?? '';
+    if (!current.contains("'refund'")) {
+      await db.execute('DROP TABLE IF EXISTS txns_v15');
+      await db.execute(_txnsDdl('txns_v15'));
+      await db.execute(
+        'INSERT INTO txns_v15 ($_txnsV14Columns) '
+        'SELECT $_txnsV14Columns FROM txns',
+      );
+      await db.execute('DROP TABLE txns');
+      await db.execute('ALTER TABLE txns_v15 RENAME TO txns');
+    }
+    for (final (name, col) in [
+      ('idx_txns_date', 'date'),
+      ('idx_txns_category', 'category'),
+      ('idx_txns_type', 'type'),
+      ('idx_txns_external_ref', 'external_ref'),
+      ('idx_txns_loan_id', 'loan_id'),
+      ('idx_txns_account', 'account'),
+      ('idx_txns_refund_of', 'refund_of'),
+    ]) {
+      await db.execute('CREATE INDEX IF NOT EXISTS $name ON txns($col)');
+    }
+    // Recorded salaries are salary income.
+    await db.execute(
+      "UPDATE txns SET income_source = 'salary' WHERE type = 'income' "
+      'AND income_source IS NULL AND (id IN (SELECT salary_txn_id FROM '
+      "income_cycles WHERE salary_txn_id IS NOT NULL) OR category = 'salary')",
+    );
+  }
+
+  static Future<void> _addColumns(
+    Database db,
+    String table,
+    Map<String, String> columns,
+  ) async {
+    final existing = {
+      for (final c in await db.rawQuery('PRAGMA table_info($table)'))
+        c['name'] as String,
+    };
+    for (final MapEntry(key: name, value: type) in columns.entries) {
+      if (!existing.contains(name)) {
+        await db.execute('ALTER TABLE $table ADD COLUMN $name $type');
+      }
+    }
+  }
+
+  /// v16: credit cards (with statements, payments and card EMIs) and the
+  /// rebuilt loans (schedules, split payments, prepayments). Additive and
+  /// re-runnable. Card purchases are `txns` with `card_id` (an expense on
+  /// the card, not the bank); bill payments and loan principal are
+  /// `movements` to a card/loan posting.
+  static Future<void> _createDebtTables(Database db) async {
+    await _addColumns(db, 'txns', {'card_id': 'INTEGER'});
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_txns_card ON txns(card_id)',
+    );
+    await _addColumns(db, 'movements', {
+      'link_type': 'TEXT',
+      'link_id': 'INTEGER',
+    });
+    await _addColumns(db, 'loans', {
+      'kind': "TEXT NOT NULL DEFAULT 'personal'",
+      'lender': 'TEXT',
+      'rate_bps': 'INTEGER',
+      'status': "TEXT NOT NULL DEFAULT 'active'",
+      'split_estimated': 'INTEGER NOT NULL DEFAULT 0',
+      'opening': "TEXT NOT NULL DEFAULT 'existing'",
+    });
+    await _addColumns(db, 'loan_payments', {
+      'installment_id': 'INTEGER',
+      'principal': 'INTEGER',
+      'interest': 'INTEGER',
+      'movement_id': 'INTEGER',
+      'txn_id': 'INTEGER',
+    });
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS credit_cards (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        name                TEXT NOT NULL,
+        bank                TEXT,
+        last4               TEXT,
+        limit_amount        INTEGER NOT NULL CHECK (limit_amount >= 0),
+        statement_day       INTEGER CHECK (statement_day BETWEEN 1 AND 31),
+        due_day             INTEGER CHECK (due_day BETWEEN 1 AND 31),
+        repayment_account   TEXT,
+        opening_outstanding INTEGER NOT NULL DEFAULT 0,
+        status              TEXT NOT NULL DEFAULT 'active',
+        created_at          TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS card_statements (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id          INTEGER NOT NULL,
+        period_start     TEXT NOT NULL,
+        period_end       TEXT NOT NULL,
+        generated_on     TEXT NOT NULL,
+        due_date         TEXT NOT NULL,
+        total_due        INTEGER NOT NULL CHECK (total_due >= 0),
+        minimum_due      INTEGER NOT NULL DEFAULT 0,
+        previous_balance INTEGER NOT NULL DEFAULT 0,
+        payments         INTEGER NOT NULL DEFAULT 0,
+        refunds          INTEGER NOT NULL DEFAULT 0,
+        purchases        INTEGER NOT NULL DEFAULT 0,
+        emi_amount       INTEGER NOT NULL DEFAULT 0,
+        charges          INTEGER NOT NULL DEFAULT 0,
+        note             TEXT,
+        created_at       TEXT NOT NULL,
+        UNIQUE (card_id, period_end)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS card_emis (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id          INTEGER NOT NULL,
+        purchase_txn_id  INTEGER,
+        description      TEXT NOT NULL,
+        purchase_amount  INTEGER NOT NULL CHECK (purchase_amount > 0),
+        purchase_date    TEXT NOT NULL,
+        tenure_months    INTEGER NOT NULL CHECK (tenure_months > 0),
+        installment      INTEGER NOT NULL CHECK (installment > 0),
+        interest_total   INTEGER,
+        fees             INTEGER,
+        taxes            INTEGER,
+        status           TEXT NOT NULL DEFAULT 'active',
+        created_at       TEXT NOT NULL
+      )
+    ''');
+    // One row per EMI per statement it was billed on: the billed count is
+    // derived from these rows, so a statement can't bill an EMI twice.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS card_statement_emis (
+        statement_id INTEGER NOT NULL,
+        emi_id       INTEGER NOT NULL,
+        principal    INTEGER,
+        interest     INTEGER,
+        PRIMARY KEY (statement_id, emi_id)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS loan_installments (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        loan_id        INTEGER NOT NULL,
+        seq            INTEGER NOT NULL,
+        due_date       TEXT NOT NULL,
+        amount         INTEGER NOT NULL,
+        principal      INTEGER NOT NULL,
+        interest       INTEGER NOT NULL,
+        principal_paid INTEGER NOT NULL DEFAULT 0,
+        interest_paid  INTEGER NOT NULL DEFAULT 0,
+        status         TEXT NOT NULL DEFAULT 'due'
+                       CHECK (status IN ('due', 'paid', 'cancelled')),
+        UNIQUE (loan_id, seq)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS loan_events (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        loan_id     INTEGER NOT NULL,
+        kind        TEXT NOT NULL
+                    CHECK (kind IN ('prepayment', 'foreclosure', 'correction', 'fee')),
+        amount      INTEGER NOT NULL,
+        date        TEXT NOT NULL,
+        movement_id INTEGER,
+        txn_id      INTEGER,
+        note        TEXT,
+        created_at  TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// v17: account type and money on hold, and a record of every time a
+  /// balance was checked against the bank (with the adjustment, if any).
+  static Future<void> _createReconciliationTables(Database db) async {
+    await _addColumns(db, 'accounts', {
+      'bank_type': 'TEXT',
+      'hold_amount': 'INTEGER NOT NULL DEFAULT 0',
+    });
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS reconciliations (
+        id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_type             TEXT NOT NULL CHECK (owner_type IN ('account', 'card')),
+        owner_id               INTEGER NOT NULL,
+        as_of                  TEXT NOT NULL,
+        app_balance            INTEGER NOT NULL,
+        actual_balance         INTEGER NOT NULL,
+        difference             INTEGER NOT NULL,
+        adjustment_movement_id INTEGER,
+        note                   TEXT,
+        created_at             TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_reconciliations_owner '
+      'ON reconciliations(owner_type, owner_id)',
+    );
+  }
+
+  /// Expected (not yet received) income, and budgets for every period.
+  static Future<void> _createIncomeAndBudgetTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS expected_income (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        source           TEXT NOT NULL,
+        amount           INTEGER NOT NULL CHECK (amount > 0),
+        expected_date    TEXT NOT NULL,
+        account          TEXT,
+        note             TEXT,
+        status           TEXT NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending', 'received', 'cancelled')),
+        received_txn_id  INTEGER,
+        created_at       TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS budgets (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        period       TEXT NOT NULL
+                     CHECK (period IN ('cycle', 'month', 'week', 'day', 'custom')),
+        category     TEXT,
+        limit_amount INTEGER NOT NULL CHECK (limit_amount > 0),
+        start_date   TEXT,
+        end_date     TEXT,
+        caution_pct  INTEGER NOT NULL DEFAULT 80
+                     CHECK (caution_pct BETWEEN 1 AND 99),
+        essential    INTEGER NOT NULL DEFAULT 0,
+        name         TEXT,
+        created_at   TEXT NOT NULL
+      )
+    ''');
+    // One overall and one per-category budget per recurring period.
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_unique '
+      "ON budgets(period, IFNULL(category, '')) WHERE period != 'custom'",
+    );
+  }
+
+  /// Salary cycles: only start dates are stored, ends are derived (see
+  /// salary_cycle.dart). `end_date` and `summary_json` are written once, when
+  /// a cycle is closed, and never recalculated (rule 15).
+  static Future<void> _createCycleTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS income_cycles (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        start_date       TEXT NOT NULL UNIQUE,
+        salary_txn_id    INTEGER,
+        untracked_salary INTEGER CHECK (untracked_salary IS NULL OR untracked_salary > 0),
+        note             TEXT,
+        created_at       TEXT NOT NULL,
+        closed_at        TEXT,
+        end_date         TEXT,
+        summary_json     TEXT,
+        rules_version    INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS salary_profile (
+        id            INTEGER PRIMARY KEY CHECK (id = 1),
+        ctc_annual    INTEGER,
+        gross_monthly INTEGER,
+        expected_net  INTEGER,
+        day_from      INTEGER NOT NULL DEFAULT 7,
+        day_to        INTEGER NOT NULL DEFAULT 15,
+        account       TEXT
+      )
+    ''');
+  }
+
+  /// v12 → v13: account details and roles, ledger tables, and every
+  /// existing transfer copied into movements + postings so balances are
+  /// identical before and after. The old `transfers` rows are left as they
+  /// were (nothing rewritten) and are no longer read.
+  static Future<void> _upgradeToLedgerV13(Database db) async {
+    await _addAccountDetailColumns(db);
+    await db.execute(
+      "UPDATE accounts SET roles = CASE type "
+      "WHEN 'investment' THEN 'investment' "
+      "WHEN 'emergency_fund' THEN 'emergency' "
+      "ELSE 'daily' END WHERE roles = ''",
+    );
+    await _createLedgerTables(db);
+
+    final ids = {
+      for (final r in await db.query('accounts', columns: ['id', 'name']))
+        r['name'] as String: r['id'] as int,
+    };
+    final transfers = await db.query('transfers', orderBy: 'id ASC');
+    for (final t in transfers) {
+      final amount = (t['amount'] as num).round();
+      if (amount <= 0) continue;
+      final movementId = await db.insert('movements', {
+        'ref': 'legacy-transfer-${t['id']}',
+        'kind': 'transfer',
+        'date': t['date'],
+        'amount': amount,
+        'status': 'completed',
+        'note': t['note'],
+        'created_at': t['created_at'],
+        'completed_at': t['created_at'],
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      // Already copied by an earlier, interrupted run.
+      if (movementId == 0) continue;
+      for (final (name, sign) in [
+        (t['from_account'], -1),
+        (t['to_account'], 1),
+      ]) {
+        final id = ids[name];
+        await db.insert('postings', {
+          'movement_id': movementId,
+          // An account deleted outside the app's own delete flow: keep the
+          // money visible as leaving/entering the books, not lost.
+          'owner_type': id == null ? 'external' : 'account',
+          'owner_id': id,
+          'amount': sign * amount,
+        });
+      }
     }
   }
 
@@ -328,24 +785,7 @@ class AppDatabase {
   }
 
   Future<void> _createSchema(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE txns (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        date          TEXT NOT NULL,
-        category      TEXT NOT NULL,
-        amount        INTEGER NOT NULL,
-        note          TEXT,
-        type          TEXT NOT NULL CHECK (type IN ('expense', 'income', 'lent', 'borrowed')),
-        created_at    TEXT NOT NULL,
-        counterparty  TEXT,
-        settled       INTEGER,
-        account       TEXT,
-        goal_id       INTEGER,
-        loan_id       INTEGER,
-        source        TEXT NOT NULL DEFAULT 'manual',
-        external_ref  TEXT
-      )
-    ''');
+    await db.execute(_txnsDdl('txns'));
 
     await db.execute('''
       CREATE TABLE recurring (
@@ -395,6 +835,13 @@ class AppDatabase {
     await db.execute('CREATE INDEX idx_txns_loan_id ON txns(loan_id)');
     await db.execute('CREATE UNIQUE INDEX idx_accounts_name ON accounts(name)');
     await _createAccountIndexes(db);
+    await _addAccountDetailColumns(db);
+    await _createLedgerTables(db);
+    await _createCycleTables(db);
+    await _createIncomeAndBudgetTables(db);
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_txns_refund_of ON txns(refund_of)',
+    );
 
     await _createWishlistTable(db);
     await _createGoalsTable(db);
@@ -402,6 +849,9 @@ class AppDatabase {
     await _createLoanPaymentsTable(db);
     await _createRemindersTable(db);
     await _createPendingTxnsTable(db);
+    // Last: extends loans and loan_payments, created above.
+    await _createDebtTables(db);
+    await _createReconciliationTables(db);
   }
 
   /// Wipes every row from every table, in place — used by Settings' "Reset

@@ -16,31 +16,24 @@ class _FakeConfigRepository extends ConfigRepository {
 }
 
 void main() {
-  test('the monthly budget you set is the budget', () async {
-    final settings = SettingsController(_FakeConfigRepository());
-    await settings.setMonthlyBudget(1700000);
-
-    expect(settings.config.monthlyBudgetPaise, 1700000);
+  test('period view and the budget import flag persist', () async {
+    final repo = _FakeConfigRepository();
+    final settings = SettingsController(repo);
+    await settings.setPeriodView('cycle');
+    await settings.markBudgetsImported();
+    expect(repo.stored.periodView, 'cycle');
+    expect(repo.stored.budgetsImported, isTrue);
   });
 
-  test('logging income does not shrink the budget', () async {
-    // The budget used to be silently capped at whatever income had been
-    // logged so far this month. That made ₹500 of incidental income cut a
-    // ₹17,000 budget by 97%, and reported the month as wildly overspent.
-    final settings = SettingsController(_FakeConfigRepository());
-    await settings.setMonthlyBudget(1700000);
-
-    // Whatever income exists, the configured budget is what the UI uses.
-    expect(settings.config.monthlyBudgetPaise, 1700000);
-
-    await settings.setMonthlyBudget(50000);
-    expect(settings.config.monthlyBudgetPaise, 50000);
-  });
-
-  test('category budgets are stored in paise', () async {
-    final settings = SettingsController(_FakeConfigRepository());
-    await settings.setCategoryBudget('food', 800000);
-
-    expect(settings.config.budgets['food'], 800000);
+  test('pre-v15 month budgets still load from old configs for import', () {
+    final config = AppConfig.fromJson({
+      'schema': 2,
+      'monthlyBudget': 1700000,
+      'budgets': {'food': 800000},
+    });
+    expect(config.monthlyBudgetPaise, 1700000);
+    expect(config.budgets['food'], 800000);
+    expect(config.budgetsImported, isFalse);
+    expect(config.periodView, 'month');
   });
 }

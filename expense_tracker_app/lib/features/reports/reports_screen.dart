@@ -18,14 +18,23 @@ import '../../core/widgets/transaction_tile.dart';
 import '../../data/models/transaction.dart';
 import '../../data/repositories/transaction_repository.dart';
 import '../dashboard/widgets/budget_vs_actual.dart';
-import '../dashboard/widgets/category_tiles.dart';
 import '../dashboard/widgets/trend_chart.dart';
 import '../expenses/expenses_controller.dart';
 import '../settings/settings_controller.dart';
+import '../budgets/budget_controller.dart';
+import '../cycles/cycle_controller.dart';
 import 'category_chart.dart';
 import 'spending_line_chart.dart';
 
-enum _RangePreset { thisMonth, lastMonth, last3Months, thisYear, custom }
+enum _RangePreset {
+  thisMonth,
+  lastMonth,
+  thisCycle,
+  lastCycle,
+  last3Months,
+  thisYear,
+  custom,
+}
 
 /// Ranges longer than this chart one point per month instead of per day.
 const _maxDailyPoints = 62;
@@ -83,6 +92,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
         );
       case _RangePreset.thisYear:
         return DateTimeRange(start: DateTime(now.year, 1, 1), end: now);
+      case _RangePreset.thisCycle || _RangePreset.lastCycle:
+        // Same transactions, a salary-to-salary date range.
+        final cycles = context.read<CycleController>().cycles;
+        final i = cycles.length - (preset == _RangePreset.thisCycle ? 1 : 2);
+        if (i < 0) return _rangeFor(_RangePreset.thisMonth);
+        final c = cycles[i];
+        return DateTimeRange(start: c.start, end: c.queryEnd(now));
       case _RangePreset.custom:
         return _range;
     }
@@ -209,6 +225,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Widget build(BuildContext context) {
     final config = context.watch<SettingsController>().config;
     final currency = config.currency;
+    final budgets = context.watch<BudgetController>();
+    final cycleCount = context.select<CycleController, int>(
+      (c) => c.cycles.length,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Reports')),
@@ -220,9 +240,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
             children: [
               ChipRow(
                 children: [
-                  for (final (preset, label) in const [
+                  for (final (preset, label) in [
                     (_RangePreset.thisMonth, 'This month'),
                     (_RangePreset.lastMonth, 'Last month'),
+                    if (cycleCount > 0) (_RangePreset.thisCycle, 'This cycle'),
+                    if (cycleCount > 1) (_RangePreset.lastCycle, 'Last cycle'),
                     (_RangePreset.last3Months, '3 months'),
                     (_RangePreset.thisYear, 'This year'),
                     (_RangePreset.custom, 'Custom'),
@@ -261,8 +283,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           onRetry: _load,
                         )
                       : _buildContent(
-                          config.budgets,
-                          config.monthlyBudgetPaise,
+                          budgets.monthCategoryCaps,
+                          budgets.monthOverall,
                           currency,
                         ),
                 ),
@@ -657,7 +679,8 @@ class _CategoryDrillDownScreenState extends State<CategoryDrillDownScreen> {
     final rows = _rows;
     final total = rows?.fold<int>(0, (s, t) => s + t.amountPaise) ?? 0;
     final text = Theme.of(context).textTheme;
-    final color = tileColor(CategoryStyle.of(widget.category).color);
+    final color = CategoryStyle.of(widget.category).color;
+    final palette = context.palette;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.category)),
@@ -686,7 +709,15 @@ class _CategoryDrillDownScreenState extends State<CategoryDrillDownScreen> {
                       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
                       padding: const EdgeInsets.all(AppSpacing.lg - 4),
                       decoration: BoxDecoration(
-                        color: color,
+                        color: Color.alphaBlend(
+                          color.withValues(
+                            alpha:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? 0.2
+                                : 0.1,
+                          ),
+                          palette.surface,
+                        ),
                         borderRadius: BorderRadius.circular(AppRadius.xl),
                       ),
                       child: Row(
@@ -694,7 +725,7 @@ class _CategoryDrillDownScreenState extends State<CategoryDrillDownScreen> {
                           CategoryIcon(
                             category: widget.category,
                             size: 48,
-                            color: Colors.white.withValues(alpha: 0.25),
+                            solid: true,
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -703,19 +734,14 @@ class _CategoryDrillDownScreenState extends State<CategoryDrillDownScreen> {
                               children: [
                                 Text(
                                   '${rows.length} transaction${rows.length == 1 ? '' : 's'}',
-                                  style: text.labelMedium?.copyWith(
-                                    color: Colors.white.withValues(alpha: 0.85),
-                                  ),
+                                  style: text.labelMedium,
                                 ),
                                 FittedBox(
                                   fit: BoxFit.scaleDown,
                                   alignment: Alignment.centerLeft,
                                   child: Text(
                                     formatMoney(total, currency),
-                                    style: text.moneyStyle(
-                                      28,
-                                      color: Colors.white,
-                                    ),
+                                    style: text.moneyStyle(28),
                                   ),
                                 ),
                               ],

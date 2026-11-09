@@ -112,8 +112,13 @@ class ExpensesController extends ChangeNotifier {
     required TxnType type,
     String? date,
     String? counterparty,
+    String? account,
+    IncomeSource? incomeSource,
+    bool recurringIncome = false,
+    int? cardId,
   }) async {
-    final account = await _accountRepo.defaultAccount();
+    // A card expense sits on the card, not in any bank account.
+    if (cardId == null) account ??= await _accountRepo.defaultAccount();
     final txn = Transaction(
       date: date ?? _isoToday(),
       category: category,
@@ -124,6 +129,11 @@ class ExpensesController extends ChangeNotifier {
       counterparty: counterparty,
       settled: type == TxnType.lent || type == TxnType.borrowed ? 0 : null,
       account: account,
+      incomeSource: type == TxnType.income
+          ? (incomeSource ?? IncomeSource.other)
+          : null,
+      recurringIncome: type == TxnType.income && recurringIncome,
+      cardId: type == TxnType.expense ? cardId : null,
     );
     final id = await _txnRepo.add(txn);
     await refresh();
@@ -165,6 +175,23 @@ class ExpensesController extends ChangeNotifier {
     );
     await refresh();
     return updated;
+  }
+
+  Future<int> refundedFor(int expenseId) => _txnRepo.refundedFor(expenseId);
+
+  /// Money back for an earlier expense (lowers that category's spending).
+  Future<void> addRefund({
+    required int expenseId,
+    required int amountPaise,
+    String? note,
+  }) async {
+    await _txnRepo.addRefund(
+      expenseId: expenseId,
+      amountPaise: amountPaise,
+      date: _isoToday(),
+      note: note,
+    );
+    await refresh();
   }
 
   Future<void> deleteById(int id) async {

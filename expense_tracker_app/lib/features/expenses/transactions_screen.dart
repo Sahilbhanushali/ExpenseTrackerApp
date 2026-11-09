@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/calendar.dart';
+import '../../core/finance/accounting.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
@@ -13,11 +14,14 @@ import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/app_chip.dart';
 import '../../core/widgets/category_icon.dart';
+import '../../core/widgets/form_sheet.dart';
 import '../../core/widgets/responsive.dart';
 import '../../core/widgets/transaction_tile.dart';
 import '../../data/models/account.dart';
+import '../../data/models/movement.dart';
 import '../../data/models/transaction.dart';
 import '../accounts/accounts_controller.dart';
+import '../cards/cards_controller.dart';
 import '../settings/settings_controller.dart';
 import 'expenses_controller.dart';
 
@@ -253,7 +257,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         // Transfers move money between your own accounts — they aren't
         // income or spending, so they stay out of the day's net.
         if (item.type == TxnType.income) net += item.amountPaise;
-        if (item.type == TxnType.expense) net -= item.amountPaise;
+        net -= spendingEffect(item.type, item.amountPaise);
         entry = _TxnEntry(item, first: prev == null);
       } else {
         entry = _TransferEntry(item as Transfer, first: prev == null);
@@ -285,6 +289,82 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     );
   }
 
+  /// Planned → done, or cancel. A cancelled movement stays on record and
+  /// in the audit log but no longer counts. Loan movements are undone from
+  /// the loan, where the installment state lives.
+  Future<void> _transferActions(Transfer t) async {
+    final loan =
+        t.kind == MovementKind.loanPrincipal || t.kind == MovementKind.loanOpen;
+    final what = switch (t.kind) {
+      MovementKind.cardPayment => 'card payment',
+      MovementKind.adjustment => 'adjustment',
+      _ => 'transfer',
+    };
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (t.status == MovementStatus.planned && !loan)
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline_rounded),
+                title: const Text('Mark as done at the bank'),
+                subtitle: const Text('Both balances change now'),
+                onTap: () => Navigator.pop(sheet, 'done'),
+              ),
+            if (loan)
+              const ListTile(
+                leading: Icon(Icons.info_outline_rounded),
+                title: Text('Part of a loan'),
+                subtitle: Text('Undo it from Loans & EMI → Undo last payment'),
+              )
+            else
+              ListTile(
+                leading: const Icon(Icons.block_rounded),
+                title: Text('Cancel this $what'),
+                subtitle: const Text('Kept on record, but stops counting'),
+                onTap: () => Navigator.pop(sheet, 'cancel'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    final accounts = context.read<AccountsController>();
+    final cards = context.read<CardsController?>();
+    if (action == 'done') {
+      await accounts.completeTransfer(t.id!);
+    } else {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: Text('Cancel this $what?'),
+          content: Text(
+            '${formatMoney(t.amountPaise, context.read<SettingsController>().config.currency)} '
+            'between ${t.fromAccount} and ${t.toAccount} will no longer count. '
+            'It stays in the history as cancelled.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('Keep'),
+            ),
+            FilledButton.tonal(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('Cancel it'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+      await accounts.cancelMovement(t.id!);
+    }
+    await cards?.refresh();
+    if (mounted) await _reload();
+  }
+
   Future<bool> _confirmDelete(Transaction txn) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -299,7 +379,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: context.palette.expense,
-              foregroundColor: Colors.white,
+              foregroundColor: context.palette.onStatus,
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
@@ -327,7 +407,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         currency: currency,
         categories: _categories,
         accounts: [
-          for (final a in context.read<AccountsController>().accounts)
+          for (final a in context.read<AccountsController>().active)
             a.account.name,
         ],
         onDelete: () async {
@@ -643,10 +723,13 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             _TxnEntry e => _buildRow(e, currency),
             _TransferEntry e => _cardSlice(
               e,
-              _TransferTile(
-                transfer: e.transfer,
-                account: _accountFilter!,
-                currency: currency,
+              InkWell(
+                onTap: () => _transferActions(e.transfer),
+                child: _TransferTile(
+                  transfer: e.transfer,
+                  account: _accountFilter!,
+                  currency: currency,
+                ),
               ),
             ),
           };
@@ -708,12 +791,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           color: p.expense,
           borderRadius: _sliceRadius(e),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.delete_outline_rounded, color: Colors.white),
-            SizedBox(width: AppSpacing.xs),
-            Text('Delete', style: TextStyle(color: Colors.white)),
+            Icon(Icons.delete_outline_rounded, color: p.onStatus),
+            const SizedBox(width: AppSpacing.xs),
+            Text('Delete', style: TextStyle(color: p.onStatus)),
           ],
         ),
       ),
@@ -747,11 +830,22 @@ class _TransferTile extends StatelessWidget {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     final outgoing = transfer.fromAccount == account;
-    final title = outgoing
-        ? 'Transfer to ${transfer.toAccount}'
-        : 'Transfer from ${transfer.fromAccount}';
+    final title = switch (transfer.kind) {
+      MovementKind.cardPayment => 'Card bill · ${transfer.toAccount}',
+      MovementKind.loanPrincipal => 'Loan repayment · ${transfer.toAccount}',
+      MovementKind.loanOpen => 'Loan received · ${transfer.fromAccount}',
+      MovementKind.adjustment => 'Balance adjustment',
+      _ =>
+        outgoing
+            ? 'Transfer to ${transfer.toAccount}'
+            : 'Transfer from ${transfer.fromAccount}',
+    };
     final note = transfer.note;
-    final subtitle = note != null && note.isNotEmpty ? note : 'Transfer';
+    final base = note != null && note.isNotEmpty ? note : 'Transfer';
+    // Planned transfers haven't happened at the bank and don't count yet.
+    final subtitle = transfer.status == MovementStatus.planned
+        ? 'Planned, not done yet · $base'
+        : base;
     final amount =
         '${outgoing ? '−' : '+'}${formatMoney(transfer.amountPaise, currency)}';
 
@@ -767,7 +861,12 @@ class _TransferTile extends StatelessWidget {
           children: [
             CategoryIcon(
               category: 'transfer',
-              icon: Icons.swap_horiz_rounded,
+              icon: switch (transfer.kind) {
+                MovementKind.cardPayment => Icons.credit_card_rounded,
+                MovementKind.loanPrincipal ||
+                MovementKind.loanOpen => Icons.account_balance_rounded,
+                _ => Icons.swap_horiz_rounded,
+              },
               color: p.debt,
             ),
             const SizedBox(width: AppSpacing.md - 4),
@@ -990,6 +1089,7 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
     TxnType.income => 'Income',
     TxnType.lent => 'Lent to ${widget.txn.counterparty ?? 'someone'}',
     TxnType.borrowed => 'Borrowed from ${widget.txn.counterparty ?? 'someone'}',
+    TxnType.refund => 'Refund',
   };
 
   Color _typeColor(AppPalette p) => switch (widget.txn.type) {
@@ -997,6 +1097,7 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
     TxnType.income => p.income,
     TxnType.lent => p.income,
     TxnType.borrowed => p.expense,
+    TxnType.refund => p.income,
   };
 
   Future<void> _pickDate() async {
@@ -1019,13 +1120,73 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
     setState(() => _saving = true);
     final iso =
         '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
-    await context.read<ExpensesController>().edit(
-      widget.txn.id!,
-      amountPaise: amount,
-      category: _isLending ? null : _category,
-      note: _noteController.text.trim(),
-      date: iso,
-      account: _account != widget.txn.account ? _account : null,
+    try {
+      await context.read<ExpensesController>().edit(
+        widget.txn.id!,
+        amountPaise: amount,
+        category: _isLending ? null : _category,
+        note: _noteController.text.trim(),
+        date: iso,
+        account: _account != widget.txn.account ? _account : null,
+      );
+    } on StateError {
+      setState(() {
+        _saving = false;
+        _amountError =
+            "Can't be less than the ${formatMoney(_refunded, widget.currency)} "
+            'already refunded';
+      });
+      return;
+    }
+    if (mounted) Navigator.pop(context, true);
+  }
+
+  /// Already refunded against this expense, in paise.
+  int _refunded = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.txn.type == TxnType.expense && widget.txn.id != null) {
+      context.read<ExpensesController?>()?.refundedFor(widget.txn.id!).then((
+        v,
+      ) {
+        if (mounted) setState(() => _refunded = v);
+      });
+    }
+  }
+
+  Future<void> _recordRefund() async {
+    final left = widget.txn.amountPaise - _refunded;
+    final amount = TextEditingController(text: paiseToEditString(left));
+    final ok = await showFormSheet(
+      context,
+      title: const Text('Record a refund'),
+      subtitle:
+          'Money back for this expense. It lowers your spending; it isn’t '
+          'income. Up to ${formatMoney(left, widget.currency)} can be refunded.',
+      submitLabel: 'Record refund',
+      validate: () {
+        final error = positiveAmountError(amount.text);
+        if (error != null) return error;
+        return parseRupeesToPaise(amount.text)! > left
+            ? 'That’s more than is left to refund.'
+            : null;
+      },
+      builder: (context, setState) => TextField(
+        controller: amount,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: 'Refund amount',
+          prefixText: '${widget.currency} ',
+        ),
+      ),
+    );
+    if (!ok || !mounted) return;
+    await context.read<ExpensesController>().addRefund(
+      expenseId: widget.txn.id!,
+      amountPaise: parseRupeesToPaise(amount.text)!,
     );
     if (mounted) Navigator.pop(context, true);
   }
@@ -1178,6 +1339,27 @@ class TransactionDetailSheetState extends State<TransactionDetailSheet> {
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(labelText: 'Note'),
               ),
+              if (widget.txn.type == TxnType.expense) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _refunded > 0
+                            ? '${formatMoney(_refunded, widget.currency)} refunded so far'
+                            : 'Got money back for this?',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    if (_refunded < widget.txn.amountPaise)
+                      TextButton.icon(
+                        onPressed: _recordRefund,
+                        icon: const Icon(Icons.undo_rounded),
+                        label: const Text('Record a refund'),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: AppSpacing.lg),
               FilledButton(
                 onPressed: _saving ? null : _save,

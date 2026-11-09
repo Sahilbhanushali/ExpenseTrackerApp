@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/widgets/form_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_theme.dart';
@@ -23,38 +24,30 @@ class LendingScreen extends StatelessWidget {
     final amountController = TextEditingController();
     final personController = TextEditingController();
     final noteController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(type == TxnType.lent ? 'Lend money' : 'Borrow money'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: personController,
-              decoration: const InputDecoration(labelText: 'Person'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: Text(type == TxnType.lent ? 'Lend money' : 'Borrow money'),
+      submitLabel: 'Save',
+      validate: () =>
+          requireText(personController.text, 'a name') ??
+          positiveAmountError(amountController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Amount'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: personController,
+            decoration: const InputDecoration(labelText: 'Person'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: noteController,
+            decoration: const InputDecoration(labelText: 'Note (optional)'),
           ),
         ],
       ),
@@ -147,43 +140,30 @@ class LendingScreen extends StatelessWidget {
     final currency = context.read<SettingsController>().config.currency;
     final dayController = TextEditingController(text: '${DateTime.now().day}');
     final monthsController = TextEditingController();
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Repeat monthly'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '${formatMoney(amountPaise, currency)} every month toward ${loan.counterparty ?? 'them'}, reminded automatically.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: dayController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Day of month (1-28)',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: monthsController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Number of months (optional)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final confirmed = await showFormSheet(
+      context,
+      title: const Text('Repeat monthly'),
+      submitLabel: 'Schedule',
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${formatMoney(amountPaise, currency)} every month toward ${loan.counterparty ?? 'them'}, reminded automatically.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Schedule'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: dayController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Day of month (1-28)'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: monthsController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Number of months (optional)',
+            ),
           ),
         ],
       ),
@@ -282,40 +262,32 @@ class LendingScreen extends StatelessWidget {
       text: loan.counterparty ?? '',
     );
     final noteController = TextEditingController(text: loan.note ?? '');
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          loan.type == TxnType.lent ? 'Edit loan' : 'Edit borrowed amount',
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: personController,
-              decoration: const InputDecoration(labelText: 'Person'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(labelText: 'Note (optional)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: Text(
+        loan.type == TxnType.lent ? 'Edit loan' : 'Edit borrowed amount',
+      ),
+      submitLabel: 'Save',
+      validate: () =>
+          requireText(personController.text, 'a name') ??
+          positiveAmountError(amountController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Amount'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: personController,
+            decoration: const InputDecoration(labelText: 'Person'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: noteController,
+            decoration: const InputDecoration(labelText: 'Note (optional)'),
           ),
         ],
       ),

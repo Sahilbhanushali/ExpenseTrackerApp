@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
+import '../budgets/budget_controller.dart';
 import '../expenses/expenses_controller.dart';
 import '../settings/settings_controller.dart';
 import 'guardian_models.dart';
@@ -22,6 +23,7 @@ class GuardianController extends ChangeNotifier with WidgetsBindingObserver {
 
   ExpensesController? _expenses;
   SettingsController? _settings;
+  BudgetController? _budgets;
   Timer? _debounce;
 
   GuardianState? _state;
@@ -43,10 +45,12 @@ class GuardianController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> attach(
     ExpensesController expenses,
     SettingsController settings,
+    BudgetController budgets,
   ) async {
     if (!_platform.supported) return;
     _expenses = expenses..addListener(_scheduleSync);
     _settings = settings..addListener(_scheduleSync);
+    _budgets = budgets..addListener(_scheduleSync);
     WidgetsBinding.instance.addObserver(this);
     await refreshState();
     await sync();
@@ -67,8 +71,8 @@ class GuardianController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> sync() async {
-    final expenses = _expenses, settings = _settings;
-    if (expenses == null || settings == null) return;
+    final expenses = _expenses, settings = _settings, budgets = _budgets;
+    if (expenses == null || settings == null || budgets == null) return;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final month = '${now.year}-${now.month.toString().padLeft(2, '0')}';
@@ -84,11 +88,11 @@ class GuardianController extends ChangeNotifier with WidgetsBindingObserver {
       _snapshot = BudgetSnapshot(
         computedAt: now,
         currency: config.currency,
-        budget: config.monthlyBudgetPaise,
+        budget: budgets.monthOverall,
         spent: total.expense,
         todaySpent: todayTotal.expense,
         categories: [
-          for (final e in config.budgets.entries)
+          for (final e in budgets.monthCategoryCaps.entries)
             if (e.value > 0) CategorySpend(e.key, e.value, cats[e.key] ?? 0),
         ],
       );
@@ -148,6 +152,7 @@ class GuardianController extends ChangeNotifier with WidgetsBindingObserver {
     _debounce?.cancel();
     _expenses?.removeListener(_scheduleSync);
     _settings?.removeListener(_scheduleSync);
+    _budgets?.removeListener(_scheduleSync);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

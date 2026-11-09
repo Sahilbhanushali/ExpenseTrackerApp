@@ -13,7 +13,7 @@ import '../../core/widgets/list_row.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/responsive.dart';
 import '../../core/widgets/settings_group.dart';
-import '../settings/budget_planner_screen.dart';
+import '../budgets/budgets_screen.dart';
 import 'guardian_controller.dart';
 import 'guardian_models.dart';
 
@@ -358,7 +358,7 @@ class _SpendingStatus extends StatelessWidget {
           TextButton(
             onPressed: () =>
                 Navigator.of(context)
-                    .push(FadeSlideRoute(page: const BudgetPlannerScreen())),
+                    .push(FadeSlideRoute(page: const BudgetsScreen())),
             child: const Text('Set budget'),
           ),
         ],
@@ -429,19 +429,23 @@ class _AppsGroup extends StatelessWidget {
         for (final (i, app) in kGuardianApps.indexed)
           Builder(
             builder: (context) {
-              final installed = state.installed[app.package] ?? false;
+              // Null: the native side didn't report this app (an older
+              // build is still installed) — don't claim it's missing.
+              final installed = state.installed[app.package];
               final selected = state.settings.apps.contains(app.package);
               return ListRow(
                 icon: Icons.account_balance_wallet_outlined,
                 iconColor: AppColors.categoryPalette[i],
                 title: app.label,
-                subtitle: installed
-                    ? 'Installed'
-                    : 'Not installed on this phone',
+                subtitle: switch (installed) {
+                  true => 'Installed',
+                  false => 'Not installed on this phone',
+                  null => 'Couldn’t check. Reinstall Spendo to update',
+                },
                 trailing: Switch(
                   value: selected,
                   // An app that isn't installed can be unticked but not ticked.
-                  onChanged: installed || selected
+                  onChanged: installed != false || selected
                       ? (v) => guardian.toggleApp(app.package, v)
                       : null,
                 ),

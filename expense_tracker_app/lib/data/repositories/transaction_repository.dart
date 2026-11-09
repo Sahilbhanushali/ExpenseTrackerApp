@@ -1,6 +1,8 @@
 import '../datasources/app_database.dart';
 import '../models/loan_payment.dart';
 import '../models/transaction.dart';
+import 'audit_log.dart';
+import 'loan_repository.dart';
 
 class MonthTotal {
   /// Both in paise.
@@ -93,9 +95,39 @@ class TransactionRepository {
       final row = Transaction.fromMap(rows.first);
 
       await txn.delete('txns', where: 'id = ?', whereArgs: [id]);
+      await writeAudit(
+        txn,
+        entity: 'txn',
+        entityId: id,
+        action: 'delete',
+        before: rows.first,
+      );
+      // Refunds of a deleted expense would otherwise reduce spending for
+      // a purchase that no longer exists.
+      final refunds = await txn.query(
+        'txns',
+        where: 'refund_of = ?',
+        whereArgs: [id],
+      );
+      for (final r in refunds) {
+        await txn.delete('txns', where: 'id = ?', whereArgs: [r['id']]);
+        await writeAudit(
+          txn,
+          entity: 'txn',
+          entityId: r['id'] as int,
+          action: 'delete',
+          before: r,
+          after: {'reason': 'expense $id deleted'},
+        );
+      }
 
       final loanId = row.loanId;
       if (loanId == null) return;
+      // An installment's interest entry: undo the whole payment (its
+      // principal movement and the installment's paid amounts) with it.
+      if (await LoanRepository.reversePaymentFor(txn, id)) return;
+      // The item a loan paid for, or a fee: nothing else to roll back.
+      if (row.source == 'loan-purchase' || row.source == 'loan') return;
 
       await txn.rawUpdate(
         'UPDATE loans SET installments_paid = MAX(installments_paid - 1, 0), '
@@ -112,6 +144,70 @@ class TransactionRepository {
           row.date,
         ],
       );
+    });
+  }
+
+  /// Total already refunded against [expenseId], in paise.
+  Future<int> refundedFor(int expenseId) async {
+    final db = await _db.database;
+    final rows = await db.rawQuery(
+      "SELECT SUM(amount) AS total FROM txns WHERE type = 'refund' AND refund_of = ?",
+      [expenseId],
+    );
+    return (rows.first['total'] as num?)?.round() ?? 0;
+  }
+
+  /// Money back for an earlier expense. Keeps the expense's category so the
+  /// category's spending goes down, and goes into [account] (default: the
+  /// account the expense came from). Never more than is left unrefunded.
+  Future<int> addRefund({
+    required int expenseId,
+    required int amountPaise,
+    required String date,
+    String? account,
+    String? note,
+  }) async {
+    if (amountPaise <= 0) {
+      throw ArgumentError.value(amountPaise, 'amount', 'must be > 0');
+    }
+    final db = await _db.database;
+    return db.transaction((txn) async {
+      final rows = await txn.query(
+        'txns',
+        where: "id = ? AND type = 'expense'",
+        whereArgs: [expenseId],
+      );
+      if (rows.isEmpty) throw StateError('Only an expense can be refunded');
+      final expense = Transaction.fromMap(rows.first);
+      final done = await txn.rawQuery(
+        "SELECT SUM(amount) AS total FROM txns WHERE type = 'refund' AND refund_of = ?",
+        [expenseId],
+      );
+      final refunded = (done.first['total'] as num?)?.round() ?? 0;
+      if (refunded + amountPaise > expense.amountPaise) {
+        throw StateError('Refunds would exceed the expense');
+      }
+      final row = Transaction(
+        date: date,
+        category: expense.category,
+        amountPaise: amountPaise,
+        note: note ?? 'Refund: ${expense.note ?? expense.category}',
+        type: TxnType.refund,
+        createdAt: DateTime.now().toIso8601String(),
+        account: account ?? (expense.cardId == null ? expense.account : null),
+        refundOf: expenseId,
+        // Money back on a card purchase goes back to the card.
+        cardId: account == null ? expense.cardId : null,
+      ).toMap()..remove('id');
+      final id = await txn.insert('txns', row);
+      await writeAudit(
+        txn,
+        entity: 'txn',
+        entityId: id,
+        action: 'refund',
+        after: row,
+      );
+      return id;
     });
   }
 
@@ -139,7 +235,34 @@ class TransactionRepository {
     if (counterparty != null) fields['counterparty'] = counterparty;
     if (date != null) fields['date'] = date;
     if (fields.isNotEmpty) {
-      await db.update('txns', fields, where: 'id = ?', whereArgs: [id]);
+      await db.transaction((txn) async {
+        final before = await txn.query(
+          'txns',
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+        if (before.isEmpty) return;
+        if (amountPaise != null && before.first['type'] == 'expense') {
+          final done = await txn.rawQuery(
+            "SELECT SUM(amount) AS total FROM txns "
+            "WHERE type = 'refund' AND refund_of = ?",
+            [id],
+          );
+          final refunded = (done.first['total'] as num?)?.round() ?? 0;
+          if (amountPaise < refunded) {
+            throw StateError('Amount is below what was already refunded');
+          }
+        }
+        await txn.update('txns', fields, where: 'id = ?', whereArgs: [id]);
+        await writeAudit(
+          txn,
+          entity: 'txn',
+          entityId: id,
+          action: 'update',
+          before: {for (final k in fields.keys) k: before.first[k]},
+          after: fields,
+        );
+      });
     }
     return getById(id);
   }
@@ -184,7 +307,7 @@ class TransactionRepository {
       args.add(_isoDate(to));
     }
     if (unassignedOnly) {
-      where.add('account IS NULL');
+      where.add('account IS NULL AND card_id IS NULL AND loan_id IS NULL');
     } else if (account != null) {
       // Same key AccountRepository balances use, so the list matches the
       // balance shown for the account.
@@ -225,19 +348,30 @@ class TransactionRepository {
     return rows.map(Transaction.fromMap).toList().reversed.toList();
   }
 
+  /// Spending is net of refunds received in the same period (rule 9).
+  static MonthTotal _totalsFrom(List<Map<String, Object?>> rows) {
+    int expense = 0, income = 0;
+    for (final r in rows) {
+      final total = (r['total'] as num?)?.round() ?? 0;
+      switch (r['type']) {
+        case 'expense':
+          expense += total;
+        case 'refund':
+          expense -= total;
+        case 'income':
+          income += total;
+      }
+    }
+    return MonthTotal(expense: expense, income: income);
+  }
+
   Future<MonthTotal> monthTotal(String month) async {
     final db = await _db.database;
     final rows = await db.rawQuery(
       "SELECT type, SUM(amount) as total FROM txns WHERE date LIKE ? GROUP BY type",
       ['$month%'],
     );
-    int expense = 0, income = 0;
-    for (final r in rows) {
-      final total = (r['total'] as num?)?.round() ?? 0;
-      if (r['type'] == 'expense') expense = total;
-      if (r['type'] == 'income') income = total;
-    }
-    return MonthTotal(expense: expense, income: income);
+    return _totalsFrom(rows);
   }
 
   /// All-time spare cash: income − expense − outstanding lent money.
@@ -253,7 +387,8 @@ class TransactionRepository {
     for (final r in rows) {
       final total = (r['total'] as num?)?.round() ?? 0;
       if (r['type'] == 'income') income = total;
-      if (r['type'] == 'expense') expense = total;
+      if (r['type'] == 'expense') expense += total;
+      if (r['type'] == 'refund') expense -= total;
       if (r['type'] == 'lent') lent = total;
     }
     return income - expense - lent;
@@ -279,7 +414,12 @@ class TransactionRepository {
       final month = r['month'] as String;
       final total = (r['total'] as num?)?.round() ?? 0;
       if (r['type'] == 'income') income[month] = total;
-      if (r['type'] == 'expense') expense[month] = total;
+      if (r['type'] == 'expense') {
+        expense[month] = (expense[month] ?? 0) + total;
+      }
+      if (r['type'] == 'refund') {
+        expense[month] = (expense[month] ?? 0) - total;
+      }
     }
     return keys
         .map(
@@ -296,7 +436,8 @@ class TransactionRepository {
   Future<Map<String, int>> categoryTotals(String month) async {
     final db = await _db.database;
     final rows = await db.rawQuery(
-      "SELECT category, SUM(amount) as total FROM txns WHERE date LIKE ? AND type = 'expense' GROUP BY category",
+      "SELECT category, SUM(CASE WHEN type = 'refund' THEN -amount ELSE amount END) as total FROM txns "
+      "WHERE date LIKE ? AND type IN ('expense', 'refund') GROUP BY category",
       ['$month%'],
     );
     return {
@@ -313,13 +454,7 @@ class TransactionRepository {
       "SELECT type, SUM(amount) as total FROM txns WHERE date >= ? AND date <= ? GROUP BY type",
       [_isoDate(from), _isoDate(to)],
     );
-    int expense = 0, income = 0;
-    for (final r in rows) {
-      final total = (r['total'] as num?)?.round() ?? 0;
-      if (r['type'] == 'expense') expense = total;
-      if (r['type'] == 'income') income = total;
-    }
-    return MonthTotal(expense: expense, income: income);
+    return _totalsFrom(rows);
   }
 
   /// Category → paise.
@@ -329,7 +464,9 @@ class TransactionRepository {
   ) async {
     final db = await _db.database;
     final rows = await db.rawQuery(
-      "SELECT category, SUM(amount) as total FROM txns WHERE date >= ? AND date <= ? AND type = 'expense' GROUP BY category",
+      "SELECT category, SUM(CASE WHEN type = 'refund' THEN -amount ELSE amount END) as total FROM txns "
+      "WHERE date >= ? AND date <= ? AND type IN ('expense', 'refund') "
+      'GROUP BY category',
       [_isoDate(from), _isoDate(to)],
     );
     return {
@@ -349,8 +486,9 @@ class TransactionRepository {
     final db = await _db.database;
     final len = monthly ? 7 : 10;
     final rows = await db.rawQuery(
-      "SELECT substr(date, 1, $len) as bucket, SUM(amount) as total FROM txns "
-      "WHERE date >= ? AND date <= ? AND type = 'expense' GROUP BY bucket",
+      "SELECT substr(date, 1, $len) as bucket, SUM(CASE WHEN type = 'refund' THEN -amount ELSE amount END) as total FROM txns "
+      "WHERE date >= ? AND date <= ? AND type IN ('expense', 'refund') "
+      'GROUP BY bucket',
       [_isoDate(from), _isoDate(to)],
     );
     return {

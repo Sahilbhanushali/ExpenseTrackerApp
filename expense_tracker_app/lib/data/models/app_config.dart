@@ -30,6 +30,14 @@ class AppConfig {
   /// 'system' | 'light' | 'dark'.
   final String themeMode;
 
+  /// Which period the dashboard summarises: 'month' (calendar) or 'cycle'
+  /// (salary to salary). Both stay available everywhere; this is the default.
+  final String periodView;
+
+  /// The month budgets above were copied into the `budgets` table (v15),
+  /// which is the source of truth from then on.
+  final bool budgetsImported;
+
   const AppConfig({
     this.currency = '₹',
     this.locale = 'en-IN',
@@ -38,6 +46,8 @@ class AppConfig {
     this.customCategories = const {},
     this.budgets = const {},
     this.themeMode = 'system',
+    this.periodView = 'month',
+    this.budgetsImported = false,
   });
 
   AppConfig copyWith({
@@ -48,6 +58,8 @@ class AppConfig {
     Map<String, List<String>>? customCategories,
     Map<String, int>? budgets,
     String? themeMode,
+    String? periodView,
+    bool? budgetsImported,
   }) {
     return AppConfig(
       currency: currency ?? this.currency,
@@ -57,6 +69,8 @@ class AppConfig {
       customCategories: customCategories ?? this.customCategories,
       budgets: budgets ?? this.budgets,
       themeMode: themeMode ?? this.themeMode,
+      periodView: periodView ?? this.periodView,
+      budgetsImported: budgetsImported ?? this.budgetsImported,
     );
   }
 
@@ -72,6 +86,8 @@ class AppConfig {
     'customCategories': customCategories,
     'budgets': budgets,
     'themeMode': themeMode,
+    'periodView': periodView,
+    'budgetsImported': budgetsImported,
   };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -101,6 +117,8 @@ class AppConfig {
         'dark' => 'dark',
         _ => 'system',
       },
+      periodView: json['periodView'] == 'cycle' ? 'cycle' : 'month',
+      budgetsImported: json['budgetsImported'] == true,
     );
   }
 }

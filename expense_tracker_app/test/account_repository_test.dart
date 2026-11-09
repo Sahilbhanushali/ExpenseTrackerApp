@@ -98,6 +98,9 @@ void main() {
     );
 
     test('transfersFor returns both directions, newest first', () async {
+      for (final name in ['Cash', 'HDFC', 'Wallet']) {
+        await accounts.add(name, 0);
+      }
       await accounts.addTransfer(transfer('Cash', 'HDFC', '2026-08-01'));
       await accounts.addTransfer(transfer('HDFC', 'Wallet', '2026-08-03'));
       await accounts.addTransfer(transfer('Cash', 'Wallet', '2026-08-02'));

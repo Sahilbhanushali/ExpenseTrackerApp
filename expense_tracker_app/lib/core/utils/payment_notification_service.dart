@@ -47,6 +47,9 @@ class PaymentNotificationService {
     'com.infrasofttech.indianbank': 'Indian Bank',
     'com.YESBANK': 'YES Bank',
     'com.rblbank.mobank': 'RBL Bank',
+    // Play Store id of the slice app; com.slice.android is kept in case an
+    // older build used it.
+    'indwin.c3.shareapp': 'slice',
     'com.slice.android': 'slice',
   };
 

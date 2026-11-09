@@ -123,9 +123,7 @@ class SpendingLineChart extends StatelessWidget {
                   children: [
                     TextSpan(
                       text: pt.tooltipLabel,
-                      style: text.labelSmall?.copyWith(
-                        color: p.onInk.withValues(alpha: 0.7),
-                      ),
+                      style: text.labelSmall?.copyWith(color: p.onInkMuted),
                     ),
                   ],
                 );

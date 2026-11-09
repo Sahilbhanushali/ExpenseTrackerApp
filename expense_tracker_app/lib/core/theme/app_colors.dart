@@ -90,10 +90,27 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color textSecondary;
   final Color textTertiary;
 
-  /// The high-contrast "ink" surface used by the nav bar and primary
-  /// buttons, and the colour drawn on top of it.
+  /// The dark "ink" surface of hero cards, the nav bar, snackbars and
+  /// tooltips — dark in both themes — and the colour drawn on top of it.
   final Color inkSurface;
   final Color onInk;
+
+  /// Secondary text on ink.
+  final Color onInkMuted;
+
+  /// Status colours tuned for the ink surface. The plain [income] /
+  /// [warning] / [expense] are tuned for [surface] and fail contrast on ink.
+  final Color inkIncome;
+  final Color inkWarning;
+  final Color inkExpense;
+  final Color inkAccent;
+
+  /// Primary buttons, selected chips/segments and FABs.
+  final Color action;
+  final Color onAction;
+
+  /// Text and icons on a solid status fill (e.g. a red delete background).
+  final Color onStatus;
   final Color income;
   final Color expense;
   final Color warning;
@@ -110,6 +127,14 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.textTertiary,
     required this.inkSurface,
     required this.onInk,
+    required this.onInkMuted,
+    required this.inkIncome,
+    required this.inkWarning,
+    required this.inkExpense,
+    required this.inkAccent,
+    required this.action,
+    required this.onAction,
+    required this.onStatus,
     required this.income,
     required this.expense,
     required this.warning,
@@ -124,9 +149,18 @@ class AppPalette extends ThemeExtension<AppPalette> {
     border: Color(0xFFE3E6EC),
     textPrimary: Color(0xFF0E1A33),
     textSecondary: Color(0xFF586174),
-    textTertiary: Color(0xFF7D8699),
+    // Every text colour here is ≥ 4.5:1 on surface and background.
+    textTertiary: Color(0xFF667085),
     inkSurface: AppColors.ink,
     onInk: Color(0xFFFFFFFF),
+    onInkMuted: Color(0xFFB4B9C3),
+    inkIncome: Color(0xFF34D399),
+    inkWarning: Color(0xFFFBBF24),
+    inkExpense: Color(0xFFFF8A8E),
+    inkAccent: Color(0xFF9DB8FF),
+    action: AppColors.ink,
+    onAction: Color(0xFFFFFFFF),
+    onStatus: Color(0xFFFFFFFF),
     income: AppColors.income,
     expense: AppColors.expense,
     warning: AppColors.warning,
@@ -141,9 +175,19 @@ class AppPalette extends ThemeExtension<AppPalette> {
     border: Color(0xFF263149),
     textPrimary: Color(0xFFF2F4F8),
     textSecondary: Color(0xFFA6AFC0),
-    textTertiary: Color(0xFF7A8499),
-    inkSurface: Color(0xFFF2F4F8),
-    onInk: AppColors.ink,
+    textTertiary: Color(0xFF8E98AC),
+    // Stays dark (an elevated navy) rather than flipping to white, so the
+    // status colours drawn on hero cards keep their contrast.
+    inkSurface: Color(0xFF1F2C4D),
+    onInk: Color(0xFFFFFFFF),
+    onInkMuted: Color(0xFFB6BCC8),
+    inkIncome: Color(0xFF34D399),
+    inkWarning: Color(0xFFFBBF24),
+    inkExpense: Color(0xFFFF8A8E),
+    inkAccent: Color(0xFF9DB8FF),
+    action: AppColors.blueLight,
+    onAction: AppColors.ink,
+    onStatus: AppColors.ink,
     income: AppColors.incomeDark,
     expense: AppColors.expenseDark,
     warning: AppColors.warningDark,
@@ -168,6 +212,14 @@ class AppPalette extends ThemeExtension<AppPalette> {
       textTertiary: l(textTertiary, other.textTertiary),
       inkSurface: l(inkSurface, other.inkSurface),
       onInk: l(onInk, other.onInk),
+      onInkMuted: l(onInkMuted, other.onInkMuted),
+      inkIncome: l(inkIncome, other.inkIncome),
+      inkWarning: l(inkWarning, other.inkWarning),
+      inkExpense: l(inkExpense, other.inkExpense),
+      inkAccent: l(inkAccent, other.inkAccent),
+      action: l(action, other.action),
+      onAction: l(onAction, other.onAction),
+      onStatus: l(onStatus, other.onStatus),
       income: l(income, other.income),
       expense: l(expense, other.expense),
       warning: l(warning, other.warning),
@@ -181,3 +233,28 @@ extension AppPaletteContext on BuildContext {
   AppPalette get palette =>
       Theme.of(this).extension<AppPalette>() ?? AppPalette.light;
 }
+
+/// WCAG contrast ratio between two opaque colours (1–21).
+double contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance(), lb = b.computeLuminance();
+  final hi = la > lb ? la : lb, lo = la > lb ? lb : la;
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/// [fg] nudged darker or lighter until it reaches [min] contrast on [bg]
+/// (4.5 for text, 3 for icons). Keeps the hue where it can.
+Color ensureContrast(Color fg, Color bg, {double min = 4.5}) {
+  if (contrastRatio(fg, bg) >= min) return fg;
+  final towards = bg.computeLuminance() > 0.4 ? Colors.black : Colors.white;
+  for (var i = 1; i <= 10; i++) {
+    final c = Color.lerp(fg, towards, i / 10)!;
+    if (contrastRatio(c, bg) >= min) return c;
+  }
+  return towards;
+}
+
+/// White or ink, whichever reads better on a solid [bg].
+Color bestOn(Color bg) =>
+    contrastRatio(Colors.white, bg) >= contrastRatio(AppColors.ink, bg)
+    ? Colors.white
+    : AppColors.ink;

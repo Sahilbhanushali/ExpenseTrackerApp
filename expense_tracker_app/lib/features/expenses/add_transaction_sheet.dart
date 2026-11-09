@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import '../../core/constants/categories.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/utils/budget_alerts.dart';
 import '../../core/utils/expense_parser.dart';
 import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
@@ -17,12 +16,17 @@ import '../../core/utils/sms_parser.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_chip.dart';
 import '../../core/widgets/category_icon.dart';
-import '../../data/models/recurring_bill.dart';
+import '../../data/models/loan.dart';
+import '../../data/repositories/loan_repository.dart';
 import '../../data/models/transaction.dart';
 import '../accounts/accounts_controller.dart';
 import '../lending/lending_controller.dart';
 import '../recurring/recurring_controller.dart';
 import '../settings/settings_controller.dart';
+import '../budgets/budget_controller.dart';
+import '../loans/loans_controller.dart';
+import '../loans/loans_screen.dart';
+import '../cards/cards_controller.dart';
 import '../guardian/guardian_controller.dart';
 import 'expenses_controller.dart';
 
@@ -79,6 +83,11 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   final _noteController = TextEditingController();
   TxnType _type = TxnType.expense;
   String _category = kDefaultCategory;
+  IncomeSource _source = IncomeSource.other;
+  bool _recurringIncome = false;
+
+  /// Null means the default account.
+  String? _account;
   DateTime _date = DateTime.now();
   String? _amountError;
 
@@ -327,25 +336,21 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   /// it should find the matching active EMI (by category/note) and apply
   /// this month's installment the same way "Log now" on Recurring & EMI
   /// does, decrementing what's left.
+  /// "paid emi fridge" — pays the next installment of the matching loan,
+  /// split into principal (lowers the debt) and interest (an expense).
+  /// With no matching loan it's logged as a plain expense, as before.
   Future<void> _submitEmiPayment(ParsedTransaction p) async {
-    final recurring = context.read<RecurringController>();
+    final loans = context.read<LoansController>();
     final tokens = p.note
         .toLowerCase()
         .split(RegExp(r'\s+'))
         .where((t) => t.length >= 3)
         .toList();
-    final candidates = recurring.bills
-        .where(
-          (b) =>
-              b.type == RecurringType.expense &&
-              b.installmentsRemaining != null,
-        )
-        .where((b) {
-          if (tokens.isEmpty) return false;
-          final haystack = '${b.category} ${b.note ?? ''}'.toLowerCase();
-          return tokens.any((t) => haystack.contains(t));
-        })
-        .toList();
+    final candidates = loans.active.where((l) {
+      if (tokens.isEmpty || l.next == null) return false;
+      final hay = '${l.loan.name} ${l.loan.lender ?? ''}'.toLowerCase();
+      return tokens.any(hay.contains);
+    }).toList();
 
     if (candidates.isEmpty) {
       final messenger = ScaffoldMessenger.of(context);
@@ -360,88 +365,84 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         ),
       );
       if (!mounted) return;
-      await context.read<AccountsController>().refresh();
-      if (!mounted) return;
+      Navigator.of(context).pop();
       messenger.showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            p.note.isEmpty
-                ? 'No matching EMI found — logged as an expense instead.'
-                : 'No EMI found for "${p.note}" — logged as an expense instead.',
+            'No matching loan, so it was logged as an expense. Add the loan '
+            'in Loans & EMI to split future payments.',
           ),
         ),
       );
-      HapticFeedback.mediumImpact();
-      if (mounted) Navigator.of(context).pop();
       return;
     }
 
     final target = candidates.length == 1
         ? candidates.first
-        : await _pickEmiToPay(candidates);
+        : await showModalBottomSheet<LoanStanding>(
+            context: context,
+            showDragHandle: true,
+            builder: (sheet) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final l in candidates)
+                    ListTile(
+                      title: Text(l.loan.name),
+                      subtitle: Text(
+                        'Next ${formatMoney(l.next!.remaining, '₹')}',
+                      ),
+                      onTap: () => Navigator.pop(sheet, l),
+                    ),
+                ],
+              ),
+            ),
+          );
     if (target == null || !mounted) return;
-
-    final result = await recurring.logDue(target);
-    if (!mounted) return;
-    await context.read<AccountsController>().refresh();
-    if (!mounted) return;
-    HapticFeedback.mediumImpact();
+    final account =
+        target.loan.account ??
+        context.read<AccountsController>().active.firstOrNull?.account.name;
+    if (account == null) return;
     final messenger = ScaffoldMessenger.of(context);
-    Navigator.of(context).pop();
-    messenger.showSnackBar(SnackBar(content: Text(result.message)));
-  }
-
-  Future<RecurringBill?> _pickEmiToPay(List<RecurringBill> candidates) {
-    return showDialog<RecurringBill>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Which EMI?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: candidates
-              .map(
-                (b) => ListTile(
-                  title: Text(
-                    b.note?.isNotEmpty == true ? b.note! : b.category,
-                  ),
-                  subtitle: Text('${b.installmentsRemaining} left'),
-                  trailing: Text(formatMoney(b.amountPaise, '₹')),
-                  onTap: () => Navigator.pop(context, b),
-                ),
-              )
-              .toList(),
+    try {
+      final r = await loans.payInstallment(
+        target,
+        amountPaise: p.amountPaise! > target.next!.remaining
+            ? target.next!.remaining
+            : p.amountPaise,
+        account: account,
+      );
+      if (!mounted) return;
+      await context.read<AccountsController>().refresh();
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      Navigator.of(context).pop();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'EMI paid: ${formatMoney(r.principal, '₹')} principal, '
+            '${formatMoney(r.interest, '₹')} interest'
+            '${r.loanClosed ? ' — loan closed!' : ''}',
+          ),
         ),
-      ),
-    );
+      );
+    } on LoanException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   /// "Bought fridge for 65000 on emi for 6 months, pay 10000 every month" —
-  /// creates the EMI outright instead of logging one plain expense, the
-  /// same as filling out the Recurring & EMI screen's EMI form by hand.
+  /// opens the loan form prefilled, so the EMI gets a real schedule with
+  /// principal and interest tracked, instead of a bare reminder.
   Future<void> _submitEmiCreate(ParsedTransaction p) async {
-    final currency = context.read<SettingsController>().config.currency;
-    final recurring = context.read<RecurringController>();
-    await recurring.logEmi(
-      monthlyPaise: p.amountPaise!,
-      category: p.category,
-      note: p.note.isEmpty ? null : p.note,
-      months: p.emiMonths!,
-      dueDay: DateTime.now().day,
-    );
-    if (!mounted) return;
-    await context.read<ExpensesController>().refresh();
-    if (!mounted) return;
-    await context.read<AccountsController>().refresh();
-    if (!mounted) return;
-    HapticFeedback.mediumImpact();
-    final messenger = ScaffoldMessenger.of(context);
-    Navigator.of(context).pop();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          'EMI created: ${formatMoney(p.amountPaise!, currency)}/month for ${p.emiMonths} months',
-        ),
-      ),
+    final nav = Navigator.of(context);
+    final root = nav.context;
+    nav.pop();
+    await showLoanForm(
+      root,
+      name: p.note.isEmpty ? p.category : p.note,
+      emiPaise: p.amountPaise,
+      months: p.emiMonths,
     );
   }
 
@@ -562,14 +563,22 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
         note: note,
         type: _type,
         date: iso,
+        account: _account != null && _account!.startsWith('card:')
+            ? null
+            : _account,
+        cardId: _account != null && _account!.startsWith('card:')
+            ? int.parse(_account!.substring(5))
+            : null,
+        incomeSource: _source,
+        recurringIncome: _recurringIncome,
       ),
     );
   }
 
-  /// Logs the transaction, then — for an expense dated in the current month —
-  /// checks whether it just pushed the overall or category budget across the
-  /// 80%/100% line, and surfaces a warning the moment that happens (parity
-  /// with bot.py's in-chat threshold warnings, which the app was missing).
+  /// Logs the transaction, then — for an expense — checks whether it just
+  /// pushed any budget (cycle, month, week, day or custom; overall or this
+  /// category) past its caution level, the limit, or over it, and says so
+  /// the moment it happens.
   Future<void> _logWithWarnings({
     required String category,
     String? note,
@@ -577,15 +586,9 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     required String date,
     required Future<void> Function() logTxn,
   }) async {
-    final expenses = context.read<ExpensesController>();
     final settings = context.read<SettingsController>();
-    final today = DateTime.now();
-    final isCurrentMonth = date.startsWith(
-      '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}',
-    );
-
-    final beforeSpent = expenses.monthTotal.expense;
-    final beforeCat = expenses.categoryTotals[category] ?? 0;
+    final budgets = context.read<BudgetController?>();
+    final before = budgets?.levels() ?? const {};
 
     await logTxn();
     if (!mounted) return;
@@ -595,25 +598,25 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
     await context.read<AccountsController>().refresh();
     if (!mounted) return;
 
-    if (isExpense && isCurrentMonth) {
-      final config = settings.config;
-      final budget = settings.config.monthlyBudgetPaise;
-      final catCap = config.budgets[category] ?? 0;
-      final warnings = buildThresholdWarnings(
-        beforeSpent: beforeSpent,
-        afterSpent: expenses.monthTotal.expense,
-        budget: budget,
-        beforeCat: beforeCat,
-        afterCat: expenses.categoryTotals[category] ?? 0,
-        catCap: catCap,
-        category: category,
-        fmt: (v) => formatMoney(v, config.currency),
-      );
+    if (isExpense && budgets != null) {
+      // The ledger refresh has already notified the budgets; make sure the
+      // levels reflect this expense before comparing.
+      await budgets.refresh();
+      if (!mounted) return;
+      final warnings = budgets.crossedSince(before, settings.config.currency);
       if (warnings.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(warnings.join('\n')),
-            backgroundColor: context.palette.expense,
+            content: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: context.palette.inkWarning,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text(warnings.join('\n'))),
+              ],
+            ),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -1071,6 +1074,47 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
+        if (_type == TxnType.income) ...[
+          Text('Source', style: text.titleSmall),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final s in IncomeSource.values)
+                AppChoiceChip(
+                  label: incomeSourceLabel(s),
+                  selected: _source == s,
+                  onTap: () => setState(() => _source = s),
+                ),
+            ],
+          ),
+          if (_source == IncomeSource.salary)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                'To start a new salary cycle, use Salary & cycles → Record '
+                'salary instead.',
+                style: text.bodySmall,
+              ),
+            ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Repeats regularly'),
+            subtitle: const Text('Like a retainer or rent you receive'),
+            value: _recurringIncome,
+            onChanged: (v) => setState(() => _recurringIncome = v),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+        ],
+        _AccountPicker(
+          value: _account,
+          label: _type == TxnType.income ? 'Received in' : 'Paid from',
+          // Income can't arrive on a credit card.
+          includeCards: _type == TxnType.expense,
+          onChanged: (v) => setState(() => _account = v),
+        ),
+        const SizedBox(height: AppSpacing.sm + 2),
         TextField(
           controller: _noteController,
           textCapitalization: TextCapitalization.sentences,
@@ -1176,6 +1220,55 @@ class _CategoryOption extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Which account the money moved through. Shows only active accounts and
+/// starts on the default one.
+class _AccountPicker extends StatelessWidget {
+  /// An account name, or `card:<id>` for a credit card.
+  final String? value;
+  final String label;
+  final bool includeCards;
+  final ValueChanged<String?> onChanged;
+  const _AccountPicker({
+    required this.value,
+    required this.label,
+    required this.onChanged,
+    this.includeCards = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts = context.watch<AccountsController>().active;
+    final cards = includeCards
+        ? context.watch<CardsController?>()?.active ?? const []
+        : const <CardSummary>[];
+    if (accounts.isEmpty && cards.isEmpty) return const SizedBox.shrink();
+    final options = <(String, String)>[
+      for (final a in accounts) (a.account.name, a.account.name),
+      for (final c in cards) ('card:${c.card.id}', '${c.card.label} (card)'),
+    ];
+    final values = options.map((o) => o.$1).toSet();
+    final fallback =
+        accounts.where((a) => a.account.isDefault).firstOrNull?.account.name ??
+        options.first.$1;
+    return DropdownButtonFormField<String>(
+      initialValue: values.contains(value) ? value : fallback,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(
+          value != null && value!.startsWith('card:')
+              ? Icons.credit_card_rounded
+              : Icons.account_balance_wallet_outlined,
+        ),
+      ),
+      items: [
+        for (final (v, l) in options)
+          DropdownMenuItem(value: v, child: Text(l)),
+      ],
+      onChanged: onChanged,
     );
   }
 }

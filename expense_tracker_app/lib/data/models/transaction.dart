@@ -1,4 +1,35 @@
-enum TxnType { expense, income, lent, borrowed }
+/// `refund` is money back for an earlier expense: it reduces spending
+/// (never counts as income) and links to the expense via [Transaction.refundOf].
+enum TxnType { expense, income, lent, borrowed, refund }
+
+/// Where income came from. Only received income is a transaction; expected
+/// income lives in `expected_income` and never touches balances.
+enum IncomeSource {
+  salary,
+  freelance,
+  side,
+  business,
+  bonus,
+  incentive,
+  reimbursement,
+  interest,
+  other,
+}
+
+String incomeSourceLabel(IncomeSource s) => switch (s) {
+  IncomeSource.salary => 'Salary',
+  IncomeSource.freelance => 'Freelance',
+  IncomeSource.side => 'Side income',
+  IncomeSource.business => 'Business',
+  IncomeSource.bonus => 'Bonus',
+  IncomeSource.incentive => 'Incentive',
+  IncomeSource.reimbursement => 'Reimbursement',
+  IncomeSource.interest => 'Interest',
+  IncomeSource.other => 'Other',
+};
+
+IncomeSource? incomeSourceFrom(String? v) =>
+    IncomeSource.values.where((s) => s.name == v).firstOrNull;
 
 TxnType txnTypeFromString(String value) => TxnType.values.firstWhere(
   (t) => t.name == value,
@@ -49,7 +80,24 @@ class Transaction {
     this.loanId,
     this.source = 'manual',
     this.externalRef,
+    this.incomeSource,
+    this.recurringIncome = false,
+    this.refundOf,
+    this.cardId,
   });
+
+  /// Spent (or refunded) on this credit card rather than from an account:
+  /// it adds to the card's outstanding, not to any bank balance.
+  final int? cardId;
+
+  /// Income only.
+  final IncomeSource? incomeSource;
+
+  /// Income only: expected to repeat (salary, retainer) vs one-off.
+  final bool recurringIncome;
+
+  /// Refunds only: the expense this money came back for.
+  final int? refundOf;
 
   bool get isAutoDetected => source != 'manual';
 
@@ -71,6 +119,10 @@ class Transaction {
     int? loanId,
     String? source,
     String? externalRef,
+    IncomeSource? incomeSource,
+    bool? recurringIncome,
+    int? refundOf,
+    int? cardId,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -89,6 +141,10 @@ class Transaction {
       loanId: loanId ?? this.loanId,
       source: source ?? this.source,
       externalRef: externalRef ?? this.externalRef,
+      incomeSource: incomeSource ?? this.incomeSource,
+      recurringIncome: recurringIncome ?? this.recurringIncome,
+      refundOf: refundOf ?? this.refundOf,
+      cardId: cardId ?? this.cardId,
     );
   }
 
@@ -108,6 +164,10 @@ class Transaction {
       'loan_id': loanId,
       'source': source,
       'external_ref': externalRef,
+      'income_source': incomeSource?.name,
+      'recurring_income': recurringIncome ? 1 : 0,
+      'refund_of': refundOf,
+      'card_id': cardId,
     };
   }
 
@@ -127,6 +187,10 @@ class Transaction {
       loanId: map['loan_id'] as int?,
       source: map['source'] as String? ?? 'manual',
       externalRef: map['external_ref'] as String?,
+      incomeSource: incomeSourceFrom(map['income_source'] as String?),
+      recurringIncome: map['recurring_income'] == 1,
+      refundOf: map['refund_of'] as int?,
+      cardId: map['card_id'] as int?,
     );
   }
 }

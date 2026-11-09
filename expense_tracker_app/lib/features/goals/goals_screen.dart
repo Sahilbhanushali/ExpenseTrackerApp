@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/widgets/form_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money.dart';
@@ -18,33 +19,25 @@ class GoalsScreen extends StatelessWidget {
   Future<void> _showAddGoal(BuildContext context) async {
     final nameController = TextEditingController();
     final targetController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New savings goal'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Goal name'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: targetController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Target amount'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: const Text('New savings goal'),
+      submitLabel: 'Add',
+      validate: () =>
+          requireText(nameController.text, 'a goal name') ??
+          positiveAmountError(targetController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Goal name'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: targetController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Target amount'),
           ),
         ],
       ),
@@ -67,33 +60,25 @@ class GoalsScreen extends StatelessWidget {
     final targetController = TextEditingController(
       text: paiseToEditString(targetPaise),
     );
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit goal'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Goal name'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: targetController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Target amount'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: const Text('Edit goal'),
+      submitLabel: 'Save',
+      validate: () =>
+          requireText(nameController.text, 'a goal name') ??
+          positiveAmountError(targetController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Goal name'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: targetController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Target amount'),
           ),
         ],
       ),
@@ -115,26 +100,16 @@ class GoalsScreen extends StatelessWidget {
     String name,
   ) async {
     final amountController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add to "$name"'),
-        content: TextField(
-          controller: amountController,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Amount'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
+    final result = await showFormSheet(
+      context,
+      title: Text('Add to "$name"'),
+      submitLabel: 'Add',
+      validate: () => positiveAmountError(amountController.text),
+      builder: (context, setState) => TextField(
+        controller: amountController,
+        keyboardType: TextInputType.number,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Amount'),
       ),
     );
     if (result == true && context.mounted) {

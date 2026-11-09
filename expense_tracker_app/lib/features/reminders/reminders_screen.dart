@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/widgets/form_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/widgets/app_card.dart';
@@ -39,96 +40,72 @@ class RemindersScreen extends StatelessWidget {
         existing?.dateTime ?? DateTime.now().add(const Duration(hours: 1));
     var repeat = existing?.repeat ?? ReminderRepeat.none;
 
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(existing == null ? 'New reminder' : 'Edit reminder'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: titleController,
-                  autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Title'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: noteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Note (optional)',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.event_outlined),
-                  title: Text(_formatWhen(dateTime)),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: dateTime,
-                      firstDate: DateTime.now().subtract(
-                        const Duration(days: 1),
-                      ),
-                      lastDate: DateTime.now().add(const Duration(days: 3650)),
-                    );
-                    if (date == null || !context.mounted) return;
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: TimeOfDay.fromDateTime(dateTime),
-                    );
-                    if (time == null) return;
-                    setState(() {
-                      dateTime = DateTime(
-                        date.year,
-                        date.month,
-                        date.day,
-                        time.hour,
-                        time.minute,
-                      );
-                    });
-                  },
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                SegmentedButton<ReminderRepeat>(
-                  segments: const [
-                    ButtonSegment(
-                      value: ReminderRepeat.none,
-                      label: Text('Once'),
-                    ),
-                    ButtonSegment(
-                      value: ReminderRepeat.daily,
-                      label: Text('Daily'),
-                    ),
-                    ButtonSegment(
-                      value: ReminderRepeat.weekly,
-                      label: Text('Weekly'),
-                    ),
-                    ButtonSegment(
-                      value: ReminderRepeat.monthly,
-                      label: Text('Monthly'),
-                    ),
-                  ],
-                  selected: {repeat},
-                  onSelectionChanged: (s) => setState(() => repeat = s.first),
-                ),
-              ],
-            ),
+    final saved = await showFormSheet(
+      context,
+      title: Text(existing == null ? 'New reminder' : 'Edit reminder'),
+      submitLabel: 'Save',
+      validate: () => requireText(titleController.text, 'a title'),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: titleController,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Title'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: noteController,
+            decoration: const InputDecoration(labelText: 'Note (optional)'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_outlined),
+            title: Text(_formatWhen(dateTime)),
+            onTap: () async {
+              final date = await showDatePicker(
+                context: context,
+                initialDate: dateTime,
+                firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                lastDate: DateTime.now().add(const Duration(days: 3650)),
+              );
+              if (date == null || !context.mounted) return;
+              final time = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay.fromDateTime(dateTime),
+              );
+              if (time == null) return;
+              setState(() {
+                dateTime = DateTime(
+                  date.year,
+                  date.month,
+                  date.day,
+                  time.hour,
+                  time.minute,
+                );
+              });
+            },
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SegmentedButton<ReminderRepeat>(
+            segments: const [
+              ButtonSegment(value: ReminderRepeat.none, label: Text('Once')),
+              ButtonSegment(value: ReminderRepeat.daily, label: Text('Daily')),
+              ButtonSegment(
+                value: ReminderRepeat.weekly,
+                label: Text('Weekly'),
+              ),
+              ButtonSegment(
+                value: ReminderRepeat.monthly,
+                label: Text('Monthly'),
+              ),
+            ],
+            selected: {repeat},
+            onSelectionChanged: (s) => setState(() => repeat = s.first),
+          ),
+        ],
       ),
     );
     if (saved != true || !context.mounted) return;

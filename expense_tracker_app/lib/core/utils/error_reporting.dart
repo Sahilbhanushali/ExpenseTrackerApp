@@ -38,8 +38,13 @@ void installErrorHandlers(GlobalKey<NavigatorState> navigatorKey) {
 void showErrorSnack(BuildContext context, String message) {
   ScaffoldMessenger.maybeOf(context)?.showSnackBar(
     SnackBar(
-      content: Text(message),
-      backgroundColor: AppColors.expense,
+      content: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, color: context.palette.inkExpense),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(message)),
+        ],
+      ),
       behavior: SnackBarBehavior.floating,
     ),
   );

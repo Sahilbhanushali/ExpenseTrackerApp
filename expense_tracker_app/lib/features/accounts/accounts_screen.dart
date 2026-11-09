@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/widgets/form_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money.dart';
@@ -15,6 +16,10 @@ import '../../core/widgets/staggered_list.dart';
 import '../../data/models/account.dart';
 import '../expenses/transactions_screen.dart';
 import '../settings/settings_controller.dart';
+import '../../core/widgets/page_transitions.dart';
+import '../../core/widgets/section_header.dart';
+import 'account_detail_screen.dart';
+import 'account_form_sheet.dart';
 import 'accounts_controller.dart';
 
 String _typeLabel(AccountType t) => switch (t) {
@@ -33,199 +38,42 @@ class AccountsScreen extends StatelessWidget {
   const AccountsScreen({super.key});
 
   Future<void> _showAddAccount(BuildContext context) async {
-    final nameController = TextEditingController();
-    final balanceController = TextEditingController(text: '0');
-    final currentValueController = TextEditingController();
-    AccountType type = AccountType.cash;
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Add account'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name (e.g. cash, bank)',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: balanceController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: type == AccountType.cash
-                      ? 'Opening balance'
-                      : 'Amount invested / set aside',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SegmentedButton<AccountType>(
-                segments: const [
-                  ButtonSegment(value: AccountType.cash, label: Text('Cash')),
-                  ButtonSegment(
-                    value: AccountType.investment,
-                    label: Text('Investment'),
-                  ),
-                  ButtonSegment(
-                    value: AccountType.emergencyFund,
-                    label: Text('Emergency'),
-                  ),
-                ],
-                selected: {type},
-                onSelectionChanged: (s) => setState(() => type = s.first),
-              ),
-              if (type == AccountType.investment) ...[
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: currentValueController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Current value (optional)',
-                    helperText: 'Leave blank if it matches what you put in',
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add'),
-            ),
-          ],
-        ),
-      ),
+    final controller = context.read<AccountsController>();
+    final r = await showAccountForm(context, nameTaken: controller.nameTaken);
+    if (r == null) return;
+    await controller.add(
+      r.name,
+      r.openingBalancePaise,
+      type: r.type,
+      currentValuePaise: r.currentValuePaise,
+      bankName: r.bankName,
+      last4: r.last4,
+      roles: r.roles,
+      bankType: r.bankType,
+      holdPaise: r.holdPaise,
     );
-    if (result == true && context.mounted) {
-      final name = nameController.text.trim();
-      final balance = parseRupeesToPaise(balanceController.text) ?? 0;
-      if (name.isEmpty) return;
-      final controller = context.read<AccountsController>();
-      if (controller.nameTaken(name)) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Account '$name' already exists.")),
-          );
-        }
-        return;
-      }
-      final currentValue = type == AccountType.investment
-          ? parseRupeesToPaise(currentValueController.text)
-          : null;
-      await controller.add(
-        name,
-        balance,
-        type: type,
-        currentValuePaise: currentValue,
-      );
-    }
   }
 
   Future<void> _showEditAccount(BuildContext context, AccountBalance a) async {
-    final nameController = TextEditingController(text: a.account.name);
-    final balanceController = TextEditingController(
-      text: paiseToEditString(a.account.openingBalancePaise),
-    );
-    final currentValueController = TextEditingController(
-      text: a.account.currentValuePaise == null
-          ? ''
-          : paiseToEditString(a.account.currentValuePaise!),
-    );
-    AccountType type = a.account.type;
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Edit account'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: balanceController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: type == AccountType.cash
-                      ? 'Opening balance'
-                      : 'Amount invested / set aside',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              SegmentedButton<AccountType>(
-                segments: const [
-                  ButtonSegment(value: AccountType.cash, label: Text('Cash')),
-                  ButtonSegment(
-                    value: AccountType.investment,
-                    label: Text('Investment'),
-                  ),
-                  ButtonSegment(
-                    value: AccountType.emergencyFund,
-                    label: Text('Emergency'),
-                  ),
-                ],
-                selected: {type},
-                onSelectionChanged: (s) => setState(() => type = s.first),
-              ),
-              if (type == AccountType.investment) ...[
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: currentValueController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Current value (optional)',
-                    helperText: 'Leave blank if it matches what you put in',
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (result != true || !context.mounted) return;
-    final name = nameController.text.trim();
-    final balance = parseRupeesToPaise(balanceController.text);
-    if (name.isEmpty || balance == null) return;
     final controller = context.read<AccountsController>();
-    if (name != a.account.name &&
-        controller.nameTaken(name, excludeId: a.account.id)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Account '$name' already exists.")),
-        );
-      }
-      return;
-    }
-    final currentValue = type == AccountType.investment
-        ? parseRupeesToPaise(currentValueController.text)
-        : null;
+    final r = await showAccountForm(
+      context,
+      existing: a.account,
+      nameTaken: (n) => controller.nameTaken(n, excludeId: a.account.id),
+    );
+    if (r == null) return;
     await controller.update(
       a.account.id!,
-      name: name,
-      openingBalancePaise: balance,
-      type: type,
-      currentValue: currentValue,
+      name: r.name,
+      openingBalancePaise: r.openingBalancePaise,
+      type: r.type,
+      currentValue: r.currentValuePaise,
+      bankName: r.bankName ?? '',
+      last4: r.last4 ?? '',
+      roles: r.roles,
+      status: r.status,
+      bankType: r.bankType,
+      holdPaise: r.holdPaise,
     );
   }
 
@@ -289,109 +137,34 @@ class AccountsScreen extends StatelessWidget {
 
     var moveTo = others.first;
     if (!context.mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Delete this account?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '"${a.account.name}" has $linked linked '
-                '${linked == 1 ? 'record' : 'records'}. Move them to:',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<String>(
-                initialValue: moveTo,
-                decoration: const InputDecoration(labelText: 'Move history to'),
-                items: others
-                    .map((n) => DropdownMenuItem(value: n, child: Text(n)))
-                    .toList(),
-                onChanged: (v) => setState(() => moveTo = v ?? moveTo),
-              ),
-            ],
+    final confirmed = await showFormSheet(
+      context,
+      title: const Text('Delete this account?'),
+      submitLabel: 'Move & delete',
+      destructive: true,
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '"${a.account.name}" has $linked linked '
+            '${linked == 1 ? 'record' : 'records'}. Move them to:',
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.tonal(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Move & delete'),
-            ),
-          ],
-        ),
+          const SizedBox(height: AppSpacing.md),
+          DropdownButtonFormField<String>(
+            initialValue: moveTo,
+            decoration: const InputDecoration(labelText: 'Move history to'),
+            items: others
+                .map((n) => DropdownMenuItem(value: n, child: Text(n)))
+                .toList(),
+            onChanged: (v) => setState(() => moveTo = v ?? moveTo),
+          ),
+        ],
       ),
     );
 
     if (confirmed == true) {
       await controller.remove(a.account.id!, reassignTo: moveTo);
-    }
-  }
-
-  Future<void> _showTransfer(BuildContext context, List<String> names) async {
-    if (names.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least two accounts first.')),
-      );
-      return;
-    }
-    String from = names[0];
-    String to = names[1];
-    final amountController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Transfer'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: from,
-                decoration: const InputDecoration(labelText: 'From'),
-                items: names
-                    .map((n) => DropdownMenuItem(value: n, child: Text(n)))
-                    .toList(),
-                onChanged: (v) => setState(() => from = v!),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<String>(
-                initialValue: to,
-                decoration: const InputDecoration(labelText: 'To'),
-                items: names
-                    .map((n) => DropdownMenuItem(value: n, child: Text(n)))
-                    .toList(),
-                onChanged: (v) => setState(() => to = v!),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Transfer'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (result == true && context.mounted) {
-      final amount = parseRupeesToPaise(amountController.text);
-      if (amount == null || amount <= 0 || from == to) return;
-      await context.read<AccountsController>().transfer(from, to, amount, null);
     }
   }
 
@@ -571,22 +344,27 @@ class AccountsScreen extends StatelessWidget {
                     ? null
                     : () async {
                         final controller = context.read<AccountsController>();
-                        for (final t in targets) {
-                          final pct =
-                              double.tryParse(
-                                pctControllers[t.account.name]!.text,
-                              ) ??
-                              0;
-                          final share = (available * pct / 100).round();
-                          if (share > 0) {
-                            await controller.transfer(
-                              source,
-                              t.account.name,
-                              share,
-                              'Income distribution',
-                            );
-                          }
-                        }
+                        // All shares are recorded together, or none are.
+                        final moves = [
+                          for (final t in targets)
+                            (
+                              from: source,
+                              to: t.account.name,
+                              amountPaise:
+                                  (available *
+                                          (double.tryParse(
+                                                pctControllers[t.account.name]!
+                                                    .text,
+                                              ) ??
+                                              0) /
+                                          100)
+                                      .round(),
+                              note: 'Income distribution' as String?,
+                            ),
+                        ];
+                        await controller.transferAll(
+                          moves.where((m) => m.amountPaise > 0).toList(),
+                        );
                         if (context.mounted) Navigator.pop(context);
                       },
                 child: const Text('Distribute'),
@@ -602,7 +380,6 @@ class AccountsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final accounts = context.watch<AccountsController>();
     final currency = context.watch<SettingsController>().config.currency;
-    final names = accounts.accounts.map((a) => a.account.name).toList();
 
     final p = context.palette;
     final text = Theme.of(context).textTheme;
@@ -649,7 +426,7 @@ class AccountsScreen extends StatelessWidget {
                         Text(
                           'Total balance',
                           style: text.labelMedium?.copyWith(
-                            color: p.onInk.withValues(alpha: 0.7),
+                            color: p.onInkMuted,
                           ),
                         ),
                         const SizedBox(height: AppSpacing.xs),
@@ -671,7 +448,7 @@ class AccountsScreen extends StatelessWidget {
                               child: _InkButton(
                                 icon: Icons.swap_horiz_rounded,
                                 label: 'Transfer',
-                                onTap: () => _showTransfer(context, names),
+                                onTap: () => showTransferSheet(context),
                               ),
                             ),
                             const SizedBox(width: AppSpacing.sm),
@@ -681,7 +458,7 @@ class AccountsScreen extends StatelessWidget {
                                 label: 'Distribute',
                                 onTap: () => _showDistribute(
                                   context,
-                                  accounts.accounts,
+                                  accounts.active,
                                   currency,
                                 ),
                               ),
@@ -692,6 +469,12 @@ class AccountsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
+                  if (accounts.planned.isNotEmpty) ...[
+                    const SectionHeader('Waiting at the bank'),
+                    for (final t in accounts.planned)
+                      PlannedTransferRow(transfer: t, currency: currency),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   if (accounts.unassignedCount > 0) ...[
                     AppCard(
                       padding: const EdgeInsets.symmetric(
@@ -726,9 +509,8 @@ class AccountsScreen extends StatelessWidget {
                             .toList(),
                         currency: currency,
                         onTap: (a) => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                TransactionsScreen(account: a.account.name),
+                          FadeSlideRoute(
+                            page: AccountDetailScreen(accountId: a.account.id!),
                           ),
                         ),
                         onEdit: (a) => _showEditAccount(context, a),
@@ -878,11 +660,44 @@ class _AccountTypeSection extends StatelessWidget {
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  if (a.account.isDefault)
+                                  if (_detailLine(a.account) case final detail?)
                                     Text(
-                                      'Default account',
+                                      detail,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: text.labelSmall,
+                                    ),
+                                  if (checkLabel(
+                                        context
+                                            .read<AccountsController>()
+                                            .lastCheck(a.account),
+                                        currency,
+                                      )
+                                      case final check?)
+                                    Text(
+                                      check,
                                       style: text.labelSmall?.copyWith(
-                                        color: p.savings,
+                                        color:
+                                            context
+                                                .read<AccountsController>()
+                                                .lastCheck(a.account)!
+                                                .matched
+                                            ? p.income
+                                            : p.warning,
+                                      ),
+                                    ),
+                                  if (a.account.isDefault ||
+                                      a.account.status == AccountStatus.closed)
+                                    Text(
+                                      a.account.status == AccountStatus.closed
+                                          ? 'Closed'
+                                          : 'Default account',
+                                      style: text.labelSmall?.copyWith(
+                                        color:
+                                            a.account.status ==
+                                                AccountStatus.closed
+                                            ? p.textTertiary
+                                            : p.savings,
                                       ),
                                     ),
                                 ],
@@ -979,4 +794,15 @@ class _GainLossLabel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// "HDFC ••1234 · Salary, EMI payments", or null when there's nothing to say.
+String? _detailLine(MoneyAccount a) {
+  final bank = [
+    if (a.bankName != null) a.bankName!,
+    if (a.last4 != null) '••${a.last4}',
+  ].join(' ');
+  final roles = a.roles.map(accountRoleLabel).join(', ');
+  final parts = [if (bank.isNotEmpty) bank, if (roles.isNotEmpty) roles];
+  return parts.isEmpty ? null : parts.join(' · ');
 }

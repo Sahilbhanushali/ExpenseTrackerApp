@@ -29,20 +29,23 @@ class CategoryIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = CategoryStyle.of(category);
     final c = color ?? style.color;
+    final p = context.palette;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final tint = c.withValues(alpha: dark ? 0.22 : 0.12);
+    // Icons need 3:1 against what's actually behind them; bright category
+    // colours (orange, amber, cyan) fall short on their own tint.
+    final glyph = solid
+        ? bestOn(c)
+        : ensureContrast(c, Color.alphaBlend(tint, p.surface), min: 3);
     return ExcludeSemantics(
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: solid ? c : c.withValues(alpha: dark ? 0.22 : 0.12),
+          color: solid ? c : tint,
           borderRadius: BorderRadius.circular(size * 0.32),
         ),
-        child: Icon(
-          icon ?? style.icon,
-          size: size * 0.5,
-          color: solid ? Colors.white : c,
-        ),
+        child: Icon(icon ?? style.icon, size: size * 0.5, color: glyph),
       ),
     );
   }

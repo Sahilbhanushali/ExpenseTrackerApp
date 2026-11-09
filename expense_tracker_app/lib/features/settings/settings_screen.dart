@@ -6,12 +6,19 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart' as file_selector;
 
+import '../../core/widgets/form_sheet.dart';
+import '../../core/utils/notification_service.dart';
+import '../reminders/reminders_controller.dart';
+import '../sms_import/sms_import_controller.dart';
+import '../budgets/budget_controller.dart';
+import '../budgets/budgets_screen.dart';
+import '../cards/cards_controller.dart';
+import '../cycles/cycle_controller.dart';
+import '../income/income_controller.dart';
+import '../guardian/guardian_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_theme.dart';
 import '../../core/utils/app_lock_service.dart';
-import '../../core/utils/money.dart';
-import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/settings_group.dart';
 import '../../core/widgets/list_row.dart';
 import '../../core/widgets/category_icon.dart';
@@ -30,47 +37,10 @@ import '../loans/loans_controller.dart';
 import '../recurring/recurring_controller.dart';
 import '../security/lock_screen.dart';
 import '../wishlist/wishlist_controller.dart';
-import 'budget_planner_screen.dart';
 import 'settings_controller.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  Future<void> _editAmount(
-    BuildContext context,
-    String title,
-    int currentPaise,
-    ValueChanged<int> onSave,
-  ) async {
-    final controller = TextEditingController(
-      text: currentPaise == 0 ? '' : paiseToEditString(currentPaise),
-    );
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    if (result == true) {
-      final value = parseRupeesToPaise(controller.text);
-      if (value != null && value >= 0) onSave(value);
-    }
-  }
 
   Future<void> _addCategory(
     BuildContext context,
@@ -78,34 +48,28 @@ class SettingsScreen extends StatelessWidget {
   ) async {
     final nameController = TextEditingController();
     final keywordsController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add category'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name (e.g. pets)'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: keywordsController,
-              decoration: const InputDecoration(
-                labelText: 'Keywords, comma-separated',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: const Text('Add category'),
+      submitLabel: 'Save',
+      validate: () =>
+          requireText(nameController.text, 'a category name') ??
+          (keywordsController.text.trim().isEmpty
+              ? 'Add at least one keyword.'
+              : null),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Name (e.g. pets)'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: keywordsController,
+            decoration: const InputDecoration(
+              labelText: 'Keywords, comma-separated',
+            ),
           ),
         ],
       ),
@@ -282,8 +246,10 @@ class SettingsScreen extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Reset all data?'),
         content: const Text(
-          'This permanently deletes every transaction, account, recurring bill, '
-          'wishlist item, goal, and budget setting on this device. This cannot be undone.',
+          'This permanently deletes every transaction, account, loan, recurring '
+          'bill, reminder, wishlist item, goal and budget on this device, and '
+          'cancels their notifications. Bank messages from before now won\'t '
+          'be imported again. This cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -306,9 +272,19 @@ class SettingsScreen extends StatelessWidget {
     final recurring = context.read<RecurringController>();
     final wishlist = context.read<WishlistController>();
     final goals = context.read<GoalsController>();
+    final loans = context.read<LoansController>();
+    final reminders = context.read<RemindersController>();
+    final smsImport = context.read<SmsImportController>();
+    final guardian = context.read<GuardianController>();
+    final cycles = context.read<CycleController>();
+    final budgets = context.read<BudgetController>();
+    final income = context.read<IncomeController>();
+    final cards = context.read<CardsController>();
     final messenger = ScaffoldMessenger.of(context);
 
     await AppDatabase.instance.resetAll();
+    await NotificationService.instance.cancelAll();
+    await smsImport.markFreshStart(DateTime.now());
     await ConfigRepository().save(const AppConfig());
     await settingsController.init();
     await Future.wait([
@@ -318,7 +294,16 @@ class SettingsScreen extends StatelessWidget {
       recurring.refresh(),
       wishlist.refresh(),
       goals.refresh(),
+      loans.refresh(),
+      reminders.refresh(),
+      cycles.refresh(),
+      budgets.refresh(),
+      income.refresh(),
+      cards.refresh(),
     ]);
+    // Clears the Spending Guardian's counters; its copy of the budget
+    // figures is re-synced by the refreshes above.
+    await guardian.resetStats();
     messenger.showSnackBar(const SnackBar(content: Text('All data reset.')));
   }
 
@@ -370,7 +355,9 @@ class SettingsScreen extends StatelessWidget {
     final config = settings.config;
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final allocated = config.budgets.values.fold<int>(0, (s, v) => s + v);
+    final budgetCount = context.select<BudgetController, int>(
+      (b) => b.budgets.length,
+    );
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -441,33 +428,15 @@ class SettingsScreen extends StatelessWidget {
               title: 'Budget',
               children: [
                 ListRow(
-                  icon: Icons.account_balance_wallet_outlined,
-                  title: 'Monthly budget',
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        formatMoney(config.monthlyBudgetPaise, config.currency),
-                        style: text.moneyStyle(14),
-                      ),
-                      const RowChevron(),
-                    ],
-                  ),
-                  onTap: () => _editAmount(
-                    context,
-                    'Monthly budget',
-                    config.monthlyBudgetPaise,
-                    settings.setMonthlyBudget,
-                  ),
-                ),
-                ListRow(
                   icon: Icons.pie_chart_outline_rounded,
-                  title: 'Category budgets',
-                  subtitle:
-                      'Allocated ${formatMoney(allocated, config.currency)} — split across categories',
+                  title: 'Budgets',
+                  subtitle: budgetCount == 0
+                      ? 'None yet · cycle, month, week, day or custom'
+                      : '$budgetCount set · cycle, month, week, day or custom',
                   trailing: const RowChevron(),
-                  onTap: () => Navigator.of(context)
-                      .push(FadeSlideRoute(page: const BudgetPlannerScreen())),
+                  onTap: () =>
+                      Navigator.of(context)
+                          .push(FadeSlideRoute(page: const BudgetsScreen())),
                 ),
                 ListRow(
                   icon: Icons.flag_outlined,

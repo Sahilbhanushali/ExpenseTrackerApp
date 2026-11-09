@@ -28,93 +28,85 @@ void main() {
   Loan emiLoan() => Loan(
     name: 'Fridge EMI',
     principalPaise: 5579200,
-    interestPaise: 263235,
     emiPaise: 973739,
     tenureMonths: 6,
     startDate: DateTime(2026, 8, 17),
+    account: 'Bank',
   );
 
-  Transaction emiExpense() => Transaction(
-    date: '2026-09-17',
-    category: 'EMI',
-    amountPaise: 973739,
-    type: TxnType.expense,
-    createdAt: DateTime(2026, 9, 17).toIso8601String(),
-  );
+  Future<LoanStanding> only() async => (await loans.standings()).single;
 
   group('EMI installments are atomic and reversible', () {
-    test(
-      'paying writes the expense, history and paid count together',
-      () async {
-        final id = await loans.add(emiLoan());
-        final loan = (await loans.list()).single;
+    setUp(() => accounts.add('Bank', 10000000));
 
-        await loans.payInstallment(loan, emiExpense());
-
-        expect((await loans.list()).single.installmentsPaid, 1);
-        expect(await txns.allRows(), hasLength(1));
-        expect(
-          await txns.paymentsFor(id, ownerType: LoanPaymentOwner.emiLoan),
-          hasLength(1),
-        );
-      },
-    );
-
-    test('the logged expense is linked back to its loan', () async {
-      final id = await loans.add(emiLoan());
-      await loans.payInstallment((await loans.list()).single, emiExpense());
-
-      expect((await txns.allRows()).single.loanId, id);
-    });
-
-    test('deleting the expense rolls the loan back', () async {
-      final id = await loans.add(emiLoan());
-      await loans.payInstallment((await loans.list()).single, emiExpense());
-      final expense = (await txns.allRows()).single;
-
-      await txns.deleteById(expense.id!);
-
-      // The paid count must not stay ahead of what was actually paid.
-      expect((await loans.list()).single.installmentsPaid, 0);
-      expect(
-        await txns.paymentsFor(id, ownerType: LoanPaymentOwner.emiLoan),
-        isEmpty,
-      );
-    });
-
-    test('undoing the last EMI payment rolls the loan back too', () async {
+    test('paying splits principal (movement) from interest (expense)', () async {
       await loans.add(emiLoan());
-      await loans.payInstallment((await loans.list()).single, emiExpense());
+      final first = (await only()).next!;
+      final r = await loans.payInstallment(
+        (await only()).loan.id!,
+        date: DateTime(2026, 8, 17),
+        account: 'Bank',
+      );
+      expect(r.interest + r.principal, first.amount);
+      // Only interest is spending (rule 4); principal lowers the debt (rule 3).
+      expect((await txns.monthTotal('2026-08')).expense, r.interest);
+      expect((await only()).outstandingPrincipal, 5579200 - r.principal);
+      expect(await accounts.balance('Bank'), 10000000 - first.amount);
+    });
 
-      await txns.undoLast();
+    test('deleting the interest entry undoes the whole payment', () async {
+      await loans.add(emiLoan());
+      final id = (await only()).loan.id!;
+      await loans.payInstallment(
+        id,
+        date: DateTime(2026, 8, 17),
+        account: 'Bank',
+      );
+      final interestTxn = (await txns.queryPage()).single;
+      await txns.deleteById(interestTxn.id!);
+      final l = await only();
+      expect(l.outstandingPrincipal, 5579200);
+      expect(l.paidCount, 0);
+      expect(await accounts.balance('Bank'), 10000000);
+    });
 
-      expect((await loans.list()).single.installmentsPaid, 0);
+    test('undoing the last payment rolls the loan back too', () async {
+      await loans.add(emiLoan());
+      final id = (await only()).loan.id!;
+      await loans.payInstallment(
+        id,
+        date: DateTime(2026, 8, 17),
+        account: 'Bank',
+      );
+      expect(await loans.undoLastPayment(id), isTrue);
+      expect((await only()).paidCount, 0);
+      expect(await loans.undoLastPayment(id), isFalse);
+      expect(await accounts.balance('Bank'), 10000000);
     });
 
     test('paying the final installment closes the loan', () async {
-      final short = Loan(
-        name: 'Two-parter',
-        principalPaise: 100000,
-        emiPaise: 50000,
-        tenureMonths: 2,
-        startDate: DateTime(2026, 1, 1),
-        installmentsPaid: 1,
-      );
-      await loans.add(short);
-
-      final finished = await loans.payInstallment(
-        (await loans.list()).single,
-        emiExpense(),
-      );
-
-      expect(finished, isTrue);
-      // Closed loans drop out of the active list.
-      expect(await loans.list(), isEmpty);
+      await loans.add(emiLoan());
+      final id = (await only()).loan.id!;
+      late LoanPaymentResult r;
+      for (var i = 0; i < 6; i++) {
+        r = await loans.payInstallment(
+          id,
+          date: DateTime(2026, 9, 1),
+          account: 'Bank',
+        );
+      }
+      expect(r.loanClosed, isTrue);
+      final l = await only();
+      expect(l.closed, isTrue);
+      expect(l.outstandingPrincipal, 0);
+      // Total interest equals the user's own EMI × months − principal.
+      expect(l.interestPaid, 973739 * 6 - 5579200);
     });
   });
 
   group('loan payment history is scoped by owner', () {
     test('an EMI loan and a person loan sharing an id stay separate', () async {
+      await accounts.add('Bank', 10000000);
       // Person loan: id comes from txns. EMI loan: id comes from loans.
       // Both sequences start at 1, so without owner_type these collide.
       final personLoanId = await txns.add(
@@ -131,7 +123,11 @@ void main() {
       await txns.repay(personLoanId, 100000);
 
       final emiId = await loans.add(emiLoan());
-      await loans.payInstallment((await loans.list()).single, emiExpense());
+      await loans.payInstallment(
+        emiId,
+        date: DateTime(2026, 9, 17),
+        account: 'Bank',
+      );
 
       expect(personLoanId, emiId, reason: 'ids must collide for this test');
 

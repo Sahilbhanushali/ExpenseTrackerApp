@@ -8,8 +8,11 @@ import 'package:provider/provider.dart';
 import 'package:expense_tracker_app/core/theme/app_theme.dart';
 import 'package:expense_tracker_app/data/datasources/app_database.dart';
 import 'package:expense_tracker_app/data/models/app_config.dart';
+import 'package:expense_tracker_app/core/finance/budgets.dart';
+import 'package:expense_tracker_app/data/repositories/budget_repository.dart';
 import 'package:expense_tracker_app/data/repositories/config_repository.dart';
 import 'package:expense_tracker_app/data/repositories/transaction_repository.dart';
+import 'package:expense_tracker_app/features/budgets/budget_controller.dart';
 import 'package:expense_tracker_app/features/expenses/expenses_controller.dart';
 import 'package:expense_tracker_app/features/guardian/guardian_controller.dart';
 import 'package:expense_tracker_app/features/guardian/guardian_models.dart';
@@ -40,6 +43,35 @@ class _FakeTxnRepo extends TransactionRepository {
   @override
   Future<MonthTotal> totalsRange(DateTime from, DateTime to) async =>
       const MonthTotal(expense: 45000);
+  @override
+  Future<Map<String, int>> categoryTotalsRange(DateTime f, DateTime t) =>
+      categoryTotals('');
+}
+
+class _FakeBudgetRepo extends BudgetRepository {
+  _FakeBudgetRepo() : super(AppDatabase.forTesting());
+  @override
+  Future<List<Budget>> list() async => const [
+    Budget(id: 1, period: BudgetPeriod.month, limitPaise: 2000000),
+    Budget(
+      id: 2,
+      period: BudgetPeriod.month,
+      category: 'food',
+      limitPaise: 500000,
+    ),
+    Budget(
+      id: 3,
+      period: BudgetPeriod.month,
+      category: 'travel',
+      limitPaise: 300000,
+    ),
+  ];
+}
+
+Future<BudgetController> _budgets() async {
+  final b = BudgetController(repo: _FakeBudgetRepo(), txnRepo: _FakeTxnRepo());
+  await b.refresh();
+  return b;
 }
 
 class _FakePlatform extends GuardianPlatform {
@@ -77,7 +109,7 @@ GuardianState _state({bool usage = true, bool overlay = true}) =>
     GuardianState.fromMap({
       'settings': {
         'enabled': true,
-        'apps': ['com.phonepe.app', 'net.one97.paytm'],
+        'apps': ['com.dreamplug.androidapp', 'net.one97.paytm'],
         'cautionPercent': 80,
         'cooldownMinutes': 30,
       },
@@ -88,11 +120,17 @@ GuardianState _state({bool usage = true, bool overlay = true}) =>
         'notifications': true,
         'batteryUnrestricted': false,
       },
-      'installed': {'com.phonepe.app': true, 'net.one97.paytm': false},
+      // Google Pay is left out: an older native build that doesn't know
+      // the app yet, which must read as "couldn't check", not "missing".
+      'installed': {
+        'com.dreamplug.androidapp': true,
+        'net.one97.paytm': false,
+        'indwin.c3.shareapp': false,
+      },
       'stats': {
         'alertsShown': 4,
         'budgetExceeded': 1,
-        'opens': {'com.phonepe.app': 7},
+        'opens': {'com.dreamplug.androidapp': 7},
       },
     });
 
@@ -145,7 +183,7 @@ void main() {
     final platform = _FakePlatform(_state());
     final guardian = GuardianController(platform);
 
-    await guardian.attach(expenses, settings);
+    await guardian.attach(expenses, settings, await _budgets());
 
     final pushed = platform.pushed.single;
     expect(pushed['budget'], 2000000);
@@ -181,7 +219,7 @@ void main() {
       final expenses = ExpensesController(txnRepo: _FakeTxnRepo());
       final platform = _FakePlatform(state ?? _state());
       final guardian = GuardianController(platform);
-      await guardian.attach(expenses, settings);
+      await guardian.attach(expenses, settings, await _budgets());
       addTearDown(guardian.dispose);
 
       await tester.pumpWidget(
@@ -238,9 +276,9 @@ void main() {
       tester,
     ) async {
       final platform = await pump(tester, size: const Size(390, 844));
-      // BHIM: not installed and not selected.
+      // slice: not installed and not selected.
       final bhim = find.ancestor(
-        of: find.text('BHIM'),
+        of: find.text('slice'),
         matching: find.byType(Row),
       );
       final toggle = tester.widget<Switch>(
@@ -248,6 +286,7 @@ void main() {
       );
       expect(toggle.onChanged, isNull);
       expect(platform.updates, isEmpty);
+      expect(find.textContaining('Couldn’t check'), findsOneWidget);
     });
   });
 }

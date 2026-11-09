@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/widgets/form_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/money.dart';
@@ -20,33 +21,25 @@ class WishlistScreen extends StatelessWidget {
   Future<void> _showAddItem(BuildContext context) async {
     final nameController = TextEditingController();
     final priceController = TextEditingController();
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add to wishlist'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Item'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Price'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: const Text('Add to wishlist'),
+      submitLabel: 'Add',
+      validate: () =>
+          requireText(nameController.text, 'the item name') ??
+          positiveAmountError(priceController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Item'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: priceController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Price'),
           ),
         ],
       ),
@@ -69,33 +62,25 @@ class WishlistScreen extends StatelessWidget {
     final priceController = TextEditingController(
       text: paiseToEditString(pricePaise),
     );
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit wishlist item'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Item'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: priceController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Price'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+    final result = await showFormSheet(
+      context,
+      title: const Text('Edit wishlist item'),
+      submitLabel: 'Save',
+      validate: () =>
+          requireText(nameController.text, 'the item name') ??
+          positiveAmountError(priceController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: nameController,
+            decoration: const InputDecoration(labelText: 'Item'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: priceController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Price'),
           ),
         ],
       ),

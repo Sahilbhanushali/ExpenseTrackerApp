@@ -113,6 +113,13 @@ class NotificationService {
     }
   }
 
+  /// Drops every scheduled and shown notification — used by "Reset all
+  /// data" so deleted bills and reminders don't keep firing.
+  Future<void> cancelAll() async {
+    if (!_initialized) return;
+    await _plugin.cancelAll();
+  }
+
   Future<void> cancel(int billId) async {
     if (!_initialized) return;
     await _plugin.cancel(billId);

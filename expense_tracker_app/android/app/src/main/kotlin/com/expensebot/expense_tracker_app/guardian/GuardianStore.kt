@@ -9,9 +9,9 @@ import org.json.JSONObject
 object GuardianApps {
     val SUPPORTED: Map<String, String> = linkedMapOf(
         "com.google.android.apps.nbu.paisa.user" to "Google Pay",
-        "com.phonepe.app" to "PhonePe",
         "net.one97.paytm" to "Paytm",
-        "in.org.npci.upiapp" to "BHIM",
+        "com.dreamplug.androidapp" to "CRED",
+        "indwin.c3.shareapp" to "slice",
     )
 
     fun label(pkg: String): String = SUPPORTED[pkg] ?: pkg
@@ -85,7 +85,10 @@ class GuardianStore(context: Context) {
 
     fun settings() = GuardianSettings(
         enabled = prefs.getBoolean(K_ENABLED, false),
-        apps = prefs.getStringSet(K_APPS, null)?.toSet() ?: GuardianApps.SUPPORTED.keys,
+        // Filtered on read too: apps dropped from the list (PhonePe, BHIM)
+        // may still be in an older saved selection.
+        apps = prefs.getStringSet(K_APPS, null)?.filter { it in GuardianApps.SUPPORTED }?.toSet()
+            ?: GuardianApps.SUPPORTED.keys,
         cautionPercent = prefs.getInt(K_CAUTION, 80).coerceIn(50, 95),
         alertCaution = prefs.getBoolean(K_ALERT_CAUTION, true),
         alertLimit = prefs.getBoolean(K_ALERT_LIMIT, true),

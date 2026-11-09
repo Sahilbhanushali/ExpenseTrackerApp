@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 import '../../data/models/account.dart';
+import '../../data/models/movement.dart';
 import '../../data/repositories/account_repository.dart';
+import '../../data/repositories/reconciliation_repository.dart';
 
 class AccountBalance {
   final MoneyAccount account;
@@ -14,8 +16,21 @@ class AccountBalance {
 /// Money pots + transfers — port of bot.py's account_cmd/transfer_cmd.
 class AccountsController extends ChangeNotifier {
   final AccountRepository _repo;
-  AccountsController([AccountRepository? repo])
-    : _repo = repo ?? AccountRepository();
+  final ReconciliationRepository _recon;
+  AccountsController([AccountRepository? repo, ReconciliationRepository? recon])
+    : _repo = repo ?? AccountRepository(),
+      _recon = recon ?? ReconciliationRepository();
+
+  List<Transfer> _planned = [];
+
+  /// Approved but not yet done at the bank — they don't count yet
+  /// (rule 14).
+  List<Transfer> get planned => _planned;
+
+  Map<String, Reconciliation> _checks = {};
+
+  /// The latest bank check for an account, if any.
+  Reconciliation? lastCheck(MoneyAccount a) => _checks['account:${a.id}'];
 
   List<AccountBalance> _accounts = [];
   List<AccountBalance> get accounts => _accounts;
@@ -33,6 +48,8 @@ class AccountsController extends ChangeNotifier {
     final list = await _repo.list();
     final balances = await _repo.allBalances();
     _unassignedCount = await _repo.unassignedTxnCount();
+    _planned = await _repo.plannedTransfers();
+    _checks = await _recon.latest();
     _accounts = [
       for (final a in list)
         AccountBalance(
@@ -42,6 +59,11 @@ class AccountsController extends ChangeNotifier {
     ];
     notifyListeners();
   }
+
+  /// Accounts that can receive new money — closed ones keep their history
+  /// but leave every picker.
+  List<AccountBalance> get active =>
+      _accounts.where((a) => a.account.status == AccountStatus.active).toList();
 
   bool nameTaken(String name, {int? excludeId}) => _accounts.any(
     (a) =>
@@ -54,12 +76,22 @@ class AccountsController extends ChangeNotifier {
     int openingBalancePaise, {
     AccountType type = AccountType.cash,
     int? currentValuePaise,
+    String? bankName,
+    String? last4,
+    Set<AccountRole>? roles,
+    BankType? bankType,
+    int holdPaise = 0,
   }) async {
     await _repo.add(
       name,
       openingBalancePaise,
       type: type,
       currentValuePaise: currentValuePaise,
+      bankName: bankName,
+      last4: last4,
+      roles: roles,
+      bankType: bankType,
+      holdPaise: holdPaise,
     );
     if (_accounts.isEmpty) {
       await _repo.setDefault(name);
@@ -73,6 +105,12 @@ class AccountsController extends ChangeNotifier {
     int? openingBalancePaise,
     AccountType? type,
     Object? currentValue = unsetCurrentValue,
+    String? bankName,
+    String? last4,
+    Set<AccountRole>? roles,
+    AccountStatus? status,
+    BankType? bankType,
+    int? holdPaise,
   }) async {
     await _repo.update(
       id,
@@ -80,6 +118,12 @@ class AccountsController extends ChangeNotifier {
       openingBalancePaise: openingBalancePaise,
       type: type,
       currentValue: currentValue,
+      bankName: bankName,
+      last4: last4,
+      roles: roles,
+      status: status,
+      bankType: bankType,
+      holdPaise: holdPaise,
     );
     await refresh();
   }
@@ -111,25 +155,108 @@ class AccountsController extends ChangeNotifier {
     await refresh();
   }
 
+  static Transfer _newTransfer(
+    String from,
+    String to,
+    int amountPaise,
+    String? note,
+  ) {
+    final now = DateTime.now();
+    final date =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return Transfer(
+      fromAccount: from,
+      toAccount: to,
+      amountPaise: amountPaise,
+      note: note,
+      date: date,
+      createdAt: now.toIso8601String(),
+    );
+  }
+
   Future<void> transfer(
     String from,
     String to,
     int amountPaise,
     String? note,
   ) async {
-    final now = DateTime.now();
-    final date =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    await _repo.addTransfer(_newTransfer(from, to, amountPaise, note));
+    await refresh();
+  }
+
+  /// Records a transfer that hasn't happened at the bank yet. It changes
+  /// no balance until [completeTransfer].
+  Future<void> planTransfer(
+    String from,
+    String to,
+    int amountPaise,
+    String? note,
+  ) async {
+    final t = _newTransfer(from, to, amountPaise, note);
     await _repo.addTransfer(
       Transfer(
-        fromAccount: from,
-        toAccount: to,
-        amountPaise: amountPaise,
-        note: note,
-        date: date,
-        createdAt: now.toIso8601String(),
+        fromAccount: t.fromAccount,
+        toAccount: t.toAccount,
+        amountPaise: t.amountPaise,
+        note: t.note,
+        date: t.date,
+        createdAt: t.createdAt,
+        status: MovementStatus.planned,
       ),
     );
     await refresh();
   }
+
+  Future<void> completeTransfer(int movementId) async {
+    await _repo.setTransferStatus(movementId, MovementStatus.completed);
+    await refresh();
+  }
+
+  /// Cancels a transfer or card payment: it stays on record (and in the
+  /// audit log) but stops affecting balances. Throws [StateError] for loan
+  /// movements, which are undone from the loan.
+  Future<void> cancelMovement(int movementId) async {
+    await _repo.setTransferStatus(movementId, MovementStatus.cancelled);
+    await refresh();
+  }
+
+  Future<int?> balanceAsOf(String account, DateTime date) =>
+      _repo.balanceAsOf(account, date);
+
+  Future<List<Reconciliation>> checks(MoneyAccount a) =>
+      _recon.history('account', a.id!);
+
+  Future<Reconciliation> reconcile(
+    String account, {
+    required DateTime asOf,
+    required int actualPaise,
+    bool adjust = false,
+    String? note,
+  }) async {
+    final r = await _recon.reconcileAccount(
+      account,
+      asOf: asOf,
+      actualPaise: actualPaise,
+      adjust: adjust,
+      note: note,
+    );
+    await refresh();
+    return r;
+  }
+
+  /// Several transfers recorded together or not at all.
+  Future<void> transferAll(
+    List<({String from, String to, int amountPaise, String? note})> moves,
+  ) async {
+    await _repo.addTransfers([
+      for (final m in moves) _newTransfer(m.from, m.to, m.amountPaise, m.note),
+    ]);
+    await refresh();
+  }
+
+  /// Total of active, spendable accounts (no savings/emergency/investment
+  /// role). In paise.
+  int get spendableTotal => _accounts
+      .where((a) => a.account.isSpendable)
+      .fold(0, (s, a) => s + a.balance);
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/finance/accounting.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
@@ -13,6 +14,10 @@ import '../../accounts/accounts_controller.dart';
 import '../../accounts/accounts_screen.dart';
 import '../../lending/lending_controller.dart';
 import '../../lending/lending_screen.dart';
+import '../../cards/cards_controller.dart';
+import '../../cards/cards_screen.dart';
+import '../../loans/loans_controller.dart';
+import '../../loans/loans_screen.dart';
 import '../../settings/settings_controller.dart';
 
 /// Net worth headline, quick actions and the asset/debt breakdown. Owns its
@@ -35,6 +40,7 @@ class _NetWorthSectionState extends State<NetWorthSection> {
   Widget build(BuildContext context) {
     final accounts = context.watch<AccountsController>();
     final lending = context.watch<LendingController>();
+    final loans = context.watch<LoansController>();
     final currency = context.select<SettingsController, String>(
       (s) => s.config.currency,
     );
@@ -50,7 +56,17 @@ class _NetWorthSectionState extends State<NetWorthSection> {
     final youOwe = lending.outstanding
         .where((t) => t.type == TxnType.borrowed)
         .fold<int>(0, (s, t) => s + t.amountPaise);
-    final netWorth = cash + investments + emergencyFund + owedToYou - youOwe;
+    final loansOutstanding = loans.outstanding;
+    final cardsOutstanding = context.select<CardsController, int>(
+      (c) => c.outstanding,
+    );
+    final netWorth = NetWorth(
+      accounts: cash + investments + emergencyFund,
+      receivables: owedToYou,
+      borrowed: youOwe,
+      loans: loansOutstanding,
+      cards: cardsOutstanding,
+    ).total;
 
     String fmt(int v) => _hidden ? '$currency••••' : formatMoney(v, currency);
 
@@ -128,6 +144,22 @@ class _NetWorthSectionState extends State<NetWorthSection> {
                 color: youOwe > 0 ? p.expense : p.textSecondary,
                 onTap: () => _open(const LendingScreen()),
               ),
+              if (cardsOutstanding > 0)
+                _AssetChip(
+                  icon: Icons.credit_card_rounded,
+                  label: 'Credit cards',
+                  value: fmt(cardsOutstanding),
+                  color: p.expense,
+                  onTap: () => _open(const CardsScreen()),
+                ),
+              if (loansOutstanding > 0)
+                _AssetChip(
+                  icon: Icons.account_balance_outlined,
+                  label: 'Loans & EMI',
+                  value: fmt(loansOutstanding),
+                  color: p.expense,
+                  onTap: () => _open(const LoansScreen()),
+                ),
             ],
           ),
         ),

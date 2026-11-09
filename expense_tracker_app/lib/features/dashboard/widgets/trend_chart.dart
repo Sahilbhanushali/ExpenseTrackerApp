@@ -102,9 +102,7 @@ class TrendChart extends StatelessWidget {
                   getTooltipItem: (group, groupIndex, rod, rodIndex) =>
                       BarTooltipItem(
                         '${label(group.x)} · ${rodIndex == 0 ? 'Income' : 'Spent'}\n',
-                        text.labelSmall!.copyWith(
-                          color: p.onInk.withValues(alpha: 0.7),
-                        ),
+                        text.labelSmall!.copyWith(color: p.onInkMuted),
                         children: [
                           TextSpan(
                             text: formatMoney(rod.toY.round(), currency),

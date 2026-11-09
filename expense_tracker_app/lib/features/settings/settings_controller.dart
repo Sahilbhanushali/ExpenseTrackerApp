@@ -27,17 +27,6 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setMonthlyBudget(int paise) =>
-      _persist(_config.copyWith(monthlyBudgetPaise: paise));
-
-  Future<void> setCategoryBudget(String category, int paise) {
-    final budgets = Map<String, int>.from(_config.budgets)..[category] = paise;
-    return _persist(_config.copyWith(budgets: budgets));
-  }
-
-  Future<void> setBudgets(Map<String, int> budgets) =>
-      _persist(_config.copyWith(budgets: budgets));
-
   Future<void> setSavingsGoal(int paise, String label) => _persist(
     _config.copyWith(
       savingsGoal: SavingsGoal(amountPaise: paise, label: label),
@@ -46,6 +35,12 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> setThemeMode(String mode) =>
       _persist(_config.copyWith(themeMode: mode));
+
+  Future<void> markBudgetsImported() =>
+      _persist(_config.copyWith(budgetsImported: true));
+
+  Future<void> setPeriodView(String view) =>
+      _persist(_config.copyWith(periodView: view));
 
   Future<void> setCurrency(String currency) =>
       _persist(_config.copyWith(currency: currency));

@@ -31,6 +31,9 @@ class ListRow extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final color = iconColor ?? p.textPrimary;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final badge = iconColor == null
+        ? p.surfaceAlt
+        : color.withValues(alpha: dark ? 0.22 : 0.12);
     final row = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: AppSizes.minTouch),
       child: Padding(
@@ -41,12 +44,19 @@ class ListRow extends StatelessWidget {
               width: AppSizes.iconBadge,
               height: AppSizes.iconBadge,
               decoration: BoxDecoration(
-                color: iconColor == null
-                    ? p.surfaceAlt
-                    : color.withValues(alpha: dark ? 0.22 : 0.12),
+                color: badge,
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: Icon(icon, size: AppIconSize.md, color: color),
+              child: Icon(
+                icon,
+                size: AppIconSize.md,
+                // Bright accent colours fall below 3:1 on their own tint.
+                color: ensureContrast(
+                  color,
+                  Color.alphaBlend(badge, p.surface),
+                  min: 3,
+                ),
+              ),
             ),
             const SizedBox(width: AppSpacing.md - 4),
             Expanded(

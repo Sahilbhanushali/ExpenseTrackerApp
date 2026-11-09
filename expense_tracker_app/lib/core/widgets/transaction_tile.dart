@@ -28,7 +28,9 @@ class TransactionTile extends StatelessWidget {
   });
 
   bool get _isCredit =>
-      txn.type == TxnType.income || txn.type == TxnType.borrowed;
+      txn.type == TxnType.income ||
+      txn.type == TxnType.borrowed ||
+      txn.type == TxnType.refund;
   bool get _isLending =>
       txn.type == TxnType.lent || txn.type == TxnType.borrowed;
 
@@ -37,6 +39,10 @@ class TransactionTile extends StatelessWidget {
         ? (txn.type == TxnType.lent
               ? '${txn.counterparty ?? 'They'} owe${txn.counterparty == null ? '' : 's'} you'
               : 'You owe ${txn.counterparty ?? 'them'}')
+        : txn.type == TxnType.refund
+        ? 'Refund · ${_capitalize(txn.category)}'
+        : txn.type == TxnType.income && txn.incomeSource != null
+        ? incomeSourceLabel(txn.incomeSource!)
         : _capitalize(txn.category);
     if (!showDate) return base;
     final d = DateTime.tryParse(txn.date);
@@ -63,6 +69,7 @@ class TransactionTile extends StatelessWidget {
       TxnType.income => 'Income',
       TxnType.lent => 'Lent',
       TxnType.borrowed => 'Borrowed',
+      TxnType.refund => 'Refund',
     };
 
     return Semantics(

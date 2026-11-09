@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/widgets/form_sheet.dart';
 import '../../core/constants/categories.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -12,6 +13,7 @@ import '../../core/widgets/staggered_list.dart';
 import '../../data/models/recurring_bill.dart';
 import '../accounts/accounts_controller.dart';
 import '../settings/settings_controller.dart';
+import '../loans/loans_screen.dart';
 import 'recurring_controller.dart';
 
 class RecurringScreen extends StatelessWidget {
@@ -25,69 +27,50 @@ class RecurringScreen extends StatelessWidget {
     String category = kDefaultCategory;
     final categories = [...kCategoryKeywords.keys, kDefaultCategory];
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(isEmi ? 'Log EMI installment' : 'Add recurring bill'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Monthly amount',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: categories
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                      .toList(),
-                  onChanged: (v) =>
-                      setState(() => category = v ?? kDefaultCategory),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: noteController,
-                  decoration: const InputDecoration(labelText: 'Note'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: dayController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: isEmi ? 'Due day (1-28)' : 'Day of month (1-28)',
-                  ),
-                ),
-                if (isEmi) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: monthsController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Total months',
-                    ),
-                  ),
-                ],
-              ],
+    final result = await showFormSheet(
+      context,
+      title: Text(isEmi ? 'Log EMI installment' : 'Add recurring bill'),
+      submitLabel: 'Save',
+      validate: () => positiveAmountError(amountController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Monthly amount'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          DropdownButtonFormField<String>(
+            initialValue: category,
+            decoration: const InputDecoration(labelText: 'Category'),
+            items: categories
+                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .toList(),
+            onChanged: (v) => setState(() => category = v ?? kDefaultCategory),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: noteController,
+            decoration: const InputDecoration(labelText: 'Note'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: dayController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: isEmi ? 'Due day (1-28)' : 'Day of month (1-28)',
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Save'),
+          if (isEmi) ...[
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: monthsController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Total months'),
             ),
           ],
-        ),
+        ],
       ),
     );
 
@@ -128,41 +111,31 @@ class RecurringScreen extends StatelessWidget {
     final noteController = TextEditingController(text: 'Salary');
     final dayController = TextEditingController(text: '${DateTime.now().day}');
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add recurring income'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: noteController,
-              decoration: const InputDecoration(
-                labelText: 'Source (e.g. Salary)',
-              ),
+    final result = await showFormSheet(
+      context,
+      title: const Text('Add recurring income'),
+      submitLabel: 'Save',
+      validate: () => positiveAmountError(amountController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: noteController,
+            decoration: const InputDecoration(
+              labelText: 'Source (e.g. Salary)',
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount'),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: dayController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Pay day (1-28)'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Amount'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: dayController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Pay day (1-28)'),
           ),
         ],
       ),
@@ -198,63 +171,47 @@ class RecurringScreen extends StatelessWidget {
     String category = bill.category;
     final categories = [...kCategoryKeywords.keys, kDefaultCategory];
 
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(isIncome ? 'Edit income' : 'Edit recurring bill'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Amount'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                if (!isIncome && bill.loanId == null)
-                  DropdownButtonFormField<String>(
-                    initialValue: categories.contains(category)
-                        ? category
-                        : kDefaultCategory,
-                    decoration: const InputDecoration(labelText: 'Category'),
-                    items: categories
-                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => category = v ?? kDefaultCategory),
-                  ),
-                if (!isIncome && bill.loanId == null)
-                  const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: noteController,
-                  decoration: InputDecoration(
-                    labelText: isIncome ? 'Source' : 'Note',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextField(
-                  controller: dayController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Day of month (1-28)',
-                  ),
-                ),
-              ],
+    final result = await showFormSheet(
+      context,
+      title: Text(isIncome ? 'Edit income' : 'Edit recurring bill'),
+      submitLabel: 'Save',
+      validate: () => positiveAmountError(amountController.text),
+      builder: (context, setState) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Amount'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (!isIncome && bill.loanId == null)
+            DropdownButtonFormField<String>(
+              initialValue: categories.contains(category)
+                  ? category
+                  : kDefaultCategory,
+              decoration: const InputDecoration(labelText: 'Category'),
+              items: categories
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) =>
+                  setState(() => category = v ?? kDefaultCategory),
+            ),
+          if (!isIncome && bill.loanId == null)
+            const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: noteController,
+            decoration: InputDecoration(
+              labelText: isIncome ? 'Source' : 'Note',
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: dayController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Day of month (1-28)'),
+          ),
+        ],
       ),
     );
 
@@ -334,8 +291,10 @@ class RecurringScreen extends StatelessWidget {
             children: [
               FloatingActionButton.extended(
                 heroTag: 'emi',
-                onPressed: () => _showAddBill(context, isEmi: true),
-                label: const Text('Installment'),
+                // EMIs live in Loans & EMI, with a schedule and the
+                // principal/interest split — one EMI system, not two.
+                onPressed: () => showLoanForm(context),
+                label: const Text('Loan / EMI'),
                 icon: const Icon(Icons.credit_card_outlined),
               ),
               const SizedBox(width: AppSpacing.sm),

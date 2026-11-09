@@ -1,117 +1,116 @@
 import 'package:flutter/foundation.dart';
 
-import '../../data/datasources/app_database.dart';
+import '../../core/finance/loans.dart';
 import '../../data/models/loan.dart';
+import '../../data/datasources/app_database.dart';
 import '../../data/models/loan_payment.dart';
-import '../../data/models/transaction.dart';
-import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/loan_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
+import '../expenses/expenses_controller.dart';
 
-/// Interest-bearing installment loans (bank loans, card EMIs). Separate from
-/// [RecurringController], which only handles flat no-interest installments.
+/// Loans and EMIs with their schedules. Every write refreshes the ledger
+/// too, since payments move account balances and log interest.
 class LoansController extends ChangeNotifier {
-  final LoanRepository _loanRepo;
+  final LoanRepository _repo;
   final TransactionRepository _txnRepo;
-  final AccountRepository _accountRepo;
+  LoansController({LoanRepository? loanRepo, TransactionRepository? txnRepo})
+    : _repo = loanRepo ?? LoanRepository(),
+      _txnRepo = txnRepo ?? TransactionRepository();
 
-  LoansController({
-    LoanRepository? loanRepo,
-    TransactionRepository? txnRepo,
-    AccountRepository? accountRepo,
-  }) : _loanRepo = loanRepo ?? LoanRepository(),
-       _txnRepo = txnRepo ?? TransactionRepository(),
-       _accountRepo = accountRepo ?? AccountRepository();
+  ExpensesController? _expenses;
+  void attach(ExpensesController expenses) => _expenses = expenses;
 
-  List<Loan> _loans = [];
-  List<Loan> get loans => _loans;
+  List<LoanStanding> _loans = [];
+
+  /// Newest first, closed ones included.
+  List<LoanStanding> get loans => _loans;
+  List<LoanStanding> get active => _loans.where((l) => !l.closed).toList();
+
+  /// Principal still owed across active loans — the liability in net
+  /// worth. In paise.
+  int get outstanding => active.fold(0, (s, l) => s + l.outstandingPrincipal);
 
   Future<void> init() => refresh();
 
   Future<void> refresh() async {
-    _loans = await _loanRepo.list();
+    _loans = await _repo.standings();
     notifyListeners();
   }
 
-  Future<void> addLoan({
-    required String name,
-    required int principalPaise,
-    required int interestPaise,
-    required int emiPaise,
-    required int tenureMonths,
-    required DateTime startDate,
-    String? note,
+  Future<void> _changed() async {
+    await refresh();
+    await _expenses?.refresh();
+  }
+
+  /// Throws [LoanException] with a message for the user.
+  Future<void> add(Loan loan, {String purchaseCategory = 'other'}) async {
+    await _repo.add(loan, purchaseCategory: purchaseCategory);
+    await _changed();
+  }
+
+  Future<LoanPaymentResult> payInstallment(
+    LoanStanding l, {
+    int? amountPaise,
+    required String account,
+    DateTime? date,
   }) async {
-    final account = await _accountRepo.defaultAccount();
-    await _loanRepo.add(
-      Loan(
-        name: name,
-        principalPaise: principalPaise,
-        interestPaise: interestPaise,
-        emiPaise: emiPaise,
-        tenureMonths: tenureMonths,
-        startDate: startDate,
-        note: note,
-        account: account,
-      ),
+    final r = await _repo.payInstallment(
+      l.loan.id!,
+      amountPaise: amountPaise,
+      date: date ?? DateTime.now(),
+      account: account,
     );
-    await refresh();
+    await _changed();
+    return r;
   }
 
-  Future<void> update(
-    int id, {
-    String? name,
-    int? principalPaise,
-    int? interestPaise,
-    int? emiPaise,
-    int? tenureMonths,
-    int? installmentsPaid,
-    DateTime? startDate,
-    String? note,
+  Future<void> prepay(
+    LoanStanding l, {
+    required int amountPaise,
+    required String account,
+    PrepayMode mode = PrepayMode.reduceTenure,
   }) async {
-    await _loanRepo.update(
-      id,
-      name: name,
-      principalPaise: principalPaise,
-      interestPaise: interestPaise,
-      emiPaise: emiPaise,
-      tenureMonths: tenureMonths,
-      installmentsPaid: installmentsPaid,
-      startDate: startDate,
-      note: note,
+    await _repo.prepay(
+      l.loan.id!,
+      amountPaise: amountPaise,
+      date: DateTime.now(),
+      account: account,
+      mode: mode,
     );
-    await refresh();
+    await _changed();
   }
 
-  Future<void> remove(int id) async {
-    await _loanRepo.remove(id);
-    await refresh();
-  }
-
-  /// Logs one EMI installment as an expense transaction and advances the
-  /// loan's paid count.
-  Future<bool> payInstallment(Loan loan) async {
-    final now = DateTime.now();
-    final date =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    // One atomic write: expense + payment history + paid count.
-    final finished = await _loanRepo.payInstallment(
-      loan,
-      Transaction(
-        date: date,
-        category: 'EMI',
-        amountPaise: loan.emiPaise,
-        note: loan.name,
-        type: TxnType.expense,
-        createdAt: now.toIso8601String(),
-        account: loan.account,
-      ),
+  Future<void> foreclose(
+    LoanStanding l, {
+    required String account,
+    int chargesPaise = 0,
+  }) async {
+    await _repo.foreclose(
+      l.loan.id!,
+      date: DateTime.now(),
+      account: account,
+      chargesPaise: chargesPaise,
     );
-    await refresh();
-    return finished;
+    await _changed();
   }
 
-  /// Installments logged against this loan, newest first.
-  Future<List<LoanPayment>> paymentsFor(Loan loan) =>
-      _txnRepo.paymentsFor(loan.id!, ownerType: LoanPaymentOwner.emiLoan);
+  Future<void> correct(LoanStanding l, int outstanding, {String? note}) async {
+    await _repo.correctOutstanding(l.loan.id!, outstanding, note: note);
+    await _changed();
+  }
+
+  Future<bool> undoLastPayment(LoanStanding l) async {
+    final undone = await _repo.undoLastPayment(l.loan.id!);
+    if (undone) await _changed();
+    return undone;
+  }
+
+  Future<void> remove(LoanStanding l) async {
+    await _repo.remove(l.loan.id!);
+    await refresh();
+  }
+
+  /// Installments paid on this loan, newest first.
+  Future<List<LoanPayment>> paymentsFor(LoanStanding l) =>
+      _txnRepo.paymentsFor(l.loan.id!, ownerType: LoanPaymentOwner.emiLoan);
 }

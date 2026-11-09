@@ -10,6 +10,9 @@ import '../../core/widgets/list_row.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/section_header.dart';
 import '../accounts/accounts_screen.dart';
+import '../cards/cards_screen.dart';
+import '../cycles/salary_cycles_screen.dart';
+import '../income/income_screen.dart';
 import '../expenses/add_transaction_sheet.dart';
 import '../expenses/transactions_screen.dart';
 import '../goals/goals_controller.dart';
@@ -23,7 +26,7 @@ import '../recurring/recurring_screen.dart';
 import '../reminders/reminders_controller.dart';
 import '../reminders/reminders_screen.dart';
 import '../reports/reports_screen.dart';
-import '../settings/budget_planner_screen.dart';
+import '../budgets/budgets_screen.dart';
 import '../settings/settings_screen.dart';
 import '../sms_import/sms_import_controller.dart';
 import '../sms_import/sms_review_screen.dart';
@@ -110,6 +113,20 @@ final _moreSections = <(String, List<_MoreItem>)>[
     'Money',
     [
       _MoreItem(
+        Icons.payments_rounded,
+        AppColors.categoryPalette[2],
+        'Salary & cycles',
+        'Record salary, see each pay cycle',
+        (c) => _push(c, const SalaryCyclesScreen()),
+      ),
+      _MoreItem(
+        Icons.south_west_rounded,
+        AppColors.categoryPalette[9],
+        'Income',
+        'By source, plus income you expect',
+        (c) => _push(c, const IncomeScreen()),
+      ),
+      _MoreItem(
         Icons.account_balance_wallet_rounded,
         AppColors.categoryPalette[1],
         'Accounts',
@@ -125,6 +142,13 @@ final _moreSections = <(String, List<_MoreItem>)>[
           c.read<LendingController>().refresh();
           _push(c, const LendingScreen());
         },
+      ),
+      _MoreItem(
+        Icons.credit_card_rounded,
+        AppColors.categoryPalette[5],
+        'Credit cards',
+        'Statements, due dates, card EMIs',
+        (c) => _push(c, const CardsScreen()),
       ),
       _MoreItem(
         Icons.account_balance_rounded,
@@ -151,9 +175,9 @@ final _moreSections = <(String, List<_MoreItem>)>[
       _MoreItem(
         Icons.pie_chart_rounded,
         AppColors.categoryPalette[2],
-        'Budget planner',
-        'Monthly and category budgets',
-        (c) => _push(c, const BudgetPlannerScreen()),
+        'Budgets',
+        'Cycle, month, week, day and custom',
+        (c) => _push(c, const BudgetsScreen()),
       ),
       if (defaultTargetPlatform == TargetPlatform.android)
         _MoreItem(

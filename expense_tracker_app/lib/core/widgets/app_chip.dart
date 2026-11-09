@@ -26,7 +26,7 @@ class AppChoiceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final fg = selected ? p.onInk : p.textPrimary;
+    final fg = selected ? p.onAction : p.textPrimary;
     return Semantics(
       button: true,
       selected: selected,
@@ -48,9 +48,9 @@ class AppChoiceChip extends StatelessWidget {
                   : AppSpacing.md - 2,
             ),
             decoration: BoxDecoration(
-              color: selected ? p.inkSurface : p.surface,
+              color: selected ? p.action : p.surface,
               borderRadius: BorderRadius.circular(AppRadius.pill),
-              border: Border.all(color: selected ? p.inkSurface : p.border),
+              border: Border.all(color: selected ? p.action : p.border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

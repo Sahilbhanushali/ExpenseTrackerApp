@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/category_icon.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money_formatter.dart';
@@ -133,6 +134,8 @@ class _CategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = CategoryStyle.of(category);
     final text = Theme.of(context).textTheme;
+    final p = context.palette;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final name = category.isEmpty
         ? category
         : '${category[0].toUpperCase()}${category.substring(1)}';
@@ -140,9 +143,14 @@ class _CategoryTile extends StatelessWidget {
       label: '$name, ${formatMoney(amount, currency)}, $percent percent',
       excludeSemantics: true,
       child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md - 2),
+        padding: const EdgeInsets.all(AppSpacing.md - 4),
         decoration: BoxDecoration(
-          color: tileColor(style.color),
+          // A soft tint of the category colour with normal text on it:
+          // readable in both themes, unlike white text on bright fills.
+          color: Color.alphaBlend(
+            style.color.withValues(alpha: dark ? 0.2 : 0.1),
+            p.surface,
+          ),
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
@@ -150,34 +158,20 @@ class _CategoryTile extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(AppRadius.sm - 2),
-                  ),
-                  child: Icon(
-                    style.icon,
-                    color: Colors.white,
-                    size: AppIconSize.md,
-                  ),
-                ),
+                CategoryIcon(category: category, size: 34, solid: true),
                 const Spacer(),
                 Text(
                   '$percent%',
-                  style: text.labelMedium?.copyWith(color: Colors.white),
+                  style: text.labelMedium?.copyWith(color: p.textSecondary),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm + 2),
             Text(
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: text.labelMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.9),
-              ),
+              style: text.labelMedium?.copyWith(color: p.textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxs),
             FittedBox(
@@ -185,7 +179,7 @@ class _CategoryTile extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 formatMoney(amount, currency),
-                style: text.moneyStyle(18, color: Colors.white),
+                style: text.moneyStyle(17, color: p.textPrimary),
               ),
             ),
           ],

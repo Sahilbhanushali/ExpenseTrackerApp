@@ -135,8 +135,8 @@ class AppTheme {
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: p.inkSurface,
-        foregroundColor: p.onInk,
+        backgroundColor: p.action,
+        foregroundColor: p.onAction,
         elevation: 2,
         highlightElevation: 4,
         shape: const StadiumBorder(),
@@ -148,24 +148,35 @@ class AppTheme {
           visualDensity: VisualDensity.compact,
           side: WidgetStatePropertyAll(BorderSide(color: p.border)),
           backgroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? p.inkSurface : p.surface,
+            (s) => s.contains(WidgetState.selected) ? p.action : p.surface,
           ),
           foregroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? p.onInk : p.textPrimary,
+            (s) =>
+                s.contains(WidgetState.selected) ? p.onAction : p.textPrimary,
           ),
           iconColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? p.onInk : p.textPrimary,
+            (s) =>
+                s.contains(WidgetState.selected) ? p.onAction : p.textPrimary,
           ),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: p.surface,
-        selectedColor: p.inkSurface,
-        checkmarkColor: p.onInk,
+        selectedColor: p.action,
+        checkmarkColor: p.onAction,
         side: BorderSide(color: p.border),
         shape: const StadiumBorder(),
-        labelStyle: text.labelMedium?.copyWith(color: p.textPrimary),
-        secondaryLabelStyle: text.labelMedium?.copyWith(color: p.onInk),
+        // Resolved per state by the chip: a selected chip sits on the
+        // action colour, so its label must switch to onAction — a fixed
+        // textPrimary label vanished into the selected fill.
+        labelStyle: text.labelMedium?.copyWith(
+          color: WidgetStateColor.resolveWith(
+            (s) =>
+                s.contains(WidgetState.selected) ? p.onAction : p.textPrimary,
+          ),
+        ),
+        secondaryLabelStyle: text.labelMedium?.copyWith(color: p.onAction),
+        iconTheme: IconThemeData(color: p.textPrimary, size: AppIconSize.sm),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       ),
       switchTheme: SwitchThemeData(
@@ -267,10 +278,10 @@ class AppTheme {
   static ButtonStyle _primaryButton(AppPalette p, TextTheme text) {
     return ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.disabled) ? p.surfaceAlt : p.inkSurface,
+        (s) => s.contains(WidgetState.disabled) ? p.surfaceAlt : p.action,
       ),
       foregroundColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.disabled) ? p.textTertiary : p.onInk,
+        (s) => s.contains(WidgetState.disabled) ? p.textTertiary : p.onAction,
       ),
       minimumSize: const WidgetStatePropertyAll(
         Size(64, AppSizes.buttonHeight),

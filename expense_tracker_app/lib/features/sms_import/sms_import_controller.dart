@@ -215,6 +215,28 @@ class SmsImportController extends ChangeNotifier {
     );
   }
 
+  static const _ignoreBeforeKey = 'sms_ignore_before';
+
+  /// After "Reset all data", messages from before the reset are past data:
+  /// never re-import them, even though the dedupe memory was wiped too.
+  Future<void> markFreshStart(DateTime at) async {
+    try {
+      await _storage.write(key: _ignoreBeforeKey, value: at.toIso8601String());
+    } catch (e) {
+      debugPrint('Could not store fresh-start time: ${e.runtimeType}');
+    }
+    await refresh();
+  }
+
+  Future<DateTime?> _ignoreBefore() async {
+    try {
+      final raw = await _storage.read(key: _ignoreBeforeKey);
+      return raw == null ? null : DateTime.tryParse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<SmsScanResult> scan({bool firstRun = false}) async {
     if (!_sms.isSupported || _scanning) return const SmsScanResult();
     _scanning = true;
@@ -222,9 +244,13 @@ class SmsImportController extends ChangeNotifier {
 
     var logged = 0, queued = 0, skipped = 0;
     try {
-      final since = DateTime.now().subtract(
+      var since = DateTime.now().subtract(
         firstRun ? _firstScanWindow : _routineScanWindow,
       );
+      final ignoreBefore = await _ignoreBefore();
+      if (ignoreBefore != null && ignoreBefore.isAfter(since)) {
+        since = ignoreBefore;
+      }
       final messages = await _sms.inboxSince(since);
 
       for (final msg in messages) {

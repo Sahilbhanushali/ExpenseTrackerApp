@@ -8,8 +8,12 @@ import 'package:expense_tracker_app/data/datasources/app_database.dart';
 import 'package:expense_tracker_app/data/models/transaction.dart';
 import 'package:expense_tracker_app/data/repositories/transaction_repository.dart';
 import 'package:expense_tracker_app/features/accounts/accounts_controller.dart';
+import 'package:expense_tracker_app/features/budgets/budget_controller.dart';
+import 'package:expense_tracker_app/features/cards/cards_controller.dart';
+import 'package:expense_tracker_app/features/cycles/cycle_controller.dart';
 import 'package:expense_tracker_app/features/dashboard/home_shell.dart';
 import 'package:expense_tracker_app/features/expenses/expenses_controller.dart';
+import 'package:expense_tracker_app/features/income/income_controller.dart';
 import 'package:expense_tracker_app/features/goals/goals_controller.dart';
 import 'package:expense_tracker_app/features/lending/lending_controller.dart';
 import 'package:expense_tracker_app/features/loans/loans_controller.dart';
@@ -115,6 +119,10 @@ Widget _app(ExpensesController expenses, ThemeData theme) {
       ChangeNotifierProvider(create: (_) => GoalsController()),
       ChangeNotifierProvider(create: (_) => RemindersController()),
       ChangeNotifierProvider(create: (_) => SmsImportController()),
+      ChangeNotifierProvider(create: (_) => CycleController()),
+      ChangeNotifierProvider(create: (_) => BudgetController()),
+      ChangeNotifierProvider(create: (_) => IncomeController()),
+      ChangeNotifierProvider(create: (_) => CardsController()),
     ],
     child: MaterialApp(theme: theme, home: const HomeShell()),
   );

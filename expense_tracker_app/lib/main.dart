@@ -11,6 +11,10 @@ import 'core/utils/app_lock_service.dart';
 import 'core/utils/error_reporting.dart';
 import 'core/utils/notification_service.dart';
 import 'features/accounts/accounts_controller.dart';
+import 'features/budgets/budget_controller.dart';
+import 'features/cards/cards_controller.dart';
+import 'features/cycles/cycle_controller.dart';
+import 'features/income/income_controller.dart';
 import 'features/dashboard/home_shell.dart';
 import 'features/expenses/add_transaction_sheet.dart';
 import 'features/expenses/expenses_controller.dart';
@@ -55,6 +59,10 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RemindersController()),
         ChangeNotifierProvider(create: (_) => SmsImportController()),
         ChangeNotifierProvider(create: (_) => GuardianController()),
+        ChangeNotifierProvider(create: (_) => CycleController()),
+        ChangeNotifierProvider(create: (_) => BudgetController()),
+        ChangeNotifierProvider(create: (_) => IncomeController()),
+        ChangeNotifierProvider(create: (_) => CardsController()),
       ],
       child: const _ThemedApp(),
     );
@@ -196,6 +204,11 @@ class _AppBootstrapState extends State<_AppBootstrap>
     final goals = context.read<GoalsController>();
     final reminders = context.read<RemindersController>();
     final smsImport = context.read<SmsImportController>();
+    final cycles = context.read<CycleController>()..attach(expenses);
+    final budgets = context.read<BudgetController>()..attach(expenses, cycles);
+    final income = context.read<IncomeController>()..attach(expenses);
+    final cards = context.read<CardsController>()..attach(expenses);
+    loans.attach(expenses);
 
     await settings.init();
     await Future.wait([
@@ -208,12 +221,19 @@ class _AppBootstrapState extends State<_AppBootstrap>
       goals.init(),
       reminders.init(),
       smsImport.init(),
+      cycles.init(),
+      income.init(),
+      cards.init(),
     ]);
+    // Needs settings loaded (legacy import) and the current cycle.
+    await budgets.init(settings);
     await _checkDueBills();
     if (!mounted) return;
     // Keeps the native Spending Guardian's copy of the budget figures
     // current; a no-op off Android.
-    unawaited(context.read<GuardianController>().attach(expenses, settings));
+    unawaited(
+      context.read<GuardianController>().attach(expenses, settings, budgets),
+    );
     _initQuickActions();
     _initShareIntent();
     _pendingLocked = await AppLockService.instance.isEnabled();

@@ -15,10 +15,12 @@ import '../../../data/repositories/transaction_repository.dart';
 import '../../expenses/expenses_controller.dart';
 import '../../goals/goals_controller.dart';
 import '../../goals/goals_screen.dart';
-import '../../settings/budget_planner_screen.dart';
+import '../../budgets/budget_controller.dart';
+import '../../budgets/budgets_screen.dart';
 import '../../settings/settings_controller.dart';
 import 'budget_vs_actual.dart';
 import 'category_tiles.dart';
+import 'ink_metric.dart';
 import 'trend_chart.dart';
 import 'upcoming_bills.dart';
 
@@ -53,6 +55,7 @@ class MonthSummarySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final expenses = context.watch<ExpensesController>();
     final config = context.watch<SettingsController>().config;
+    final budgets = context.watch<BudgetController>();
     final totalSaved = context.select<GoalsController, int>(
       (g) => g.goals.fold<int>(0, (s, e) => s + e.saved),
     );
@@ -67,9 +70,6 @@ class MonthSummarySection extends StatelessWidget {
     final categoryTotals = isCurrentMonth
         ? expenses.categoryTotals
         : viewedCategoryTotals;
-    // `recent` is oldest→newest; the dashboard shows the newest first.
-    final recent = expenses.recent.reversed.take(5).toList();
-
     const gap = SizedBox(height: AppSpacing.lg);
 
     return Column(
@@ -77,7 +77,7 @@ class MonthSummarySection extends StatelessWidget {
       children: [
         _SpendCard(
           totals: totals,
-          budget: config.monthlyBudgetPaise,
+          budget: budgets.monthOverall,
           currency: currency,
           viewedMonth: viewedMonth,
           isCurrentMonth: isCurrentMonth,
@@ -99,18 +99,18 @@ class MonthSummarySection extends StatelessWidget {
           )
         else
           CategoryTiles(totals: categoryTotals, currency: currency),
-        if (config.budgets.isNotEmpty) ...[
+        if (budgets.monthCategoryCaps.isNotEmpty) ...[
           gap,
           SectionHeader(
             'Budgets',
             action: 'Edit',
             onAction: () =>
                 Navigator.of(context)
-                    .push(FadeSlideRoute(page: const BudgetPlannerScreen())),
+                    .push(FadeSlideRoute(page: const BudgetsScreen())),
           ),
           AppCard(
             child: BudgetVsActual(
-              budgets: config.budgets,
+              budgets: budgets.monthCategoryCaps,
               actuals: categoryTotals,
               currency: currency,
             ),
@@ -154,10 +154,36 @@ class MonthSummarySection extends StatelessWidget {
           ),
         ],
         gap,
+        RecentTransactions(onSeeAll: onSeeAllTransactions),
+      ],
+    );
+  }
+}
+
+/// The newest five transactions, whichever period is on screen.
+class RecentTransactions extends StatelessWidget {
+  final VoidCallback onSeeAll;
+  const RecentTransactions({super.key, required this.onSeeAll});
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = context.select<SettingsController, String>(
+      (s) => s.config.currency,
+    );
+    // `recent` is oldest→newest; the dashboard shows the newest first.
+    final recent = context
+        .watch<ExpensesController>()
+        .recent
+        .reversed
+        .take(5)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         SectionHeader(
           'Recent transactions',
           action: recent.isEmpty ? null : 'See all',
-          onAction: onSeeAllTransactions,
+          onAction: onSeeAll,
         ),
         if (recent.isEmpty)
           const AppCard(
@@ -201,7 +227,7 @@ class _SpendCard extends StatelessWidget {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
     final on = p.onInk;
-    final onMuted = on.withValues(alpha: 0.68);
+    final onMuted = p.onInkMuted;
     final spent = totals.expense;
     final remaining = budget - spent;
     final net = totals.income - spent;
@@ -235,7 +261,7 @@ class _SpendCard extends StatelessWidget {
                 ),
               ),
               if (budget > 0)
-                _StatusPill(label: status.label, color: status.color(p)),
+                _StatusPill(label: status.label, color: status.inkColor(p)),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -282,15 +308,15 @@ class _SpendCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              _InkMetric(
+              InkMetric(
                 label: 'Income',
                 value: formatMoneyCompact(totals.income, currency),
               ),
-              _InkMetric(
+              InkMetric(
                 label: net >= 0 ? 'Saved' : 'Overspent',
                 value: formatMoneyCompact(net.abs(), currency),
               ),
-              _InkMetric(
+              InkMetric(
                 label: 'Savings rate',
                 value: rate == null ? '—' : '$rate%',
               ),
@@ -312,7 +338,7 @@ class _InkProgress extends StatelessWidget {
     final p = context.palette;
     final frac = (spent / budget).clamp(0.0, 1.0);
     final status = budgetStatus(spent, budget);
-    final fill = status == BudgetStatus.ok ? p.onInk : status.color(p);
+    final fill = status == BudgetStatus.ok ? p.onInk : status.inkColor(p);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: frac),
       duration: AppDurations.of(context, AppDurations.slow),
@@ -360,37 +386,6 @@ class _StatusPill extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelSmall
                 ?.copyWith(color: p.onInk),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InkMetric extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InkMetric({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final on = context.palette.onInk;
-    final text = Theme.of(context).textTheme;
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: text.bodySmall?.copyWith(color: on.withValues(alpha: 0.68)),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(value, style: text.moneyStyle(16, color: on)),
           ),
         ],
       ),

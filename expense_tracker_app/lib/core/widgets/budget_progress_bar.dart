@@ -20,6 +20,13 @@ extension BudgetStatusStyle on BudgetStatus {
     BudgetStatus.warning => p.warning,
     BudgetStatus.over => p.expense,
   };
+
+  /// The same status drawn on the dark ink surface.
+  Color inkColor(AppPalette p) => switch (this) {
+    BudgetStatus.ok => p.inkAccent,
+    BudgetStatus.warning => p.inkWarning,
+    BudgetStatus.over => p.inkExpense,
+  };
   String get label => switch (this) {
     BudgetStatus.ok => 'On track',
     BudgetStatus.warning => 'Near limit',
