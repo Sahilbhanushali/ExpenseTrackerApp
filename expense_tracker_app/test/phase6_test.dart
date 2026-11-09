@@ -15,6 +15,7 @@ import 'package:expense_tracker_app/data/models/movement.dart';
 import 'package:expense_tracker_app/data/models/transaction.dart';
 import 'package:expense_tracker_app/data/repositories/account_repository.dart';
 import 'package:expense_tracker_app/data/repositories/card_repository.dart';
+import 'package:expense_tracker_app/data/repositories/investment_repository.dart';
 import 'package:expense_tracker_app/data/repositories/loan_repository.dart';
 import 'package:expense_tracker_app/data/repositories/reconciliation_repository.dart';
 import 'package:expense_tracker_app/data/repositories/transaction_repository.dart';
@@ -260,7 +261,11 @@ void main() {
         addTearDown(tester.view.reset);
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 
-        final controller = AccountsController(_Accounts(), _Recon());
+        final controller = AccountsController(
+          _Accounts(),
+          _Recon(),
+          _Investments(),
+        );
         await controller.refresh();
         await tester.pumpWidget(
           MultiProvider(
@@ -352,4 +357,11 @@ class _Recon extends ReconciliationRepository {
   Future<List<Reconciliation>> history(String ownerType, int ownerId) async => [
     _r,
   ];
+}
+
+class _Investments extends InvestmentRepository {
+  _Investments() : super(AppDatabase.forTesting());
+  @override
+  Future<Map<String, ({int invested, int current, int count})>>
+  totals() async => {};
 }

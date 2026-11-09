@@ -1,6 +1,6 @@
 # Personal Finance Upgrade — Audit & Roadmap
 
-Status: **Phases 1–8 complete. Next: Phase 9 (emergency fund, goals, investments), awaiting review.**
+Status: **Phases 1–9 complete. Next: Phase 10 (financial calendar and reminders), awaiting review.**
 Living document: each phase updates its section (schema changes, decisions, test results).
 
 ---
@@ -488,3 +488,51 @@ history frozen against later edits, dates locked, reopen recalculates, audited);
 invalid choices move nothing; planned transfers at close; overspent cycle; open cycle
 refused. `closing_screens_test.dart` (4) — both screens at 320 px / 1.5× in both
 themes. Full suite 300 passing, `flutter analyze` clean.
+
+### Phase 9 — Emergency fund, goals and investments (done)
+
+Schema **v19** (`_createWealthTables`, re-runnable): `goals` + target_date, priority,
+monthly_contribution, account, kind (short/long), status, starting_amount;
+`allocation_settings` + emergency_months, essential_monthly; `investment_holdings`
+(account, name, kind, invested, current value, as-of date, note, status).
+
+Rules and code (`lib/core/finance/wealth.dart`, pure):
+- Nothing here is a separate pile of money: every rupee is in an account and counted
+  once there (rules 5–7).
+- **Goals (B3 fixed):** a goal is an earmark on a savings (or investment) account.
+  Saved = starting amount + completed transfers tagged `goal` − those tagged `goal_out`.
+  Adding money is a transfer from a spending account (done or planned); taking it out is
+  capped at what's saved; deleting a goal leaves the money. Contributions recorded as
+  expenses before v19 still count toward progress. Pace: months to the target date,
+  required per month, on track vs the planned contribution. Warns when goals claim more
+  than their account holds.
+- **Emergency fund:** current = emergency accounts' balance (the same money as in net
+  worth). Target = 3/6/9/12 × essential monthly, or a custom amount. Essential monthly =
+  the user's figure, else essential budgets (weekly/daily converted to monthly), else
+  average spending on needs over the last three months with spending. Coverage in months,
+  shortfall, suggested contribution (planned amount or a twelfth of the gap), linked
+  accounts, money taken out (transfers out and spending from emergency accounts).
+- **Investments:** holdings record what an investment account holds, with the user's own
+  value as of a date — no live prices, no promised returns. Uninvested cash = balance −
+  invested; the account's worth = uninvested + holdings' value; that worth (not balance
+  + value) is what net worth uses, so nothing is double counted. Planned contributions =
+  allocation investing + long-term goals.
+- **Allocation:** goals are needs (short-term → savings bucket, long-term → investing),
+  with their account as destination and pace in the reason; approved goal transfers are
+  tagged so they count toward the goal once done. The emergency target in months is
+  resolved by the emergency fund.
+- **Bug fixed:** renaming an account now updates every table that names it (loans,
+  card repayment account, expected income, allocation decisions, goals, holdings) —
+  previously only transactions and the salary profile.
+- Screens: **Savings goals** rebuilt (progress, pace, on-track, earmark warning, add /
+  take out / edit / achieved / delete), **Emergency fund** (balance vs target, coverage,
+  suggested, target sheet with months or custom, essential override, accounts, money
+  taken out), **Investments** (worth, in holdings, put in, cash waiting, planned, on-paper
+  change with as-of dates, holdings per account, add/update).
+
+Tests (`phase9_test.dart`, 18): goal pace, essential monthly precedence, emergency
+status/target, investment worth; B3 transfer not spending and counted once; planned vs
+done contributions, capped withdrawals; account required, delete keeps money; holdings
+set worth once; emergency months target with override; goals as allocation needs with a
+done transfer counting; rename cascade; v18 → v19; three screens at 320 px / 1.5× both
+themes. Full suite 318 passing, `flutter analyze` clean.
