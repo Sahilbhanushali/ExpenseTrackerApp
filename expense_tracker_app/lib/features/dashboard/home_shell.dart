@@ -10,6 +10,7 @@ import '../../core/widgets/list_row.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/section_header.dart';
 import '../accounts/accounts_screen.dart';
+import '../calendar/calendar_screen.dart';
 import '../cards/cards_screen.dart';
 import '../cycles/salary_cycles_screen.dart';
 import '../income/income_screen.dart';
@@ -181,6 +182,13 @@ final _moreSections = <(String, List<_MoreItem>)>[
         'Budgets',
         'Cycle, month, week, day and custom',
         (c) => _push(c, const BudgetsScreen()),
+      ),
+      _MoreItem(
+        Icons.calendar_month_rounded,
+        AppColors.categoryPalette[6],
+        'Financial calendar',
+        'Salary, EMIs, card dues and bills ahead',
+        (c) => _push(c, const CalendarScreen()),
       ),
       _MoreItem(
         Icons.account_tree_outlined,

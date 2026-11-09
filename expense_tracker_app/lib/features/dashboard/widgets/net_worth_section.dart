@@ -1,28 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/finance/accounting.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money_formatter.dart';
 import '../../../core/widgets/animated_money_text.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/page_transitions.dart';
-import '../../../data/models/account.dart';
-import '../../../data/models/transaction.dart';
-import '../../accounts/accounts_controller.dart';
-import '../../accounts/accounts_screen.dart';
-import '../../lending/lending_controller.dart';
 import '../../lending/lending_screen.dart';
-import '../../cards/cards_controller.dart';
+import '../../allocation/allocation_screen.dart';
 import '../../cards/cards_screen.dart';
-import '../../loans/loans_controller.dart';
+import '../../emergency/emergency_screen.dart';
+import '../../goals/goals_screen.dart';
+import '../../investments/investments_screen.dart';
+import '../dashboard_controller.dart';
+import 'overview_cards.dart';
 import '../../loans/loans_screen.dart';
 import '../../settings/settings_controller.dart';
 
-/// Net worth headline, quick actions and the asset/debt breakdown. Owns its
-/// own subscriptions to accounts + lending, so moving money between
-/// accounts repaints this block alone.
+/// Net worth headline; actual vs reserved vs available; and what net worth
+/// is made of. Reads the dashboard's derived position only.
 class NetWorthSection extends StatefulWidget {
   const NetWorthSection({super.key});
 
@@ -38,35 +36,13 @@ class _NetWorthSectionState extends State<NetWorthSection> {
 
   @override
   Widget build(BuildContext context) {
-    final accounts = context.watch<AccountsController>();
-    final lending = context.watch<LendingController>();
-    final loans = context.watch<LoansController>();
+    final pos = context.watch<DashboardController>().position;
     final currency = context.select<SettingsController, String>(
       (s) => s.config.currency,
     );
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-
-    final cash = accounts.totalFor(AccountType.cash);
-    final investments = accounts.totalFor(AccountType.investment);
-    final emergencyFund = accounts.totalFor(AccountType.emergencyFund);
-    final owedToYou = lending.outstanding
-        .where((t) => t.type == TxnType.lent)
-        .fold<int>(0, (s, t) => s + t.amountPaise);
-    final youOwe = lending.outstanding
-        .where((t) => t.type == TxnType.borrowed)
-        .fold<int>(0, (s, t) => s + t.amountPaise);
-    final loansOutstanding = loans.outstanding;
-    final cardsOutstanding = context.select<CardsController, int>(
-      (c) => c.outstanding,
-    );
-    final netWorth = NetWorth(
-      accounts: cash + investments + emergencyFund,
-      receivables: owedToYou,
-      borrowed: youOwe,
-      loans: loansOutstanding,
-      cards: cardsOutstanding,
-    ).total;
+    final netWorth = pos.netWorth.total;
 
     String fmt(int v) => _hidden ? '$currency••••' : formatMoney(v, currency);
 
@@ -101,6 +77,41 @@ class _NetWorthSectionState extends State<NetWorthSection> {
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          onTap: () => _open(const AllocationScreen()),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  FigureColumn(
+                    label: 'In bank & cash',
+                    value: fmt(pos.inAccounts),
+                  ),
+                  FigureColumn(label: 'Reserved', value: fmt(pos.reserved)),
+                  FigureColumn(
+                    label: 'Available',
+                    value: fmt(pos.available),
+                    color: pos.available < 0 ? p.expense : p.income,
+                    end: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                pos.onHold > 0
+                    ? 'Available = bank & cash − ${fmt(pos.onHold)} on hold − reserved'
+                    : 'Available = bank & cash − reserved for bills and plans',
+                style: text.bodySmall,
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg),
         SizedBox(
           // Grows with the user's text size so labels never clip.
@@ -109,54 +120,55 @@ class _NetWorthSectionState extends State<NetWorthSection> {
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.none,
             children: [
+              if (pos.savings > 0)
+                _AssetChip(
+                  icon: Icons.savings_outlined,
+                  label: 'Savings',
+                  value: fmt(pos.savings),
+                  color: p.savings,
+                  onTap: () => _open(const GoalsScreen()),
+                ),
               _AssetChip(
-                icon: Icons.account_balance_rounded,
-                label: 'Cash & bank',
-                value: fmt(cash),
-                color: p.savings,
-                onTap: () => _open(const AccountsScreen()),
+                icon: Icons.shield_outlined,
+                label: 'Emergency fund',
+                value: fmt(pos.emergency),
+                color: p.income,
+                onTap: () => _open(const EmergencyScreen()),
               ),
               _AssetChip(
                 icon: Icons.trending_up_rounded,
                 label: 'Investments',
-                value: fmt(investments),
+                value: fmt(pos.investments),
                 color: p.debt,
-                onTap: () => _open(const AccountsScreen()),
-              ),
-              _AssetChip(
-                icon: Icons.shield_outlined,
-                label: 'Emergency fund',
-                value: fmt(emergencyFund),
-                color: p.income,
-                onTap: () => _open(const AccountsScreen()),
+                onTap: () => _open(const InvestmentsScreen()),
               ),
               _AssetChip(
                 icon: Icons.call_received_rounded,
                 label: 'Owed to you',
-                value: fmt(owedToYou),
+                value: fmt(pos.receivables),
                 color: p.income,
                 onTap: () => _open(const LendingScreen()),
               ),
               _AssetChip(
                 icon: Icons.call_made_rounded,
                 label: 'You owe',
-                value: fmt(youOwe),
-                color: youOwe > 0 ? p.expense : p.textSecondary,
+                value: fmt(pos.borrowed),
+                color: pos.borrowed > 0 ? p.expense : p.textSecondary,
                 onTap: () => _open(const LendingScreen()),
               ),
-              if (cardsOutstanding > 0)
+              if (pos.cards > 0)
                 _AssetChip(
                   icon: Icons.credit_card_rounded,
                   label: 'Credit cards',
-                  value: fmt(cardsOutstanding),
+                  value: fmt(pos.cards),
                   color: p.expense,
                   onTap: () => _open(const CardsScreen()),
                 ),
-              if (loansOutstanding > 0)
+              if (pos.loans > 0)
                 _AssetChip(
                   icon: Icons.account_balance_outlined,
                   label: 'Loans & EMI',
-                  value: fmt(loansOutstanding),
+                  value: fmt(pos.loans),
                   color: p.expense,
                   onTap: () => _open(const LoansScreen()),
                 ),

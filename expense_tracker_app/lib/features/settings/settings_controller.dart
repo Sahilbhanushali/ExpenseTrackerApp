@@ -36,6 +36,10 @@ class SettingsController extends ChangeNotifier {
   Future<void> setThemeMode(String mode) =>
       _persist(_config.copyWith(themeMode: mode));
 
+  Future<void> setReminders({bool? on, int? daysBefore}) => _persist(
+    _config.copyWith(remindersOn: on, reminderDaysBefore: daysBefore),
+  );
+
   Future<void> markBudgetsImported() =>
       _persist(_config.copyWith(budgetsImported: true));
 

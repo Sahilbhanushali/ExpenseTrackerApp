@@ -13,7 +13,7 @@ abstract final class LoanPaymentOwner {
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const dbName = 'expenses.db';
-  static const _dbVersion = 19;
+  static const _dbVersion = 20;
 
   static const allTables = [
     'txns',
@@ -44,6 +44,7 @@ class AppDatabase {
     'allocation_decisions',
     'allocation_settings',
     'investment_holdings',
+    'net_worth_snapshots',
   ];
 
   AppDatabase._([this._pathOverride]);
@@ -185,6 +186,9 @@ class AppDatabase {
     }
     if (oldVersion < 19) {
       await _createWealthTables(db);
+    }
+    if (oldVersion < 20) {
+      await _createSnapshotTables(db);
     }
   }
 
@@ -530,6 +534,21 @@ class AppDatabase {
   /// v19: goals become earmarks on savings accounts (contributions are
   /// transfers tagged with the goal, never expenses); the emergency target
   /// can be months of essential spending; manual investment holdings.
+  /// One row per month: net worth as last seen that month, for the trend.
+  /// History can't be rebuilt for debts, so the trend starts when this
+  /// version is first used.
+  static Future<void> _createSnapshotTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+        month        TEXT PRIMARY KEY,
+        assets       INTEGER NOT NULL,
+        liabilities  INTEGER NOT NULL,
+        net_worth    INTEGER NOT NULL,
+        updated_at   TEXT NOT NULL
+      )
+    ''');
+  }
+
   static Future<void> _createWealthTables(Database db) async {
     await _addColumns(db, 'goals', {
       'target_date': 'TEXT',
@@ -930,6 +949,7 @@ class AppDatabase {
     await _createReconciliationTables(db);
     await _createAllocationTables(db);
     await _createWealthTables(db);
+    await _createSnapshotTables(db);
   }
 
   /// Wipes every row from every table, in place — used by Settings' "Reset

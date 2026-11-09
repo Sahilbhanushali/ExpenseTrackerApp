@@ -5,6 +5,7 @@ import '../../data/models/movement.dart';
 import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/investment_repository.dart';
 import '../../data/repositories/reconciliation_repository.dart';
+import '../../core/finance/dashboard.dart';
 import '../../core/finance/wealth.dart';
 
 class AccountBalance {
@@ -308,4 +309,18 @@ class AccountsController extends ChangeNotifier {
   int get spendableTotal => _accounts
       .where((a) => a.account.isSpendable)
       .fold(0, (s, a) => s + a.balance);
+
+  /// Net transfers into savings, emergency and investment accounts in a
+  /// date range — money put aside, not spent. Paise.
+  Future<int> transferredIntoSetAside(DateTime from, DateTime to) =>
+      _repo.transferredInto(
+        {
+          for (final a in _accounts)
+            if (a.account.id != null &&
+                accountGroup(a.account) != AccountGroup.spending)
+              a.account.id!,
+        },
+        from,
+        to,
+      );
 }

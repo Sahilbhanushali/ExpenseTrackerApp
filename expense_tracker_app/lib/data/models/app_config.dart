@@ -38,6 +38,12 @@ class AppConfig {
   /// which is the source of truth from then on.
   final bool budgetsImported;
 
+  /// Reminders for EMIs, card dues, statements and expected income.
+  final bool remindersOn;
+
+  /// How many days ahead to remind (0 = on the day).
+  final int reminderDaysBefore;
+
   const AppConfig({
     this.currency = '₹',
     this.locale = 'en-IN',
@@ -48,6 +54,8 @@ class AppConfig {
     this.themeMode = 'system',
     this.periodView = 'month',
     this.budgetsImported = false,
+    this.remindersOn = true,
+    this.reminderDaysBefore = 1,
   });
 
   AppConfig copyWith({
@@ -60,6 +68,8 @@ class AppConfig {
     String? themeMode,
     String? periodView,
     bool? budgetsImported,
+    bool? remindersOn,
+    int? reminderDaysBefore,
   }) {
     return AppConfig(
       currency: currency ?? this.currency,
@@ -71,6 +81,8 @@ class AppConfig {
       themeMode: themeMode ?? this.themeMode,
       periodView: periodView ?? this.periodView,
       budgetsImported: budgetsImported ?? this.budgetsImported,
+      remindersOn: remindersOn ?? this.remindersOn,
+      reminderDaysBefore: reminderDaysBefore ?? this.reminderDaysBefore,
     );
   }
 
@@ -88,6 +100,8 @@ class AppConfig {
     'themeMode': themeMode,
     'periodView': periodView,
     'budgetsImported': budgetsImported,
+    'remindersOn': remindersOn,
+    'reminderDaysBefore': reminderDaysBefore,
   };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -119,6 +133,9 @@ class AppConfig {
       },
       periodView: json['periodView'] == 'cycle' ? 'cycle' : 'month',
       budgetsImported: json['budgetsImported'] == true,
+      remindersOn: json['remindersOn'] != false,
+      reminderDaysBefore: ((json['reminderDaysBefore'] as num?)?.toInt() ?? 1)
+          .clamp(0, 7),
     );
   }
 }

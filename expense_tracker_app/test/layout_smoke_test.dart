@@ -10,6 +10,8 @@ import 'package:expense_tracker_app/data/repositories/transaction_repository.dar
 import 'package:expense_tracker_app/features/accounts/accounts_controller.dart';
 import 'package:expense_tracker_app/features/allocation/allocation_controller.dart';
 import 'package:expense_tracker_app/features/budgets/budget_controller.dart';
+import 'package:expense_tracker_app/features/calendar/calendar_controller.dart';
+import 'package:expense_tracker_app/features/dashboard/dashboard_controller.dart';
 import 'package:expense_tracker_app/features/cards/cards_controller.dart';
 import 'package:expense_tracker_app/features/cycles/cycle_controller.dart';
 import 'package:expense_tracker_app/features/dashboard/home_shell.dart';
@@ -127,6 +129,12 @@ Widget _app(ExpensesController expenses, ThemeData theme) {
       ChangeNotifierProvider(create: (_) => CardsController()),
       ChangeNotifierProvider(create: (_) => AllocationController()),
       ChangeNotifierProvider(create: (_) => EmergencyController()),
+      ChangeNotifierProvider(
+        create: (_) => CalendarController(scheduleReminders: false),
+      ),
+      ChangeNotifierProvider(
+        create: (_) => DashboardController(recordSnapshots: false),
+      ),
     ],
     child: MaterialApp(theme: theme, home: const HomeShell()),
   );

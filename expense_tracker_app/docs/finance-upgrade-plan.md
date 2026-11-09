@@ -1,6 +1,6 @@
 # Personal Finance Upgrade — Audit & Roadmap
 
-Status: **Phases 1–9 complete. Next: Phase 10 (financial calendar and reminders), awaiting review.**
+Status: **Phases 1–10 complete. Next: Phase 11 (dashboard, reports and insights), awaiting review.**
 Living document: each phase updates its section (schema changes, decisions, test results).
 
 ---
@@ -536,3 +536,33 @@ done contributions, capped withdrawals; account required, delete keeps money; ho
 set worth once; emergency months target with override; goals as allocation needs with a
 done transfer counting; rename cascade; v18 → v19; three screens at 320 px / 1.5× both
 themes. Full suite 318 passing, `flutter analyze` clean.
+
+### Phase 10 — Financial calendar and reminders (done)
+
+No table change. `AppConfig` (JSON in config) gains `remindersOn` (default on) and
+`reminderDaysBefore` (default 1, clamped 0–7); older configs load with the defaults.
+
+- `lib/core/finance/calendar_events.dart` (pure): `FinEvent` (stable key, date, kind,
+  amount in paise or none, outgoing/incoming/info), next day-of-month with clamping,
+  window filter that always keeps overdue dues, window totals, reminder id (stable per
+  key, own range 500000–599999) and reminder time (N days before at 09:00, none once
+  passed, none for info-only events except statement days).
+- `CalendarController` follows cycles, income, loans, cards, recurring bills, accounts
+  and settings, and builds 60 days of events: salary window (or "salary is late"),
+  expected income, EMI installments, card dues from the latest unpaid statement, statement
+  days, recurring bills and recurring income, planned transfers. No new queries — it reads
+  what the controllers already hold.
+- No duplicate notifications: each obligation has one id; every sync cancels ids in the
+  calendar range that are no longer wanted and reschedules the rest, so a paid EMI or a
+  moved date replaces its reminder. Recurring bills keep their existing reminders and are
+  left out of the calendar's.
+- Screens: More → **Financial calendar** (7 / 15 / 30 days, due to pay vs expected in,
+  overdue first, then day by day; reminders sheet: on/off and on the day / 1 / 3 / 7 days
+  before). Home and cycle views replace "Upcoming bills" with **Coming up this week**
+  (top four, total due, link to the calendar). `upcoming_bills.dart` removed.
+
+Tests (`phase10_test.dart`, 6): day-of-month clamping; window keeps overdue dues and
+totals; reminder ids/times; every event source from real repositories with unique keys,
+overdue EMI first, one reminder per obligation, bills excluded, reminders off → none;
+calendar screen at 320 px / 1.5× in both themes. Full suite 324 passing, `flutter analyze`
+clean.

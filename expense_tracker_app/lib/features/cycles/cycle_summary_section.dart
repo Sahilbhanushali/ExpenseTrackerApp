@@ -6,9 +6,9 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/section_header.dart';
 import '../dashboard/widgets/category_tiles.dart';
 import '../dashboard/widgets/month_summary_section.dart';
-import '../dashboard/widgets/upcoming_bills.dart';
+import '../dashboard/widgets/overview_cards.dart';
+import '../calendar/calendar_screen.dart';
 import '../settings/settings_controller.dart';
-import '../../core/finance/salary_cycle.dart';
 import 'cycle_card.dart';
 import 'cycle_closing_screen.dart';
 import 'cycle_controller.dart';
@@ -33,9 +33,10 @@ class CycleSummarySection extends StatelessWidget {
       (s) => s.config.currency,
     );
     const gap = SizedBox(height: AppSpacing.lg);
-    final toClose = context.select<CycleController, List<CycleRange>>(
-      (c) => c.needsClosing,
-    );
+    final cycles = context.watch<CycleController>();
+    final toClose = cycles.needsClosing;
+    final c = summary.cycle;
+    final isCurrent = cycles.cycles.lastOrNull?.record.id == c.record.id;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -45,6 +46,14 @@ class CycleSummarySection extends StatelessWidget {
             child: CloseCyclePrompt(cycle: c),
           ),
         CycleCard(summary: summary, currency: currency),
+        if (isCurrent) const CyclePlanCard(),
+        InsightsSection(
+          from: c.start,
+          to: c.queryEnd(DateTime.now()),
+          previousStart: cycles.previousOf(c)?.start,
+          period: 'cycle',
+          limit: 3,
+        ),
         gap,
         SectionHeader(
           'Spending by category',
@@ -60,7 +69,8 @@ class CycleSummarySection extends StatelessWidget {
           )
         else
           CategoryTiles(totals: summary.categories, currency: currency),
-        if (summary.cycle.isOpen) const UpcomingBills(),
+        if (summary.cycle.isOpen) const ComingUp(),
+        if (isCurrent) const FinanceOverview(),
         gap,
         RecentTransactions(onSeeAll: onSeeAllTransactions),
       ],

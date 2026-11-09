@@ -12,6 +12,7 @@ import '../reminders/reminders_controller.dart';
 import '../sms_import/sms_import_controller.dart';
 import '../allocation/allocation_controller.dart';
 import '../budgets/budget_controller.dart';
+import '../calendar/calendar_controller.dart';
 import '../budgets/budgets_screen.dart';
 import '../cards/cards_controller.dart';
 import '../cycles/cycle_controller.dart';
@@ -305,6 +306,7 @@ class SettingsScreen extends StatelessWidget {
     ]);
     if (context.mounted) await context.read<EmergencyController>().refresh();
     if (context.mounted) await context.read<AllocationController>().refresh();
+    if (context.mounted) await context.read<CalendarController>().refresh();
     // Clears the Spending Guardian's counters; its copy of the budget
     // figures is re-synced by the refreshes above.
     await guardian.resetStats();

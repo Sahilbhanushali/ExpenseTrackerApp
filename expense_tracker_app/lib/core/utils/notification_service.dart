@@ -120,6 +120,45 @@ class NotificationService {
     await _plugin.cancelAll();
   }
 
+  /// Calendar reminders live in ids 500000–599999 (see `reminderId`). This
+  /// schedules [wanted] and cancels any reminder in that range that isn't
+  /// wanted any more — so each obligation has at most one reminder, and
+  /// paid or removed ones stop.
+  Future<void> syncCalendarReminders(
+    List<({int id, DateTime at, String title, String body})> wanted,
+  ) async {
+    if (!_initialized) return;
+    final keep = {for (final w in wanted) w.id};
+    try {
+      for (final p in await _plugin.pendingNotificationRequests()) {
+        if (p.id >= 500000 && p.id < 600000 && !keep.contains(p.id)) {
+          await _plugin.cancel(p.id);
+        }
+      }
+      for (final w in wanted) {
+        await _plugin.zonedSchedule(
+          w.id,
+          w.title,
+          w.body,
+          tz.TZDateTime.from(w.at, tz.local),
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'obligation_reminders',
+              'Dues and income reminders',
+              importance: Importance.high,
+            ),
+            iOS: DarwinNotificationDetails(),
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+        );
+      }
+    } catch (_) {
+      // Best-effort: a failed schedule shouldn't break the calendar.
+    }
+  }
+
   Future<void> cancel(int billId) async {
     if (!_initialized) return;
     await _plugin.cancel(billId);

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/money_formatter.dart';
 import '../../../core/widgets/animated_money_text.dart';
 import '../../../core/widgets/app_card.dart';
@@ -13,16 +12,15 @@ import '../../../core/widgets/section_header.dart';
 import '../../../core/widgets/transaction_tile.dart';
 import '../../../data/repositories/transaction_repository.dart';
 import '../../expenses/expenses_controller.dart';
-import '../../goals/goals_controller.dart';
-import '../../goals/goals_screen.dart';
 import '../../budgets/budget_controller.dart';
 import '../../budgets/budgets_screen.dart';
 import '../../settings/settings_controller.dart';
 import 'budget_vs_actual.dart';
+import 'overview_cards.dart';
 import 'category_tiles.dart';
 import 'ink_metric.dart';
 import 'trend_chart.dart';
-import 'upcoming_bills.dart';
+import '../../calendar/calendar_screen.dart';
 
 /// Everything that describes one month: spend vs. budget, the category
 /// split, trend and recent activity. Watches expenses/settings/goals itself,
@@ -56,12 +54,6 @@ class MonthSummarySection extends StatelessWidget {
     final expenses = context.watch<ExpensesController>();
     final config = context.watch<SettingsController>().config;
     final budgets = context.watch<BudgetController>();
-    final totalSaved = context.select<GoalsController, int>(
-      (g) => g.goals.fold<int>(0, (s, e) => s + e.saved),
-    );
-    final hasGoals = context.select<GoalsController, bool>(
-      (g) => g.goals.isNotEmpty,
-    );
     final currency = config.currency;
 
     final totals = isCurrentMonth
@@ -81,6 +73,15 @@ class MonthSummarySection extends StatelessWidget {
           currency: currency,
           viewedMonth: viewedMonth,
           isCurrentMonth: isCurrentMonth,
+        ),
+        InsightsSection(
+          from: DateTime(viewedMonth.year, viewedMonth.month),
+          to: isCurrentMonth
+              ? DateTime.now()
+              : DateTime(viewedMonth.year, viewedMonth.month + 1, 0),
+          previousStart: DateTime(viewedMonth.year, viewedMonth.month - 1),
+          period: 'month',
+          limit: 3,
         ),
         gap,
         SectionHeader(
@@ -116,7 +117,7 @@ class MonthSummarySection extends StatelessWidget {
             ),
           ),
         ],
-        if (isCurrentMonth) const UpcomingBills(),
+        if (isCurrentMonth) const ComingUp(),
         if (trendLoaded && trend.any((p) => p.income > 0 || p.expense > 0)) ...[
           gap,
           const SectionHeader('Income vs expenses'),
@@ -124,35 +125,7 @@ class MonthSummarySection extends StatelessWidget {
             child: TrendChart(points: trend, currency: currency),
           ),
         ],
-        if (hasGoals) ...[
-          gap,
-          AppCard(
-            onTap: () =>
-                Navigator.of(context)
-                    .push(FadeSlideRoute(page: const GoalsScreen())),
-            child: Row(
-              children: [
-                Icon(Icons.flag_rounded, color: context.palette.savings),
-                const SizedBox(width: AppSpacing.md - 4),
-                Expanded(
-                  child: Text(
-                    'Saved toward goals',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-                Text(
-                  formatMoney(totalSaved, currency),
-                  style: Theme.of(context).textTheme.moneyStyle(16),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: context.palette.textTertiary,
-                ),
-              ],
-            ),
-          ),
-        ],
+        if (isCurrentMonth) const FinanceOverview(),
         gap,
         RecentTransactions(onSeeAll: onSeeAllTransactions),
       ],

@@ -13,6 +13,8 @@ import 'core/utils/notification_service.dart';
 import 'features/accounts/accounts_controller.dart';
 import 'features/allocation/allocation_controller.dart';
 import 'features/budgets/budget_controller.dart';
+import 'features/calendar/calendar_controller.dart';
+import 'features/dashboard/dashboard_controller.dart';
 import 'features/cards/cards_controller.dart';
 import 'features/cycles/cycle_controller.dart';
 import 'features/emergency/emergency_controller.dart';
@@ -67,6 +69,8 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CardsController()),
         ChangeNotifierProvider(create: (_) => AllocationController()),
         ChangeNotifierProvider(create: (_) => EmergencyController()),
+        ChangeNotifierProvider(create: (_) => CalendarController()),
+        ChangeNotifierProvider(create: (_) => DashboardController()),
       ],
       child: const _ThemedApp(),
     );
@@ -250,6 +254,33 @@ class _AppBootstrapState extends State<_AppBootstrap>
         emergency: emergency,
       );
     await allocation.refresh();
+    if (!mounted) return;
+    final calendar = context.read<CalendarController>()
+      ..attach(
+        cycles: cycles,
+        income: income,
+        loans: loans,
+        cards: cards,
+        recurring: recurring,
+        accounts: accounts,
+        settings: settings,
+      );
+    await calendar.refresh();
+    if (!mounted) return;
+    await (context.read<DashboardController>()..attach(
+          accounts: accounts,
+          lending: lending,
+          loans: loans,
+          cards: cards,
+          allocation: allocation,
+          calendar: calendar,
+          cycles: cycles,
+          emergency: emergency,
+          budgets: budgets,
+          expenses: expenses,
+          settings: settings,
+        ))
+        .refresh();
     await _checkDueBills();
     if (!mounted) return;
     // Keeps the native Spending Guardian's copy of the budget figures

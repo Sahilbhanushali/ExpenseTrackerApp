@@ -144,6 +144,26 @@ class AccountRepository {
   /// The balance as it stood at the end of [date]: opening balance,
   /// transactions dated up to then, and completed movements dated up to
   /// then. What a bank statement for that day should show.
+  /// Net money moved by transfers into [accountIds] between [from] and
+  /// [to] (inclusive), completed only. Moves among those accounts cancel
+  /// out. Paise.
+  Future<int> transferredInto(
+    Set<int> accountIds,
+    DateTime from,
+    DateTime to,
+  ) async {
+    if (accountIds.isEmpty) return 0;
+    final db = await _db.database;
+    final marks = List.filled(accountIds.length, '?').join(',');
+    final rows = await db.rawQuery(
+      'SELECT SUM(p.amount) AS t FROM postings p JOIN movements m ON m.id = p.movement_id '
+      "WHERE p.owner_type = 'account' AND p.owner_id IN ($marks) "
+      "AND m.status = 'completed' AND m.kind = 'transfer' AND m.date >= ? AND m.date <= ?",
+      [...accountIds, _iso(from), _iso(to)],
+    );
+    return (rows.first['t'] as num?)?.round() ?? 0;
+  }
+
   Future<int?> balanceAsOf(
     String name,
     DateTime date, {

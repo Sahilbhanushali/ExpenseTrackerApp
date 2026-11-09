@@ -23,6 +23,7 @@ import '../expenses/expenses_controller.dart';
 import '../settings/settings_controller.dart';
 import '../budgets/budget_controller.dart';
 import '../cycles/cycle_controller.dart';
+import '../dashboard/widgets/overview_cards.dart';
 import 'category_chart.dart';
 import 'spending_line_chart.dart';
 
@@ -101,6 +102,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return DateTimeRange(start: c.start, end: c.queryEnd(now));
       case _RangePreset.custom:
         return _range;
+    }
+  }
+
+  /// Where the comparable earlier stretch starts: the previous month or
+  /// cycle; null compares with the same number of days just before.
+  DateTime? get _previousStart {
+    switch (_preset) {
+      case _RangePreset.thisMonth || _RangePreset.lastMonth:
+        return DateTime(_range.start.year, _range.start.month - 1);
+      case _RangePreset.thisCycle || _RangePreset.lastCycle:
+        final cycles = context.read<CycleController>().cycles;
+        final i = cycles.indexWhere(
+          (c) => c.start.isAtSameMomentAs(_range.start),
+        );
+        return i > 0 ? cycles[i - 1].start : null;
+      default:
+        return null;
     }
   }
 
@@ -360,6 +378,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
             ],
           ),
+        ),
+        InsightsSection(
+          from: _range.start,
+          to: _range.end,
+          previousStart: _previousStart,
+          period: switch (_preset) {
+            _RangePreset.thisMonth || _RangePreset.lastMonth => 'month',
+            _RangePreset.thisCycle || _RangePreset.lastCycle => 'cycle',
+            _ => 'period',
+          },
+          showEmpty: true,
         ),
         gap,
         SectionHeader(_monthly ? 'Monthly spending' : 'Daily spending'),
