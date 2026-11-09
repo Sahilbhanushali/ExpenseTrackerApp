@@ -3,23 +3,44 @@ import 'package:flutter/foundation.dart';
 import '../../data/models/account.dart';
 import '../../data/models/movement.dart';
 import '../../data/repositories/account_repository.dart';
+import '../../data/repositories/investment_repository.dart';
 import '../../data/repositories/reconciliation_repository.dart';
+import '../../core/finance/wealth.dart';
 
 class AccountBalance {
   final MoneyAccount account;
 
   /// In paise.
   final int balance;
-  const AccountBalance({required this.account, required this.balance});
+
+  /// What it's worth for net worth: for an investment account with
+  /// holdings, uninvested cash + the holdings' recorded value; otherwise
+  /// the manual current value, else the balance. Counted once.
+  final int worth;
+
+  /// Set for an investment account that has holdings.
+  final InvestmentStanding? investments;
+
+  AccountBalance({
+    required this.account,
+    required this.balance,
+    int? worth,
+    this.investments,
+  }) : worth = worth ?? (account.currentValuePaise ?? balance);
 }
 
 /// Money pots + transfers — port of bot.py's account_cmd/transfer_cmd.
 class AccountsController extends ChangeNotifier {
   final AccountRepository _repo;
   final ReconciliationRepository _recon;
-  AccountsController([AccountRepository? repo, ReconciliationRepository? recon])
-    : _repo = repo ?? AccountRepository(),
-      _recon = recon ?? ReconciliationRepository();
+  final InvestmentRepository _investments;
+  AccountsController([
+    AccountRepository? repo,
+    ReconciliationRepository? recon,
+    InvestmentRepository? investments,
+  ]) : _repo = repo ?? AccountRepository(),
+       _recon = recon ?? ReconciliationRepository(),
+       _investments = investments ?? InvestmentRepository();
 
   List<Transfer> _planned = [];
 
@@ -47,14 +68,16 @@ class AccountsController extends ChangeNotifier {
     // per account — this runs after every write in the app.
     final list = await _repo.list();
     final balances = await _repo.allBalances();
+    final holdings = await _investments.totals();
     _unassignedCount = await _repo.unassignedTxnCount();
     _planned = await _repo.plannedTransfers();
     _checks = await _recon.latest();
     _accounts = [
       for (final a in list)
-        AccountBalance(
-          account: a,
-          balance: balances[a.name] ?? a.openingBalancePaise,
+        _withHoldings(
+          a,
+          balances[a.name] ?? a.openingBalancePaise,
+          holdings[a.name],
         ),
     ];
     notifyListeners();
@@ -64,6 +87,28 @@ class AccountsController extends ChangeNotifier {
   /// but leave every picker.
   List<AccountBalance> get active =>
       _accounts.where((a) => a.account.status == AccountStatus.active).toList();
+
+  static AccountBalance _withHoldings(
+    MoneyAccount a,
+    int balance,
+    ({int invested, int current, int count})? h,
+  ) {
+    if (h == null || h.count == 0) {
+      return AccountBalance(account: a, balance: balance);
+    }
+    final s = InvestmentStanding(
+      balance: balance,
+      invested: h.invested,
+      currentValue: h.current,
+      holdings: h.count,
+    );
+    return AccountBalance(
+      account: a,
+      balance: balance,
+      worth: s.worth,
+      investments: s,
+    );
+  }
 
   bool nameTaken(String name, {int? excludeId}) => _accounts.any(
     (a) =>
@@ -136,7 +181,7 @@ class AccountsController extends ChangeNotifier {
   /// In paise.
   int totalFor(AccountType type) => _accounts
       .where((a) => a.account.type == type)
-      .fold(0, (s, a) => s + (a.account.currentValuePaise ?? a.balance));
+      .fold(0, (s, a) => s + a.worth);
 
   /// Number of transactions/transfers that would be orphaned by deleting
   /// this account — the UI uses it to ask where they should go.
@@ -219,6 +264,10 @@ class AccountsController extends ChangeNotifier {
     await _repo.setTransferStatus(movementId, MovementStatus.cancelled);
     await refresh();
   }
+
+  /// Transfers and other movements in and out of [account], newest first.
+  Future<List<Transfer>> transfersFor(String account) =>
+      _repo.transfersFor(account);
 
   Future<int?> balanceAsOf(String account, DateTime date) =>
       _repo.balanceAsOf(account, date);

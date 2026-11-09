@@ -13,7 +13,7 @@ abstract final class LoanPaymentOwner {
 /// Telegram-only chat_id column (single local user, no chat scoping needed).
 class AppDatabase {
   static const dbName = 'expenses.db';
-  static const _dbVersion = 17;
+  static const _dbVersion = 19;
 
   static const allTables = [
     'txns',
@@ -41,6 +41,9 @@ class AppDatabase {
     'loan_installments',
     'loan_events',
     'reconciliations',
+    'allocation_decisions',
+    'allocation_settings',
+    'investment_holdings',
   ];
 
   AppDatabase._([this._pathOverride]);
@@ -176,6 +179,12 @@ class AppDatabase {
     }
     if (oldVersion < 17) {
       await _createReconciliationTables(db);
+    }
+    if (oldVersion < 18) {
+      await _createAllocationTables(db);
+    }
+    if (oldVersion < 19) {
+      await _createWealthTables(db);
     }
   }
 
@@ -482,6 +491,73 @@ class AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_reconciliations_owner '
       'ON reconciliations(owner_type, owner_id)',
     );
+  }
+
+  /// v18: Smart Money Allocation. Proposals are computed live and never
+  /// stored; only the user's decisions are (reserve, skip, transfer done),
+  /// one per need per period ([scope]: the cycle start or month).
+  static Future<void> _createAllocationTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS allocation_settings (
+        id               INTEGER PRIMARY KEY CHECK (id = 1),
+        priority_order   TEXT NOT NULL,
+        emergency_target INTEGER,
+        emergency_monthly INTEGER,
+        savings_per_cycle INTEGER,
+        invest_per_cycle INTEGER
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS allocation_decisions (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope       TEXT NOT NULL,
+        need_key    TEXT NOT NULL,
+        bucket      TEXT NOT NULL,
+        label       TEXT NOT NULL,
+        amount      INTEGER NOT NULL CHECK (amount >= 0),
+        destination TEXT,
+        source      TEXT,
+        status      TEXT NOT NULL
+                    CHECK (status IN ('reserved', 'transferred', 'skipped')),
+        movement_id INTEGER,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        UNIQUE (scope, need_key)
+      )
+    ''');
+  }
+
+  /// v19: goals become earmarks on savings accounts (contributions are
+  /// transfers tagged with the goal, never expenses); the emergency target
+  /// can be months of essential spending; manual investment holdings.
+  static Future<void> _createWealthTables(Database db) async {
+    await _addColumns(db, 'goals', {
+      'target_date': 'TEXT',
+      'priority': 'INTEGER NOT NULL DEFAULT 2',
+      'monthly_contribution': 'INTEGER',
+      'account': 'TEXT',
+      'kind': "TEXT NOT NULL DEFAULT 'short'",
+      'status': "TEXT NOT NULL DEFAULT 'active'",
+      'starting_amount': 'INTEGER NOT NULL DEFAULT 0',
+    });
+    await _addColumns(db, 'allocation_settings', {
+      'emergency_months': 'INTEGER',
+      'essential_monthly': 'INTEGER',
+    });
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS investment_holdings (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        account       TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        kind          TEXT NOT NULL DEFAULT 'other',
+        invested      INTEGER NOT NULL CHECK (invested >= 0),
+        current_value INTEGER NOT NULL CHECK (current_value >= 0),
+        as_of         TEXT NOT NULL,
+        note          TEXT,
+        status        TEXT NOT NULL DEFAULT 'active',
+        created_at    TEXT NOT NULL
+      )
+    ''');
   }
 
   /// Expected (not yet received) income, and budgets for every period.
@@ -852,6 +928,8 @@ class AppDatabase {
     // Last: extends loans and loan_payments, created above.
     await _createDebtTables(db);
     await _createReconciliationTables(db);
+    await _createAllocationTables(db);
+    await _createWealthTables(db);
   }
 
   /// Wipes every row from every table, in place — used by Settings' "Reset

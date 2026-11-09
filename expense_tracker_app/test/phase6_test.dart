@@ -278,6 +278,11 @@ void main() {
         expect(find.text('Check against bank'), findsOneWidget);
         expect(find.text('Deposit'), findsOneWidget);
         expect(find.textContaining('off bank'), findsOneWidget);
+        await tester.scrollUntilVisible(
+          find.text('Waiting at the bank'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
         expect(find.text('Waiting at the bank'), findsOneWidget);
         await tester.drag(
           find.byType(Scrollable).first,

@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../core/widgets/form_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/utils/money.dart';
 import '../../core/utils/money_formatter.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/theme/app_theme.dart';
@@ -18,6 +17,7 @@ import '../expenses/transactions_screen.dart';
 import '../settings/settings_controller.dart';
 import '../../core/widgets/page_transitions.dart';
 import '../../core/widgets/section_header.dart';
+import '../allocation/allocation_screen.dart';
 import 'account_detail_screen.dart';
 import 'account_form_sheet.dart';
 import 'accounts_controller.dart';
@@ -168,214 +168,6 @@ class AccountsScreen extends StatelessWidget {
     }
   }
 
-  /// "Money lands in IDFC, keep 10k there, split the rest across the other
-  /// accounts" — a repeatable income-splitting tool instead of doing that
-  /// math by hand every payday. Never moves anything until you tap
-  /// Distribute; every figure is visible and editable first.
-  Future<void> _showDistribute(
-    BuildContext context,
-    List<AccountBalance> accounts,
-    String currency,
-  ) async {
-    if (accounts.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least two accounts first.')),
-      );
-      return;
-    }
-    final defaultSource = accounts.firstWhere(
-      (a) => a.account.isDefault,
-      orElse: () => accounts.first,
-    );
-    String source = defaultSource.account.name;
-    final amountController = TextEditingController();
-    final minKeepController = TextEditingController(text: '10000');
-    final targets = accounts.where((a) => a.account.name != source).toList();
-    final pctControllers = <String, TextEditingController>{
-      for (final t in targets)
-        t.account.name: TextEditingController(text: '20'),
-    };
-
-    await showDialog<void>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          void rebuildTargets(String newSource) {
-            source = newSource;
-            targets
-              ..clear()
-              ..addAll(accounts.where((a) => a.account.name != source));
-            pctControllers.clear();
-            for (final t in targets) {
-              pctControllers[t.account.name] = TextEditingController(
-                text: '20',
-              );
-            }
-          }
-
-          final amount = parseRupeesToPaise(amountController.text) ?? 0;
-          final minKeep = parseRupeesToPaise(minKeepController.text) ?? 0;
-          final available = (amount - minKeep).clamp(0, amount);
-          final totalPct = pctControllers.values.fold<double>(
-            0,
-            (s, c) => s + (double.tryParse(c.text) ?? 0),
-          );
-
-          return AlertDialog(
-            title: const Text('Distribute income'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: source,
-                    decoration: const InputDecoration(
-                      labelText: 'Money lands in',
-                    ),
-                    items: accounts
-                        .map(
-                          (a) => DropdownMenuItem(
-                            value: a.account.name,
-                            child: Text(a.account.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) =>
-                        setState(() => rebuildTargets(v ?? source)),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Amount received',
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: minKeepController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Keep at least this much in $source',
-                    ),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'Available to split: ${formatMoney(available, currency)}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: available <= 0 && amount > 0
-                          ? context.palette.expense
-                          : null,
-                    ),
-                  ),
-                  if (available <= 0 && amount > 0) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      amount < minKeep
-                          ? '${formatMoney(minKeep - amount, currency)} short of the $source minimum — nothing to split yet.'
-                          : 'This entire amount stays in $source to meet the minimum — nothing left to split.',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: context.palette.expense),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  for (final t in targets) ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: Text(
-                            '${t.account.name} · ${_typeLabel(t.account.type)}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Expanded(
-                          child: TextField(
-                            controller: pctControllers[t.account.name],
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.end,
-                            decoration: const InputDecoration(suffixText: '%'),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        SizedBox(
-                          width: 90,
-                          child: Text(
-                            formatMoney(
-                              (available *
-                                      (double.tryParse(
-                                            pctControllers[t.account.name]!
-                                                .text,
-                                          ) ??
-                                          0) /
-                                      100)
-                                  .round(),
-                              currency,
-                            ),
-                            textAlign: TextAlign.end,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                  ],
-                  Text(
-                    'Total: ${totalPct.toStringAsFixed(0)}%'
-                    '${totalPct > 100 ? ' — over 100%' : ''}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: totalPct > 100 ? context.palette.expense : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: available <= 0 || totalPct > 100
-                    ? null
-                    : () async {
-                        final controller = context.read<AccountsController>();
-                        // All shares are recorded together, or none are.
-                        final moves = [
-                          for (final t in targets)
-                            (
-                              from: source,
-                              to: t.account.name,
-                              amountPaise:
-                                  (available *
-                                          (double.tryParse(
-                                                pctControllers[t.account.name]!
-                                                    .text,
-                                              ) ??
-                                              0) /
-                                          100)
-                                      .round(),
-                              note: 'Income distribution' as String?,
-                            ),
-                        ];
-                        await controller.transferAll(
-                          moves.where((m) => m.amountPaise > 0).toList(),
-                        );
-                        if (context.mounted) Navigator.pop(context);
-                      },
-                child: const Text('Distribute'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final accounts = context.watch<AccountsController>();
@@ -383,10 +175,7 @@ class AccountsScreen extends StatelessWidget {
 
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final total = accounts.accounts.fold<int>(
-      0,
-      (s, a) => s + (a.account.currentValuePaise ?? a.balance),
-    );
+    final total = accounts.accounts.fold<int>(0, (s, a) => s + a.worth);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Accounts')),
@@ -454,12 +243,12 @@ class AccountsScreen extends StatelessWidget {
                             const SizedBox(width: AppSpacing.sm),
                             Expanded(
                               child: _InkButton(
-                                icon: Icons.call_split_rounded,
-                                label: 'Distribute',
-                                onTap: () => _showDistribute(
-                                  context,
-                                  accounts.active,
-                                  currency,
+                                icon: Icons.account_tree_outlined,
+                                label: 'Allocate',
+                                onTap: () => Navigator.of(context).push(
+                                  FadeSlideRoute(
+                                    page: const AllocationScreen(),
+                                  ),
                                 ),
                               ),
                             ),
@@ -599,10 +388,7 @@ class _AccountTypeSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final text = Theme.of(context).textTheme;
-    final total = accounts.fold<int>(
-      0,
-      (s, a) => s + (a.account.currentValuePaise ?? a.balance),
-    );
+    final total = accounts.fold<int>(0, (s, a) => s + a.worth);
     final color = _typeColor(type, p);
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -707,10 +493,7 @@ class _AccountTypeSection extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  formatMoney(
-                                    a.account.currentValuePaise ?? a.balance,
-                                    currency,
-                                  ),
+                                  formatMoney(a.worth, currency),
                                   style: text.moneyStyle(15),
                                 ),
                                 if (a.account.currentValuePaise != null)

@@ -1,101 +1,102 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/finance/wealth.dart';
 import '../../data/models/goal.dart';
-import '../../data/models/transaction.dart';
-import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/goal_repository.dart';
-import '../../data/repositories/transaction_repository.dart';
+import '../accounts/accounts_controller.dart';
 
-class GoalProgress {
+/// A goal with what's been saved toward it.
+class GoalStanding {
   final Goal goal;
 
   /// In paise.
   final int saved;
-  const GoalProgress({required this.goal, required this.saved});
+  const GoalStanding({required this.goal, required this.saved});
 
-  /// In paise.
-  int get remaining => (goal.targetPaise - saved).clamp(0, goal.targetPaise);
-  double get pct =>
-      goal.targetPaise > 0 ? (saved / goal.targetPaise).clamp(0.0, 1.0) : 0.0;
-  bool get isComplete => saved >= goal.targetPaise;
+  GoalProgress get progress => GoalProgress(
+    target: goal.targetPaise,
+    saved: saved,
+    targetDate: goal.targetDate,
+    monthlyContribution: goal.monthlyContributionPaise,
+  );
 }
 
-/// Multiple savings goals — port of the reference ledger's goal tiles.
 class GoalsController extends ChangeNotifier {
-  final GoalRepository _goalRepo;
-  final TransactionRepository _txnRepo;
-  final AccountRepository _accountRepo;
+  final GoalRepository _repo;
+  GoalsController({GoalRepository? goalRepo})
+    : _repo = goalRepo ?? GoalRepository();
 
-  GoalsController({
-    GoalRepository? goalRepo,
-    TransactionRepository? txnRepo,
-    AccountRepository? accountRepo,
-  }) : _goalRepo = goalRepo ?? GoalRepository(),
-       _txnRepo = txnRepo ?? TransactionRepository(),
-       _accountRepo = accountRepo ?? AccountRepository();
+  AccountsController? _accounts;
+  void attach(AccountsController accounts) => _accounts = accounts;
 
-  List<GoalProgress> _goals = [];
-  List<GoalProgress> get goals => _goals;
+  List<GoalStanding> _goals = [];
+
+  /// Priority order, highest first.
+  List<GoalStanding> get goals => _goals;
+  List<GoalStanding> get active =>
+      _goals.where((g) => !g.goal.achieved).toList();
 
   Future<void> init() => refresh();
 
   Future<void> refresh() async {
-    final goals = await _goalRepo.list();
-    final withProgress = <GoalProgress>[];
-    for (final g in goals) {
-      final saved = await _goalRepo.savedAmount(g.id!);
-      withProgress.add(GoalProgress(goal: g, saved: saved));
-    }
-    _goals = withProgress;
+    final goals = await _repo.list();
+    final saved = await _repo.saved();
+    _goals = [
+      for (final g in goals) GoalStanding(goal: g, saved: saved[g.id] ?? 0),
+    ];
     notifyListeners();
   }
 
-  Future<void> add(String name, int targetPaise, {String? note}) async {
-    await _goalRepo.add(name, targetPaise, note: note);
+  /// Earmarked per account — to warn when goals claim more than the
+  /// account holds.
+  Map<String, int> earmarked() {
+    final out = <String, int>{};
+    for (final g in active) {
+      final a = g.goal.account;
+      if (a != null) out[a] = (out[a] ?? 0) + g.saved;
+    }
+    return out;
+  }
+
+  /// All throw [GoalException] with a message for the user.
+  Future<void> save(Goal g) async {
+    await _repo.save(g);
     await refresh();
   }
 
-  /// Logs a contribution as an expense linked to this goal — reduces
-  /// available balance the same way any other spend does, matching the
-  /// reference app's "money set aside" semantics.
-  Future<void> contribute(int goalId, int amountPaise) async {
-    final account = await _accountRepo.defaultAccount();
-    final now = DateTime.now();
-    final date =
-        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final goal = _goals.firstWhere((g) => g.goal.id == goalId).goal;
-    await _txnRepo.add(
-      Transaction(
-        date: date,
-        category: 'other',
-        amountPaise: amountPaise,
-        note: 'Goal: ${goal.name}',
-        type: TxnType.expense,
-        createdAt: now.toIso8601String(),
-        account: account,
-        goalId: goalId,
-      ),
-    );
-    await refresh();
-  }
-
-  Future<void> update(
-    int id, {
-    String? name,
-    int? targetPaise,
-    String? note,
+  Future<void> contribute(
+    GoalStanding g, {
+    required String from,
+    required int amountPaise,
+    bool done = true,
   }) async {
-    await _goalRepo.update(
-      id,
-      name: name,
-      targetPaise: targetPaise,
-      note: note,
+    await _repo.contribute(
+      g.goal.id!,
+      from: from,
+      amountPaise: amountPaise,
+      done: done,
     );
+    await refresh();
+    await _accounts?.refresh();
+  }
+
+  Future<void> withdraw(
+    GoalStanding g, {
+    required String to,
+    required int amountPaise,
+  }) async {
+    await _repo.withdraw(g.goal.id!, to: to, amountPaise: amountPaise);
+    await refresh();
+    await _accounts?.refresh();
+  }
+
+  Future<void> setAchieved(GoalStanding g, bool achieved) async {
+    await _repo.setAchieved(g.goal.id!, achieved);
     await refresh();
   }
 
-  Future<void> remove(int id) async {
-    await _goalRepo.remove(id);
+  Future<void> remove(GoalStanding g) async {
+    await _repo.remove(g.goal.id!);
     await refresh();
   }
 }

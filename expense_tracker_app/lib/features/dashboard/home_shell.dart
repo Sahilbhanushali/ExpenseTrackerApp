@@ -16,7 +16,9 @@ import '../income/income_screen.dart';
 import '../expenses/add_transaction_sheet.dart';
 import '../expenses/transactions_screen.dart';
 import '../goals/goals_controller.dart';
+import '../emergency/emergency_screen.dart';
 import '../goals/goals_screen.dart';
+import '../investments/investments_screen.dart';
 import '../guardian/guardian_screen.dart';
 import '../lending/lending_controller.dart';
 import '../lending/lending_screen.dart';
@@ -26,6 +28,7 @@ import '../recurring/recurring_screen.dart';
 import '../reminders/reminders_controller.dart';
 import '../reminders/reminders_screen.dart';
 import '../reports/reports_screen.dart';
+import '../allocation/allocation_screen.dart';
 import '../budgets/budgets_screen.dart';
 import '../settings/settings_screen.dart';
 import '../sms_import/sms_import_controller.dart';
@@ -179,6 +182,13 @@ final _moreSections = <(String, List<_MoreItem>)>[
         'Cycle, month, week, day and custom',
         (c) => _push(c, const BudgetsScreen()),
       ),
+      _MoreItem(
+        Icons.account_tree_outlined,
+        AppColors.categoryPalette[1],
+        'Smart allocation',
+        'What to pay, keep and save first',
+        (c) => _push(c, const AllocationScreen()),
+      ),
       if (defaultTargetPlatform == TargetPlatform.android)
         _MoreItem(
           Icons.shield_outlined,
@@ -196,6 +206,20 @@ final _moreSections = <(String, List<_MoreItem>)>[
           c.read<GoalsController>().refresh();
           _push(c, const GoalsScreen());
         },
+      ),
+      _MoreItem(
+        Icons.health_and_safety_outlined,
+        AppColors.categoryPalette[3],
+        'Emergency fund',
+        'Months of essentials covered',
+        (c) => _push(c, const EmergencyScreen()),
+      ),
+      _MoreItem(
+        Icons.trending_up_rounded,
+        AppColors.categoryPalette[7],
+        'Investments',
+        'Holdings you record, at your values',
+        (c) => _push(c, const InvestmentsScreen()),
       ),
       _MoreItem(
         Icons.stars_rounded,

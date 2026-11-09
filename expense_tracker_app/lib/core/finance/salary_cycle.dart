@@ -63,7 +63,11 @@ class CycleRecord {
   final DateTime? closedAt;
   final String? note;
 
+  /// Frozen at closing (a [CycleCloseSummary] encoding); null while open.
+  final String? summaryJson;
+
   const CycleRecord({
+    this.summaryJson,
     this.id,
     required this.start,
     this.salaryTxnId,

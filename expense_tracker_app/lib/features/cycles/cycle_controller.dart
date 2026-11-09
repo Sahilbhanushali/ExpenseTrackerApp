@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/finance/cycle_closing.dart';
 import '../../core/finance/salary_cycle.dart';
 import '../../data/repositories/cycle_repository.dart';
 import '../../data/repositories/transaction_repository.dart';
@@ -15,12 +16,16 @@ class CycleSummary {
   /// Only for the open cycle.
   final CycleStanding? standing;
 
+  /// Set for a closed cycle: these figures come from it, not the ledger.
+  final CycleCloseSummary? frozen;
+
   const CycleSummary({
     required this.cycle,
     required this.income,
     required this.spent,
     required this.categories,
     this.standing,
+    this.frozen,
   });
 
   /// Income received this cycle minus what was spent. Upcoming bills, EMIs
@@ -67,7 +72,30 @@ class CycleController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Ended cycles not closed yet, oldest first.
+  List<CycleRange> get needsClosing =>
+      _cycles.where((c) => !c.isOpen && !c.record.isClosed).toList();
+
+  /// A closed cycle is shown as it was frozen (rule 15); everything else
+  /// is computed from the ledger.
   Future<CycleSummary> summaryFor(CycleRange c, {DateTime? today}) async {
+    final json = c.record.summaryJson;
+    if (c.record.isClosed && json != null) {
+      final f = CycleCloseSummary.decode(json);
+      return CycleSummary(
+        cycle: c,
+        income: CycleIncome(salary: f.salary, additional: f.additionalIncome),
+        spent: f.spent,
+        categories: f.categories,
+        frozen: f,
+      );
+    }
+    return liveSummaryFor(c, today: today);
+  }
+
+  /// Always from the ledger — to show when a closed cycle's history was
+  /// edited after closing.
+  Future<CycleSummary> liveSummaryFor(CycleRange c, {DateTime? today}) async {
     final now = today ?? DateTime.now();
     final end = c.queryEnd(now);
     final (income, totals, categories) = await (
@@ -131,6 +159,11 @@ class CycleController extends ChangeNotifier {
 
   Future<void> moveStart(int id, DateTime date) async {
     await _repo.moveStart(id, date);
+    await refresh();
+  }
+
+  Future<void> reopen(int id) async {
+    await _repo.reopen(id);
     await refresh();
   }
 

@@ -59,10 +59,16 @@ class AppChoiceChip extends StatelessWidget {
                   Icon(icon, size: AppIconSize.sm, color: fg),
                   const SizedBox(width: AppSpacing.xs + 2),
                 ],
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.labelMedium
-                      ?.copyWith(color: fg),
+                // Shrinks (with an ellipsis) instead of overflowing the
+                // screen at large text sizes.
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium
+                        ?.copyWith(color: fg),
+                  ),
                 ),
                 if (selected && onClear != null)
                   IconButton(

@@ -1,6 +1,6 @@
 # Personal Finance Upgrade — Audit & Roadmap
 
-Status: **Phases 1–5 complete. Next: Phase 6 (bank account details and reconciliation), awaiting review.**
+Status: **Phases 1–8 complete. Next: Phase 9 (emergency fund, goals, investments), awaiting review.**
 Living document: each phase updates its section (schema changes, decisions, test results).
 
 ---
@@ -355,3 +355,136 @@ both themes. Old flat-interest `loan_test.dart` / `loan_repository_test.dart` re
 Known gaps: per-EMI principal/interest from a statement isn't entered in the UI yet
 (stored as unknown); statements can't be edited (delete and re-add before payment);
 card payments can't be undone in the UI yet — reconciliation (Phase 6) adds adjustments.
+
+### Phase 6 — Bank accounts and reconciliation (done)
+
+Schema **v17** (`_createReconciliationTables`, re-runnable): `accounts` + `bank_type`
+(savings, current, salary, wallet, cash, fixed deposit, other) and `hold_amount`
+(available = balance − hold); `reconciliations` (owner account/card, as-of date, app
+figure, bank figure, difference, adjustment movement, note).
+
+Rules and code:
+- `AccountRepository.balanceAsOf` — opening + txns and completed movements dated up to
+  the day: what a bank statement for that day should show.
+- `ReconciliationRepository`: every check is kept (matched or not) and audited. Only when
+  the user asks, the difference becomes an `adjustment` movement between the account (or
+  card) and `external` — it corrects the balance, is labelled "Balance adjustment" in
+  history, and is never income or spending. Card checks compare what's owed today with
+  the bank app's figure.
+- Planned transfers (rule 14): the transfer sheet has "Already done at the bank"; planned
+  ones are listed under "Waiting at the bank" (Accounts and account detail) with Done /
+  Cancel and change no balance until done.
+- Cancelling: tapping a transfer, card payment or adjustment in an account's history
+  offers Cancel (kept on record and in the audit log, stops counting; a cancelled card
+  payment reopens its statement) or Mark as done. Cancelled stays cancelled. Loan
+  movements are refused — they're undone from the loan, where installment state lives.
+- Deposit / Withdraw shortcuts (transfers with an account of type Cash).
+- Screens: **account detail** (balance, available after hold, bank details and roles,
+  last bank check, Check against bank, Transfer, Deposit/Withdraw, waiting transfers,
+  check history, link to all transactions); account rows show "Matched bank · date" or
+  "₹X off bank · date"; account form gains account type and money on hold; card detail
+  gains "Check against bank app".
+
+Tests (`test/phase6_test.dart`, 11): balance as of a date; matched check moves nothing;
+mismatch kept until adjusted; adjustment not income/spending, shown in history, audited;
+card check with adjustment; planned → done → cancelled, cancelled is final; cancelled
+card payment reopens the statement; loan movements can't be cancelled; account type and
+hold saved; v16 → v17; account detail screen at 320 px / 1.5× in both themes. Full suite
+273 passing, `flutter analyze` clean.
+
+### Phase 7 — Smart Money Allocation (done)
+
+Schema **v18** (`_createAllocationTables`): `allocation_settings` (single row: priority
+order, emergency target and per-period contribution, savings and investing per period)
+and `allocation_decisions` (scope = cycle start or month, need key, bucket, amount,
+destination, source, status reserved/transferred/skipped, planned movement; unique per
+scope + need).
+
+Design: proposals are **computed live, never stored**; only decisions are. So extra
+income simply raises what's unallocated and the next proposal covers it, without
+touching approvals (spec §4 / scenario 2).
+
+- Available = spendable accounts (active, no savings/emergency/investment role, cash
+  type) − money on hold − reservations still held in that cash. Income is already
+  inside those balances, so nothing is counted twice; set-aside accounts are never
+  re-spent (scenario 10).
+- Horizon = latest expected salary day (a week ahead when salary is late; month end
+  without a cycle).
+- Needs (`allocation_needs.dart`, pure): essentials and discretionary from category
+  budget remainders (an overall cap only when there are no category budgets); card
+  statements unpaid and due by the horizon or overdue (overdue = revolving); loan
+  installments due by the horizon; recurring bills due by the horizon; emergency gap
+  (target − emergency balance, capped by the per-period contribution); savings and
+  investing per-period amounts — each with a destination account and a reason built
+  from the figures.
+- Engine (`allocation.dart`, pure): walks the configurable order (default: essentials,
+  obligations, emergency, savings, investing, discretionary; buffer last), funds
+  required − already funded until money runs out, Σ proposed ≤ available always, real
+  shortfalls reported (never a fake balanced plan), unmet needs ranked by priority then
+  due date. Investing is skipped while essentials/dues are short or card debt is
+  overdue; overdue card debt is always funded before savings, investing and
+  discretionary.
+- Reservations count only while their need exists and never beyond what it now needs —
+  paying a bill or spending a budget releases its share automatically.
+- Approval (rules 12–14): Approve / Approve all / Edit (amount, destination) / Skip /
+  Top up / Release / Transfer done. Approving never moves money: when the destination
+  differs (a set-aside account, or a spendable account short of the amount) a planned
+  transfer is recorded from the salary (or largest) account, counting only when marked
+  done. Release cancels a planned transfer; an executed one must be cancelled from the
+  account history. Everything is audited.
+- Screen: More → **Smart allocation** (also Accounts → Allocate, replacing Distribute):
+  available and how it's derived, Approve all, shortfall card (what's short before
+  payday, top unmet needs, discretionary budgets that may need trimming), sections in
+  priority order, buffer, skipped list with Undo, settings (reorder, amounts).
+  **B8 fixed** (Distribute's fixed % and immediate transfers removed).
+
+Tests (`test/phase7_test.dart`, 15): priority funding and Σ ≤ available; scenario 9
+shortfall with investing skipped; overdue card debt jumps ahead; custom order and
+reservations; scenario 10 liquid excludes savings/emergency and holds; horizon filtering
+and revolving; bills and essential vs discretionary budgets; next bill date clamping;
+payment releases a reservation; approving creates only a planned transfer, transfer
+done moves money, executed release refused; release cancels; skip per scope; settings
+round-trip; scenario 2 extra income keeps approvals; v17 → v18; screen at 320 px / 1.5×
+both themes. Full suite 288 passing, `flutter analyze` clean.
+
+Not yet: goals as savings needs (Phase 9 reworks goals); the emergency target is a
+manual amount until Phase 9 derives it from essential spending.
+
+### Phase 8 — Cycle closing and leftover money (done)
+
+No schema change: `income_cycles.closed_at / end_date / summary_json / rules_version`
+were reserved in v14.
+
+- `lib/core/finance/cycle_closing.dart` (pure): leftover you can decide on =
+  min(max(cycle income − spending, 0), unallocated spendable cash now) — so deciding on
+  a cycle's leftover never spends the next salary; nine choices (carry forward, savings,
+  emergency, extra loan principal, card paydown, investments, keep as cash, custom
+  account, and any split of these); validation (positive amounts, a destination for
+  every move, total ≤ leftover); `CycleCloseSummary` frozen JSON with
+  `kClosingRulesVersion`.
+- `CycleClosingService`: preview (income, spending, categories, every account's balance
+  at the cycle's last day, card and loan debt, reserved, unpaid obligations due by the
+  end — still owed after closing, never reset); `check` against real accounts, loans and
+  cards before anything moves; `close` carries out the choices (account moves as
+  completed or planned transfers from the salary account; loan → prepayment; card →
+  payment to the oldest unpaid statement), then freezes the cycle.
+- `CycleRepository.close` (only ended cycles; audited) and `reopen` (explicit, newest
+  closed first; audited; money moved at closing stays moved).
+- Rule 15: closed cycles are shown from their frozen summary; the closed view compares
+  with the live ledger and says when history was edited after closing. Closed cycles'
+  dates can't move.
+- Screens: **Close cycle** (figures, balances at end, still owed and unpaid, leftover
+  with how it's derived, add one or more destinations with amounts/targets, remaining
+  shown live, "transfers already done" switch, confirmation listing every action) and
+  **closed cycle** view (frozen figures, what was done, balances, owed at closing,
+  Reopen). Prompts on Salary & cycles and the dashboard cycle view whenever an ended
+  cycle is still open.
+- `AppChoiceChip` labels now ellipsize instead of overflowing at large text (found by
+  the closing-screen layout test).
+
+Tests: `phase8_test.dart` (8) — leftover cap, validation, summary round trip; scenario 8
+(carry forward + savings + card paydown, new salary excluded, moves aren't spending,
+history frozen against later edits, dates locked, reopen recalculates, audited);
+invalid choices move nothing; planned transfers at close; overspent cycle; open cycle
+refused. `closing_screens_test.dart` (4) — both screens at 320 px / 1.5× in both
+themes. Full suite 300 passing, `flutter analyze` clean.

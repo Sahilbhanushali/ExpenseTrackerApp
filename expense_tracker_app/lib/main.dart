@@ -11,9 +11,11 @@ import 'core/utils/app_lock_service.dart';
 import 'core/utils/error_reporting.dart';
 import 'core/utils/notification_service.dart';
 import 'features/accounts/accounts_controller.dart';
+import 'features/allocation/allocation_controller.dart';
 import 'features/budgets/budget_controller.dart';
 import 'features/cards/cards_controller.dart';
 import 'features/cycles/cycle_controller.dart';
+import 'features/emergency/emergency_controller.dart';
 import 'features/income/income_controller.dart';
 import 'features/dashboard/home_shell.dart';
 import 'features/expenses/add_transaction_sheet.dart';
@@ -63,6 +65,8 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => BudgetController()),
         ChangeNotifierProvider(create: (_) => IncomeController()),
         ChangeNotifierProvider(create: (_) => CardsController()),
+        ChangeNotifierProvider(create: (_) => AllocationController()),
+        ChangeNotifierProvider(create: (_) => EmergencyController()),
       ],
       child: const _ThemedApp(),
     );
@@ -201,7 +205,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
     final recurring = context.read<RecurringController>();
     final loans = context.read<LoansController>();
     final wishlist = context.read<WishlistController>();
-    final goals = context.read<GoalsController>();
+    final goals = context.read<GoalsController>()..attach(accounts);
     final reminders = context.read<RemindersController>();
     final smsImport = context.read<SmsImportController>();
     final cycles = context.read<CycleController>()..attach(expenses);
@@ -227,6 +231,25 @@ class _AppBootstrapState extends State<_AppBootstrap>
     ]);
     // Needs settings loaded (legacy import) and the current cycle.
     await budgets.init(settings);
+    if (!mounted) return;
+    final emergency = context.read<EmergencyController>()
+      ..attach(accounts, budgets);
+    await emergency.refresh();
+    if (!mounted) return;
+    // Reads every other controller, so it attaches last.
+    final allocation = context.read<AllocationController>()
+      ..attach(
+        accounts: accounts,
+        budgets: budgets,
+        cards: cards,
+        loans: loans,
+        recurring: recurring,
+        cycles: cycles,
+        settings: settings,
+        goals: goals,
+        emergency: emergency,
+      );
+    await allocation.refresh();
     await _checkDueBills();
     if (!mounted) return;
     // Keeps the native Spending Guardian's copy of the budget figures

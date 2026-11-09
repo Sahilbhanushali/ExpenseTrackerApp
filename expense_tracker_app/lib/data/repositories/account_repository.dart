@@ -239,11 +239,22 @@ class AccountRepository {
 
       await txn.update('accounts', fields, where: 'id = ?', whereArgs: [id]);
       if (fields.containsKey('name')) {
-        for (final table in ['txns', 'salary_profile']) {
+        // Everything that refers to an account by name follows the rename.
+        for (final (table, column) in const [
+          ('txns', 'account'),
+          ('salary_profile', 'account'),
+          ('loans', 'account'),
+          ('credit_cards', 'repayment_account'),
+          ('expected_income', 'account'),
+          ('allocation_decisions', 'destination'),
+          ('allocation_decisions', 'source'),
+          ('goals', 'account'),
+          ('investment_holdings', 'account'),
+        ]) {
           await txn.update(
             table,
-            {'account': name},
-            where: 'account = ?',
+            {column: name},
+            where: '$column = ?',
             whereArgs: [oldName],
           );
         }
@@ -453,7 +464,11 @@ class AccountRepository {
   ///
   /// [Transfer.status] planned records an intention that doesn't touch
   /// balances until [setTransferStatus] marks it completed.
-  Future<int> addTransfer(Transfer transfer, {DatabaseExecutor? within}) async {
+  Future<int> addTransfer(
+    Transfer transfer, {
+    DatabaseExecutor? within,
+    ({String type, int id})? link,
+  }) async {
     if (transfer.amountPaise <= 0) {
       throw ArgumentError.value(transfer.amountPaise, 'amount', 'must be > 0');
     }
@@ -476,6 +491,9 @@ class AccountRepository {
         'note': transfer.note,
         'created_at': transfer.createdAt,
         'completed_at': completed ? DateTime.now().toIso8601String() : null,
+        // e.g. a goal contribution ('goal') or withdrawal ('goal_out').
+        'link_type': link?.type,
+        'link_id': link?.id,
       };
       final id = await ex.insert('movements', movement);
       for (final p in [

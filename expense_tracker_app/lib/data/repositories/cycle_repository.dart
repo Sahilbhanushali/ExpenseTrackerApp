@@ -1,3 +1,4 @@
+import '../../core/finance/cycle_closing.dart';
 import '../../core/finance/salary_cycle.dart';
 import '../datasources/app_database.dart';
 import 'audit_log.dart';
@@ -75,8 +76,89 @@ class CycleRepository {
               ? null
               : DateTime.parse(r['closed_at'] as String),
           note: r['note'] as String?,
+          summaryJson: r['summary_json'] as String?,
         ),
     ];
+  }
+
+  /// Freezes [cycleId] with [summary]: its figures are shown from this
+  /// record from now on and its dates can't change. Only an ended cycle (a
+  /// later salary has started the next one) can be closed.
+  Future<void> close(int cycleId, CycleCloseSummary summary) async {
+    final cycles = resolveCycles(await list());
+    final c = cycles.where((x) => x.record.id == cycleId).firstOrNull;
+    if (c == null) throw const CycleException('That cycle no longer exists.');
+    if (c.record.isClosed) {
+      throw const CycleException('This cycle is already closed.');
+    }
+    if (c.isOpen) {
+      throw const CycleException(
+        'The current cycle closes once your next salary is recorded.',
+      );
+    }
+    final db = await _db.database;
+    await db.transaction((txn) async {
+      final row = {
+        'closed_at': summary.closedAt.toIso8601String(),
+        'end_date': isoDate(c.end!),
+        'summary_json': summary.encode(),
+        'rules_version': summary.rulesVersion,
+      };
+      await txn.update(
+        'income_cycles',
+        row,
+        where: 'id = ?',
+        whereArgs: [cycleId],
+      );
+      await writeAudit(
+        txn,
+        entity: 'cycle',
+        entityId: cycleId,
+        action: 'close',
+        after: {
+          ...row,
+          'summary_json': null,
+          'leftover': summary.leftoverAvailable,
+        },
+      );
+    });
+  }
+
+  /// Explicitly reopens a closed cycle (audited). The money moves made at
+  /// closing stay — undo those from the accounts if they were wrong.
+  Future<void> reopen(int cycleId) async {
+    final cycles = resolveCycles(await list());
+    final i = cycles.indexWhere((x) => x.record.id == cycleId);
+    if (i < 0 || !cycles[i].record.isClosed) return;
+    if (cycles.skip(i + 1).any((c) => c.record.isClosed)) {
+      throw const CycleException('Reopen the later closed cycles first.');
+    }
+    final db = await _db.database;
+    await db.transaction((txn) async {
+      final before = await txn.query(
+        'income_cycles',
+        where: 'id = ?',
+        whereArgs: [cycleId],
+      );
+      await txn.update(
+        'income_cycles',
+        {
+          'closed_at': null,
+          'end_date': null,
+          'summary_json': null,
+          'rules_version': null,
+        },
+        where: 'id = ?',
+        whereArgs: [cycleId],
+      );
+      await writeAudit(
+        txn,
+        entity: 'cycle',
+        entityId: cycleId,
+        action: 'reopen',
+        before: before.firstOrNull,
+      );
+    });
   }
 
   /// Records a salary that arrived on [date] and starts a new cycle there.

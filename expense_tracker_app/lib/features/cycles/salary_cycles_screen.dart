@@ -12,7 +12,9 @@ import '../../core/widgets/section_header.dart';
 import '../../core/widgets/settings_group.dart';
 import '../../data/repositories/cycle_repository.dart';
 import '../settings/settings_controller.dart';
+import '../../core/widgets/page_transitions.dart';
 import 'cycle_card.dart';
+import 'cycle_closing_screen.dart';
 import 'cycle_controller.dart';
 import 'salary_sheets.dart';
 
@@ -74,6 +76,11 @@ class _SalaryCyclesScreenState extends State<SalaryCyclesScreen> {
   }
 
   Future<void> _cycleActions(CycleRange c) async {
+    if (c.record.isClosed) {
+      await Navigator.of(context)
+          .push(FadeSlideRoute(page: ClosedCycleScreen(cycleId: c.record.id!)));
+      return;
+    }
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -81,6 +88,13 @@ class _SalaryCyclesScreenState extends State<SalaryCyclesScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (!c.isOpen)
+              ListTile(
+                leading: const Icon(Icons.task_alt_rounded),
+                title: const Text('Close this cycle'),
+                subtitle: const Text('Decide what to do with the leftover'),
+                onTap: () => Navigator.pop(sheet, 'close'),
+              ),
             ListTile(
               leading: const Icon(Icons.edit_calendar_rounded),
               title: const Text('Change start date'),
@@ -100,6 +114,12 @@ class _SalaryCyclesScreenState extends State<SalaryCyclesScreen> {
       ),
     );
     if (!mounted || action == null) return;
+    if (action == 'close') {
+      await Navigator.of(
+        context,
+      ).push(FadeSlideRoute(page: CycleClosingScreen(cycleId: c.record.id!)));
+      return;
+    }
     if (action == 'move') {
       final now = DateTime.now();
       final picked = await showDatePicker(
@@ -169,6 +189,11 @@ class _SalaryCyclesScreenState extends State<SalaryCyclesScreen> {
             AppSpacing.navClearance,
           ),
           children: [
+            for (final c in cycles.needsClosing)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                child: CloseCyclePrompt(cycle: c),
+              ),
             if (current == null)
               AppCard(
                 child: Column(
